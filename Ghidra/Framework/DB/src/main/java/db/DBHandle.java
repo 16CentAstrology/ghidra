@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,9 +18,9 @@ package db;
 import java.io.File;
 import java.io.IOException;
 import java.util.Hashtable;
-import java.util.Iterator;
 
 import db.buffers.*;
+import db.util.ErrorHandler;
 import ghidra.util.Msg;
 import ghidra.util.UniversalIdGenerator;
 import ghidra.util.datastruct.WeakDataStructureFactory;
@@ -45,9 +45,12 @@ public class DBHandle {
 	private WeakSet<DBListener> listenerList = WeakDataStructureFactory.createCopyOnReadWeakSet();
 
 	private long lastTransactionID;
-	private boolean txStarted = false;
+	private volatile boolean txStarted = false;
+
 	private boolean waitingForNewTransaction = false;
 	private boolean reloadInProgress = false;
+
+	private volatile boolean cachedChangedState;
 
 	private long checkpointNum;
 	private long lastRecoverySnapshotId;
@@ -242,7 +245,7 @@ public class DBHandle {
 			databaseId = ((long) dbParms.get(DBParms.DATABASE_ID_HIGH_PARM) << 32) +
 				(dbParms.get(DBParms.DATABASE_ID_LOW_PARM) & 0x0ffffffffL);
 		}
-		catch (ArrayIndexOutOfBoundsException e) {
+		catch (IndexOutOfBoundsException e) {
 			// DBParams is still at version 1
 		}
 	}
@@ -407,6 +410,16 @@ public class DBHandle {
 	}
 
 	/**
+	 * Check if the database is closed.
+	 * @throws ClosedException if database is closed and further operations are unsupported
+	 */
+	public void checkIsClosed() throws ClosedException {
+		if (isClosed()) {
+			throw new ClosedException();
+		}
+	}
+
+	/**
 	 * @return true if transaction is currently active
 	 */
 	public boolean isTransactionActive() {
@@ -414,10 +427,46 @@ public class DBHandle {
 	}
 
 	/**
+	 * Open new transaction.  This should generally be done with a try-with-resources block:
+	 * <pre>
+	 * try (Transaction tx = dbHandle.openTransaction(dbErrorHandler)) {
+	 * 	// ... Do something
+	 * }
+	 * </pre>
+	 * 
+	 * @param errorHandler handler resposible for handling an IOException which may result during
+	 * transaction processing.  In general, a {@link RuntimeException} should be thrown by the 
+	 * handler to ensure continued processing is properly signaled/interupted.
+	 * @return transaction object
+	 * @throws IllegalStateException if transaction is already active or this {@link DBHandle} has 
+	 * already been closed.
+	 */
+	public Transaction openTransaction(ErrorHandler errorHandler) throws IllegalStateException {
+		return new Transaction() {
+
+			long txId = startTransaction();
+
+			@Override
+			protected boolean endTransaction(boolean commit) {
+				try {
+					return DBHandle.this.endTransaction(txId, commit);
+				}
+				catch (IOException e) {
+					errorHandler.dbError(e);
+				}
+				return false;
+			}
+		};
+	}
+
+	/**
 	 * Start a new transaction
 	 * @return transaction ID
 	 */
 	public synchronized long startTransaction() {
+		if (isClosed()) {
+			throw new IllegalStateException("Database is closed");
+		}
 		if (txStarted) {
 			throw new IllegalStateException("Transaction already started");
 		}
@@ -482,8 +531,23 @@ public class DBHandle {
 		}
 		finally {
 			txStarted = false;
+			cacheChangedState();
 		}
 		return false;
+	}
+
+	private void cacheChangedState() {
+		cachedChangedState = bufferMgr != null && bufferMgr.isChanged();
+	}
+
+	/**
+	 * Provides a means of detecting changes to the underlying database buffers 
+	 * during a transaction.
+	 * 
+	 * @return current modification count
+	 */
+	public long getModCount() {
+		return bufferMgr.getModCount();
 	}
 
 	/**
@@ -492,6 +556,34 @@ public class DBHandle {
 	 */
 	public synchronized boolean hasUncommittedChanges() {
 		return (bufferMgr != null && !bufferMgr.atCheckpoint());
+	}
+
+	/**
+	 * Set the DB source buffer file with a newer local buffer file version.
+	 * Intended for use following a merge or commit operation only where a local checkout has been
+	 * retained.
+	 * @param versionedSourceBufferFile updated local DB source buffer file opened for versioning 
+	 * update (NOTE: file itself is read-only).  File must be an instance of 
+	 * {@link LocalManagedBufferFile}.
+	 * @throws IOException if an IO error occurs
+	 */
+	public void setDBVersionedSourceFile(BufferFile versionedSourceBufferFile) throws IOException {
+		if (!(versionedSourceBufferFile instanceof LocalManagedBufferFile bf) ||
+			!versionedSourceBufferFile.isReadOnly()) {
+			throw new IllegalArgumentException(
+				"Requires local versioned buffer file opened for versioning update");
+		}
+		synchronized (this) {
+			if (isTransactionActive()) {
+				throw new IOException("transaction is active");
+			}
+			bufferMgr.clearRecoveryFiles();
+			bufferMgr.setDBVersionedSourceFile(bf);
+			++checkpointNum;
+			reloadTables();
+			cacheChangedState();
+		}
+		notifyDbRestored();
 	}
 
 	/**
@@ -544,6 +636,7 @@ public class DBHandle {
 			if (canUndo() && bufferMgr.undo(true)) {
 				++checkpointNum;
 				reloadTables();
+				cacheChangedState();
 				success = true;
 			}
 		}
@@ -589,6 +682,7 @@ public class DBHandle {
 			if (canRedo() && bufferMgr.redo()) {
 				++checkpointNum;
 				reloadTables();
+				cacheChangedState();
 				success = true;
 			}
 		}
@@ -606,6 +700,7 @@ public class DBHandle {
 	 */
 	public synchronized void setMaxUndos(int maxUndos) {
 		bufferMgr.setMaxUndos(maxUndos);
+		cacheChangedState();
 	}
 
 	/**
@@ -649,24 +744,30 @@ public class DBHandle {
 	 * @param keepRecoveryData true if existing recovery data should be retained or false to remove
 	 * any recovery data
 	 */
-	public void close(boolean keepRecoveryData) {
+	public synchronized void close(boolean keepRecoveryData) {
 
 		closeScratchPad();
 
-		// use copy of bufferMgr to be thread-safe
-		BufferMgr mgr = bufferMgr;
-		if (mgr != null) {
-			notifyDbClosed();
-			mgr.dispose(keepRecoveryData);
+		synchronized (this) {
+			if (bufferMgr == null) {
+				return;
+			}
+			bufferMgr.dispose(keepRecoveryData);
 			bufferMgr = null;
+			cachedChangedState = false;
 		}
+
+		notifyDbClosed();
 	}
 
 	/**
+	 * Determine if the underlying database has changed.
+	 * NOTE: The returned value reflects a cached state assuming all underlaying database 
+	 * transactions, saving, etc. are facilitated by this handle object.
 	 * @return true if unsaved changes have been made.
 	 */
-	public synchronized boolean isChanged() {
-		return bufferMgr != null && bufferMgr.isChanged();
+	public boolean isChanged() {
+		return cachedChangedState;
 	}
 
 	/**
@@ -691,19 +792,26 @@ public class DBHandle {
 
 //TODO: Does not throw ReadOnlyException - should it?
 
+		checkIsClosed();
+
 		if (txStarted) {
 			throw new AssertException("Can't save during transaction");
 		}
 
-		long txId = startTransaction();
 		try {
-			masterTable.flush();
+			long txId = startTransaction();
+			try {
+				masterTable.flush();
+			}
+			finally {
+				endTransaction(txId, true); // saved file may be corrupt on IOException
+			}
+
+			bufferMgr.save(comment, changeSet, monitor);
 		}
 		finally {
-			endTransaction(txId, true); // saved file may be corrupt on IOException
+			cacheChangedState();
 		}
-
-		bufferMgr.save(comment, changeSet, monitor);
 	}
 
 	/**
@@ -720,29 +828,36 @@ public class DBHandle {
 	public synchronized void saveAs(BufferFile outFile, boolean associateWithNewFile,
 			TaskMonitor monitor) throws IOException, CancelledException {
 
+		checkIsClosed();
+
 		if (txStarted) {
 			throw new AssertException("Can't save during transaction");
 		}
 
-		long txId = startTransaction();
-		boolean addedTx = false;
 		try {
-			// About to create copy of existing file - assign new databaseId
-			if (bufferMgr.getSourceFile() != null) {
-				initDatabaseId();
+			long txId = startTransaction();
+			boolean addedTx = false;
+			try {
+				// About to create copy of existing file - assign new databaseId
+				if (bufferMgr.getSourceFile() != null) {
+					initDatabaseId();
+				}
+				masterTable.flush();
 			}
-			masterTable.flush();
+			finally {
+				addedTx = endTransaction(txId, true); // saved file may be corrupt on IOException
+			}
+
+			bufferMgr.saveAs(outFile, associateWithNewFile, monitor);
+
+			if (addedTx && !associateWithNewFile) {
+				// Restore state and original databaseId
+				undo();
+				readDatabaseId();
+			}
 		}
 		finally {
-			addedTx = endTransaction(txId, true); // saved file may be corrupt on IOException
-		}
-
-		bufferMgr.saveAs(outFile, associateWithNewFile, monitor);
-
-		if (addedTx && !associateWithNewFile) {
-			// Restore state and original databaseId
-			undo();
-			readDatabaseId();
+			cacheChangedState();
 		}
 	}
 
@@ -766,25 +881,32 @@ public class DBHandle {
 			boolean associateWithNewFile, TaskMonitor monitor)
 			throws IOException, CancelledException {
 
+		checkIsClosed();
+
 		if (txStarted) {
 			throw new IllegalStateException("Can't save during transaction");
 		}
 
-		long txId = startTransaction();
 		try {
-			if (newDatabaseId == null) {
-				initDatabaseId();
+			long txId = startTransaction();
+			try {
+				if (newDatabaseId == null) {
+					initDatabaseId();
+				}
+				else if (databaseId != newDatabaseId.longValue()) {
+					setDatabaseId(newDatabaseId);
+				}
+				masterTable.flush();
 			}
-			else if (databaseId != newDatabaseId.longValue()) {
-				setDatabaseId(newDatabaseId);
+			finally {
+				endTransaction(txId, true); // saved file may be corrupt on IOException
 			}
-			masterTable.flush();
+
+			bufferMgr.saveAs(outFile, associateWithNewFile, monitor);
 		}
 		finally {
-			endTransaction(txId, true); // saved file may be corrupt on IOException
+			cacheChangedState();
 		}
-
-		bufferMgr.saveAs(outFile, associateWithNewFile, monitor);
 	}
 
 	/**
@@ -802,23 +924,30 @@ public class DBHandle {
 	public synchronized void saveAs(File file, boolean associateWithNewFile, TaskMonitor monitor)
 			throws IOException, CancelledException {
 
+		checkIsClosed();
+
 		if (file.exists()) {
 			throw new DuplicateFileException("File already exists: " + file);
 		}
 
-		LocalBufferFile outFile = new LocalBufferFile(file, bufferMgr.getBufferSize());
-		boolean success = false;
 		try {
-			saveAs(outFile, associateWithNewFile, monitor);
-			success = true;
+			LocalBufferFile outFile = new LocalBufferFile(file, bufferMgr.getBufferSize());
+			boolean success = false;
+			try {
+				saveAs(outFile, associateWithNewFile, monitor);
+				success = true;
+			}
+			finally {
+				if (!success) {
+					outFile.delete();
+				}
+				else if (!associateWithNewFile) {
+					outFile.dispose();
+				}
+			}
 		}
 		finally {
-			if (!success) {
-				outFile.delete();
-			}
-			else if (!associateWithNewFile) {
-				outFile.dispose();
-			}
+			cacheChangedState();
 		}
 	}
 
@@ -831,7 +960,7 @@ public class DBHandle {
 	 * @return Buffer the newly created buffer
 	 * @throws IOException if an I/O error occurs while creating the buffer.
 	 */
-	public DBBuffer createBuffer(int length) throws IOException {
+	public synchronized DBBuffer createBuffer(int length) throws IOException {
 		checkTransaction();
 		return new DBBuffer(this, new ChainedBuffer(length, true, bufferMgr));
 	}
@@ -846,7 +975,7 @@ public class DBHandle {
 	 * @return Buffer the newly created buffer
 	 * @throws IOException if an I/O error occurs while creating the buffer.
 	 */
-	public DBBuffer createBuffer(DBBuffer shadowBuffer) throws IOException {
+	public synchronized DBBuffer createBuffer(DBBuffer shadowBuffer) throws IOException {
 		checkTransaction();
 		return new DBBuffer(this,
 			new ChainedBuffer(shadowBuffer.length(), true, shadowBuffer.buf, 0, bufferMgr));
@@ -860,7 +989,8 @@ public class DBHandle {
 	 * @return Buffer the buffer associated with the given id.
 	 * @throws IOException if an I/O error occurs while getting the buffer.
 	 */
-	public DBBuffer getBuffer(int id) throws IOException {
+	public synchronized DBBuffer getBuffer(int id) throws IOException {
+		checkIsClosed();
 		return new DBBuffer(this, new ChainedBuffer(bufferMgr, id));
 	}
 
@@ -875,7 +1005,8 @@ public class DBHandle {
 	 * @return Buffer the buffer associated with the given id.
 	 * @throws IOException if an I/O error occurs while getting the buffer.
 	 */
-	public DBBuffer getBuffer(int id, DBBuffer shadowBuffer) throws IOException {
+	public synchronized DBBuffer getBuffer(int id, DBBuffer shadowBuffer) throws IOException {
+		checkIsClosed();
 		return new DBBuffer(this, new ChainedBuffer(bufferMgr, id, shadowBuffer.buf, 0));
 	}
 
@@ -970,10 +1101,9 @@ public class DBHandle {
 	public Table[] getTables() {
 		Table[] t = new Table[tables.size()];
 
-		Iterator<Table> it = tables.values().iterator();
 		int i = 0;
-		while (it.hasNext()) {
-			t[i++] = it.next();
+		for (Table element : tables.values()) {
+			t[i++] = element;
 		}
 		return t;
 	}
@@ -998,12 +1128,11 @@ public class DBHandle {
 	 * @return new table instance
 	 * @throws IOException if IO error occurs during table creation
 	 */
-	public Table createTable(String name, Schema schema, int[] indexedColumns)
-			throws IOException {
+	public Table createTable(String name, Schema schema, int[] indexedColumns) throws IOException {
 		Table table;
 		synchronized (this) {
 			if (tables.containsKey(name)) {
-				throw new IOException("Table already exists");
+				throw new IOException("Table already exists: " + name);
 			}
 			checkTransaction();
 			table = new Table(this, masterTable.createTableRecord(name, schema, -1));
@@ -1032,7 +1161,7 @@ public class DBHandle {
 		}
 		checkTransaction();
 		if (tables.containsKey(newName)) {
-			throw new DuplicateNameException("Table already exists");
+			throw new DuplicateNameException("Table already exists: " + newName);
 		}
 		Table table = tables.remove(oldName);
 		if (table == null) {
@@ -1071,6 +1200,9 @@ public class DBHandle {
 	 * @return number of buffer cache hits
 	 */
 	public long getCacheHits() {
+		if (bufferMgr == null) {
+			throw new IllegalStateException("Database is closed");
+		}
 		return bufferMgr.getCacheHits();
 	}
 
@@ -1078,6 +1210,9 @@ public class DBHandle {
 	 * @return number of buffer cache misses
 	 */
 	public long getCacheMisses() {
+		if (bufferMgr == null) {
+			throw new IllegalStateException("Database is closed");
+		}
 		return bufferMgr.getCacheMisses();
 	}
 
@@ -1085,6 +1220,9 @@ public class DBHandle {
 	 * @return low water mark (minimum buffer pool size)
 	 */
 	public int getLowBufferCount() {
+		if (bufferMgr == null) {
+			throw new IllegalStateException("Database is closed");
+		}
 		return bufferMgr.getLowBufferCount();
 	}
 
@@ -1102,6 +1240,9 @@ public class DBHandle {
 	 * @return buffer size utilized by this database
 	 */
 	public int getBufferSize() {
+		if (bufferMgr == null) {
+			throw new IllegalStateException("Database is closed");
+		}
 		return bufferMgr.getBufferSize();
 	}
 

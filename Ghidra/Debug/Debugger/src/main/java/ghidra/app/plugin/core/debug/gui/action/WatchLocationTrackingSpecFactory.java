@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import ghidra.app.services.DebuggerWatchesService;
+import ghidra.debug.api.action.LocationTrackingSpec;
+import ghidra.debug.api.action.LocationTrackingSpecFactory;
 import ghidra.framework.plugintool.PluginTool;
 
 /**
@@ -38,6 +40,7 @@ public class WatchLocationTrackingSpecFactory implements LocationTrackingSpecFac
 		}
 		return watchesService.getWatches()
 				.stream()
+				.filter(WatchLocationTrackingSpec::isTrackable)
 				.map(WatchLocationTrackingSpec::fromWatch)
 				.collect(Collectors.toList());
 	}

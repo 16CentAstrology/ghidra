@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,24 +15,18 @@
  */
 package ghidra.app.plugin.core.debug.gui.stack;
 
-import java.util.List;
+import java.util.Objects;
 
-import javax.swing.event.ListSelectionEvent;
+import javax.swing.JTable;
 import javax.swing.event.ListSelectionListener;
 
-import docking.widgets.table.AbstractDynamicTableColumn;
 import docking.widgets.table.TableColumnDescriptor;
-import ghidra.app.plugin.core.debug.DebuggerCoordinates;
 import ghidra.app.plugin.core.debug.gui.model.*;
-import ghidra.app.plugin.core.debug.gui.model.AbstractQueryTablePanel.CellActivationListener;
-import ghidra.app.plugin.core.debug.gui.model.ObjectTableModel.ValueRow;
-import ghidra.app.plugin.core.debug.gui.model.columns.TraceValueKeyColumn;
-import ghidra.app.plugin.core.debug.gui.model.columns.TraceValueObjectAttributeColumn;
+import ghidra.app.plugin.core.debug.gui.model.ObjectTableModel.*;
+import ghidra.app.plugin.core.debug.gui.model.columns.*;
+import ghidra.app.plugin.core.debug.service.modules.DebuggerStaticMappingUtils;
 import ghidra.app.services.DebuggerTraceManagerService;
-import ghidra.dbg.target.TargetStack;
-import ghidra.dbg.target.TargetStackFrame;
-import ghidra.dbg.target.schema.TargetObjectSchema;
-import ghidra.dbg.util.PathMatcher;
+import ghidra.debug.api.tracemgr.DebuggerCoordinates;
 import ghidra.docking.settings.Settings;
 import ghidra.framework.plugintool.Plugin;
 import ghidra.framework.plugintool.ServiceProvider;
@@ -40,14 +34,16 @@ import ghidra.framework.plugintool.annotation.AutoServiceConsumed;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.listing.Function;
 import ghidra.trace.model.Trace;
+import ghidra.trace.model.stack.TraceObjectStack;
 import ghidra.trace.model.stack.TraceObjectStackFrame;
 import ghidra.trace.model.target.TraceObject;
 import ghidra.trace.model.target.TraceObjectValue;
-import utilities.util.SuppressableCallback;
-import utilities.util.SuppressableCallback.Suppression;
+import ghidra.trace.model.target.path.KeyPath;
+import ghidra.trace.model.target.path.PathFilter;
+import ghidra.trace.model.target.schema.TraceObjectSchema;
 
 public class DebuggerStackPanel extends AbstractObjectsTableBasedPanel<TraceObjectStackFrame>
-		implements ListSelectionListener, CellActivationListener {
+		implements ListSelectionListener {
 
 	private static class FrameLevelColumn extends TraceValueKeyColumn {
 		@Override
@@ -57,13 +53,13 @@ public class DebuggerStackPanel extends AbstractObjectsTableBasedPanel<TraceObje
 
 		@Override
 		public int getColumnPreferredWidth() {
-			return 48;
+			return 60;
 		}
 	}
 
 	private static class FramePcColumn extends TraceValueObjectAttributeColumn<Address> {
 		public FramePcColumn() {
-			super(TargetStackFrame.PC_ATTRIBUTE_NAME, Address.class);
+			super(TraceObjectStackFrame.KEY_PC, Address.class);
 		}
 
 		@Override
@@ -72,20 +68,90 @@ public class DebuggerStackPanel extends AbstractObjectsTableBasedPanel<TraceObje
 		}
 	}
 
-	private class FrameFunctionColumn
-			extends AbstractDynamicTableColumn<ValueRow, Function, Trace> {
+	static Address computeProgramCounter(ValueRow row, long snap) {
+		if (!(row.getValue().getValue() instanceof TraceObject object)) {
+			return null;
+		}
+		TraceObjectValue attrPc = object.getAttribute(snap, TraceObjectStackFrame.KEY_PC);
+		if (attrPc == null || !(attrPc.getValue() instanceof Address pc)) {
+			return null;
+		}
+		return pc;
+	}
+
+	private Function computeFunction(ValueRow row, long snap, ServiceProvider serviceProvider) {
+		Address pc = computeProgramCounter(row, snap);
+		if (pc == null) {
+			return null;
+		}
+		return DebuggerStaticMappingUtils.getFunction(pc, provider.current, serviceProvider);
+	}
+
+	private class FrameFunctionColumn extends TraceValueObjectPropertyColumn<Function> {
+		public FrameFunctionColumn() {
+			super(Function.class);
+		}
+
+		@Override
+		public ValueProperty<Function> getProperty(ValueRow row) {
+			throw new AssertionError(); // overrode caller to this
+		}
+
+		@Override
+		public ValueProperty<Function> getValue(ValueRow row, Settings settings, Trace data,
+				ServiceProvider serviceProvider) throws IllegalArgumentException {
+			return new ValueDerivedProperty<>(row, Function.class) {
+				@Override
+				public Function getValue() {
+					return computeFunction(row, row.currentSnap(), serviceProvider);
+				}
+
+				@Override
+				public boolean isModified() {
+					return !Objects.equals(computeFunction(row, row.currentSnap(), serviceProvider),
+						computeFunction(row, row.previousSnap(), serviceProvider));
+				}
+			};
+		}
 
 		@Override
 		public String getColumnName() {
 			return "Function";
 		}
+	}
+
+	private String computeModuleName(ValueRow row, long snap) {
+		Address pc = computeProgramCounter(row, snap);
+		if (pc == null) {
+			return null;
+		}
+		return DebuggerStaticMappingUtils.getModuleName(pc, provider.current);
+	}
+
+	private class FrameModuleColumn extends TraceValueObjectPropertyColumn<String> {
+		public FrameModuleColumn() {
+			super(String.class);
+		}
 
 		@Override
-		public Function getValue(ValueRow rowObject, Settings settings, Trace data,
-				ServiceProvider serviceProvider) throws IllegalArgumentException {
-			TraceObjectValue value =
-				rowObject.getAttributeEntry(TargetStackFrame.PC_ATTRIBUTE_NAME);
-			return value == null ? null : provider.getFunction((Address) value.getValue());
+		public ValueProperty<String> getProperty(ValueRow row) {
+			return new ValueDerivedProperty<>(row, String.class) {
+				@Override
+				public String getValue() {
+					return computeModuleName(row, row.currentSnap());
+				}
+
+				@Override
+				public boolean isModified() {
+					return !Objects.equals(computeModuleName(row, row.currentSnap()),
+						computeModuleName(row, row.previousSnap()));
+				}
+			};
+		}
+
+		@Override
+		public String getColumnName() {
+			return "Module";
 		}
 	}
 
@@ -100,6 +166,7 @@ public class DebuggerStackPanel extends AbstractObjectsTableBasedPanel<TraceObje
 			descriptor.addVisibleColumn(new FrameLevelColumn(), 1, true);
 			descriptor.addVisibleColumn(new FramePcColumn());
 			descriptor.addVisibleColumn(new FrameFunctionColumn());
+			descriptor.addVisibleColumn(new FrameModuleColumn());
 			return descriptor;
 		}
 	}
@@ -109,29 +176,27 @@ public class DebuggerStackPanel extends AbstractObjectsTableBasedPanel<TraceObje
 	@AutoServiceConsumed
 	protected DebuggerTraceManagerService traceManager;
 
-	private final SuppressableCallback<Void> cbFrameSelected = new SuppressableCallback<>();
-
 	public DebuggerStackPanel(DebuggerStackProvider provider) {
 		super(provider.plugin, provider, TraceObjectStackFrame.class);
 		this.provider = provider;
 	}
 
 	@Override
-	protected ObjectTableModel createModel(Plugin plugin) {
+	protected ObjectTableModel createModel() {
 		return new StackTableModel(plugin);
 	}
 
 	@Override
 	protected ModelQuery computeQuery(TraceObject object) {
-		TargetObjectSchema rootSchema = object.getRoot().getTargetSchema();
-		List<String> stackPath = rootSchema
-				.searchForSuitable(TargetStack.class, object.getCanonicalPath().getKeyList());
+		TraceObjectSchema rootSchema = object.getRoot().getSchema();
+		KeyPath stackPath =
+			rootSchema.searchForSuitable(TraceObjectStack.class, object.getCanonicalPath());
 		if (stackPath == null) {
 			return ModelQuery.EMPTY;
 		}
-		TargetObjectSchema stackSchema = rootSchema.getSuccessorSchema(stackPath);
-		PathMatcher matcher = stackSchema.searchFor(TargetStackFrame.class, stackPath, true);
-		return new ModelQuery(matcher);
+		TraceObjectSchema stackSchema = rootSchema.getSuccessorSchema(stackPath);
+		PathFilter filter = stackSchema.searchFor(TraceObjectStackFrame.class, stackPath, true);
+		return new ModelQuery(filter);
 	}
 
 	@Override
@@ -139,21 +204,20 @@ public class DebuggerStackPanel extends AbstractObjectsTableBasedPanel<TraceObje
 		super.coordinatesActivated(coordinates);
 		TraceObject object = coordinates.getObject();
 		if (object != null) {
-			try (Suppression supp = cbFrameSelected.suppress(null)) {
-				trySelectAncestor(object);
-			}
+			trySelectAncestor(object);
 		}
 	}
 
 	@Override
-	public void valueChanged(ListSelectionEvent e) {
-		super.valueChanged(e);
-		if (e.getValueIsAdjusting()) {
-			return;
-		}
+	public void cellActivated(JTable table) {
+		/**
+		 * Override, because PC columns is fairly wide and representative of the stack frame.
+		 * Likely, when the user double-clicks, they mean to activate the frame, even if it happens
+		 * to be in that column. Simply going to the address will confuse and/or disappoint.
+		 */
 		ValueRow item = getSelectedItem();
 		if (item != null) {
-			cbFrameSelected.invoke(() -> traceManager.activateObject(item.getValue().getChild()));
+			traceManager.activateObject(item.getValue().getChild());
 		}
 	}
 }

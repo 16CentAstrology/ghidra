@@ -15,10 +15,11 @@
  */
 package ghidra.app.plugin.core.debug.gui.stack;
 
+import db.Transaction;
+import ghidra.app.plugin.core.debug.service.modules.DebuggerStaticMappingUtils;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.listing.Function;
 import ghidra.trace.model.stack.TraceStackFrame;
-import ghidra.util.database.UndoableTransaction;
 
 public class StackFrameRow {
 	public static class Synthetic extends StackFrameRow {
@@ -73,8 +74,8 @@ public class StackFrameRow {
 	}
 
 	public void setComment(String comment) {
-		try (UndoableTransaction tid =
-			UndoableTransaction.start(frame.getStack().getThread().getTrace(), "Frame comment")) {
+		try (Transaction tx =
+			frame.getStack().getThread().getTrace().openTransaction("Frame comment")) {
 			frame.setComment(getSnap(), comment);
 		}
 	}
@@ -84,7 +85,12 @@ public class StackFrameRow {
 	}
 
 	public Function getFunction() {
-		return panel.provider.getFunction(getProgramCounter());
+		return DebuggerStaticMappingUtils.getFunction(getProgramCounter(), panel.current,
+			panel.provider.getTool());
+	}
+
+	public String getModule() {
+		return DebuggerStaticMappingUtils.getModuleName(getProgramCounter(), panel.current);
 	}
 
 	protected void update() {

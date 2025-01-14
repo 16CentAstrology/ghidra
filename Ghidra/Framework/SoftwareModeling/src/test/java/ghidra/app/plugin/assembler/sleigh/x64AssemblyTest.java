@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -282,6 +282,11 @@ public class x64AssemblyTest extends AbstractAssemblyTest {
 			"48:81:65:f8:00:00:ff:ff");
 	}
 
+	@Test
+	public void testAssemble_PUSH_R8() {
+		assertOneCompatRestExact("PUSH R8", "41:50");
+	}
+
 	//@Ignore("This is a demonstration of an issue with signedness and scalar print pieces.")
 	//@Test
 	public void testAssembly_AND_mRBP_n0x8m_0x80()
@@ -313,6 +318,6 @@ public class x64AssemblyTest extends AbstractAssemblyTest {
 
 	@Test
 	public void testAssemblyCompat32_DEC_EAX() {
-		assertOneCompatRestExact("DEC EAX", "48", "09:00:00:00", 0x00400000, "DEC EAX");
+		assertOneCompatRestExact("DEC EAX", "48", "09:00:00:00:00:00:00:00", 0x00400000, "DEC EAX");
 	}
 }

@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -36,7 +36,6 @@ import ghidra.app.util.cparser.C.CParserUtils;
 import ghidra.app.util.cparser.C.ParseException;
 import ghidra.program.model.data.DataTypeManager;
 import ghidra.program.model.data.FileDataTypeManager;
-import ghidra.util.Msg;
 
 public class CreateJNIGDTArchivesScript extends GhidraScript {
 
@@ -62,13 +61,9 @@ public class CreateJNIGDTArchivesScript extends GhidraScript {
 		
 		File f = getArchiveFile(dataTypeFile);
 		
-        FileDataTypeManager dtMgr = FileDataTypeManager.createFileArchive(f);
-        
-		String messages = CParserUtils.parseHeaderFiles(openTypes, filenames, args, dtMgr, languageID, compiler, null, monitor);
+		FileDataTypeManager dtMgr = CParserUtils.parseHeaderFiles(openTypes, filenames, null, args,
+			f.getAbsolutePath(), languageID, compiler, monitor);
 		
-		Msg.info(this, messages);
-
-		dtMgr.save();
 		dtMgr.close();
 	}
 	
@@ -113,7 +108,6 @@ public class CreateJNIGDTArchivesScript extends GhidraScript {
 				"-D__builtin_va_list=void *",
 				"-D__DO_NOT_DEFINE_COMPILE",
 				"-D_Complex",
-				"-D_WCHAR_T",
 				"-D__NO_STRING_INLINES",
 				"-D__signed__",
 				"-D__extension__=",
@@ -159,7 +153,6 @@ public class CreateJNIGDTArchivesScript extends GhidraScript {
 				"-D__builtin_va_list=void *",
 				"-D__DO_NOT_DEFINE_COMPILE",
 				"-D_Complex",
-				"-D_WCHAR_T",
 				"-D__NO_STRING_INLINES",
 				"-D__signed__",
 				"-D__extension__=",

@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -40,6 +40,8 @@ import ghidra.util.exception.InvalidInputException;
  */
 public class HighFunction extends PcodeSyntaxTree {
 	public final static String DECOMPILER_TAG_MAP = "decompiler_tags";
+	public final static String OVERRIDE_NAMESPACE_NAME = "override";
+
 	private Function func; // The traditional function object
 	private Language language;
 	private CompilerSpec compilerSpec;
@@ -48,6 +50,7 @@ public class HighFunction extends PcodeSyntaxTree {
 	private GlobalSymbolMap globalSymbols;
 	private List<JumpTable> jumpTables;
 	private List<DataTypeSymbol> protoOverrides;
+	private Address entryPoint;
 
 	/**
 	 * @param function  function associated with the higher level function abstraction.
@@ -62,6 +65,7 @@ public class HighFunction extends PcodeSyntaxTree {
 		this.language = language;
 		this.compilerSpec = compilerSpec;
 		AddressSpace stackSpace = function.getProgram().getAddressFactory().getStackSpace();
+		entryPoint = function.getEntryPoint();
 		localSymbols = new LocalSymbolMap(this, stackSpace);
 		globalSymbols = new GlobalSymbolMap(this);
 		proto = new FunctionPrototype(localSymbols, function);
@@ -85,7 +89,7 @@ public class HighFunction extends PcodeSyntaxTree {
 		if (func instanceof FunctionDB) {
 			return func.getSymbol().getID();
 		}
-		return func.getProgram().getSymbolTable().getDynamicSymbolID(func.getEntryPoint());
+		return func.getProgram().getSymbolTable().getDynamicSymbolID(entryPoint);
 	}
 
 	/**
@@ -253,7 +257,7 @@ public class HighFunction extends PcodeSyntaxTree {
 			}
 			if (subel == ELEM_ADDR.id()) {
 				Address addr = AddressXML.decode(decoder);
-				if (!func.getEntryPoint().equals(addr)) {
+				if (!entryPoint.equals(addr)) {
 					throw new DecoderException("Mismatched address in function tag");
 				}
 			}
@@ -298,7 +302,7 @@ public class HighFunction extends PcodeSyntaxTree {
 	private void decodeJumpTableList(Decoder decoder) throws DecoderException {
 		int el = decoder.openElement(ELEM_JUMPTABLELIST);
 		while (decoder.peekElement() != 0) {
-			JumpTable table = new JumpTable(func.getEntryPoint().getAddressSpace());
+			JumpTable table = new JumpTable(entryPoint.getAddressSpace());
 			table.decode(decoder);
 			if (!table.isEmpty()) {
 				if (jumpTables == null) {
@@ -316,10 +320,10 @@ public class HighFunction extends PcodeSyntaxTree {
 			pcaddr = rep.getPCAddress();
 			if (pcaddr == Address.NO_ADDRESS) {
 				try {
-					pcaddr = func.getEntryPoint().add(-1);
+					pcaddr = entryPoint.add(-1);
 				}
 				catch (AddressOutOfBoundsException e) {
-					pcaddr = func.getEntryPoint();
+					pcaddr = entryPoint;
 				}
 			}
 		}
@@ -430,7 +434,12 @@ public class HighFunction extends PcodeSyntaxTree {
 		if (id != 0) {
 			encoder.writeUnsignedInteger(ATTRIB_ID, id);
 		}
-		encoder.writeString(ATTRIB_NAME, func.getName());
+		String funcName = func.getName();
+		encoder.writeString(ATTRIB_NAME, funcName);
+		String altName = getDataTypeManager().getNameTransformer().simplify(funcName);
+		if (!altName.equals(funcName)) {
+			encoder.writeString(ATTRIB_LABEL, altName);
+		}
 		encoder.writeSignedInteger(ATTRIB_SIZE, size);
 		if (func.isInline()) {
 			encoder.writeBool(ATTRIB_INLINE, true);
@@ -439,13 +448,13 @@ public class HighFunction extends PcodeSyntaxTree {
 			encoder.writeBool(ATTRIB_NORETURN, true);
 		}
 		if (entryPoint == null) {
-			AddressXML.encode(encoder, func.getEntryPoint());
+			AddressXML.encode(encoder, this.entryPoint);
 		}
 		else {
 			AddressXML.encode(encoder, entryPoint);		// Address is forced on XML
 		}
-		localSymbols.encodeLocalDb(encoder, namespace);
-		proto.encodePrototype(encoder, getDataTypeManager());
+		localSymbols.encodeLocalDb(encoder, namespace, getDataTypeManager().getNameTransformer());
+		proto.encodePrototype(encoder, getDataTypeManager(), -1);
 		if ((jumpTables != null) && (jumpTables.size() > 0)) {
 			encoder.openElement(ELEM_JUMPTABLELIST);
 			for (JumpTable jumpTable : jumpTables) {
@@ -457,13 +466,15 @@ public class HighFunction extends PcodeSyntaxTree {
 		if (hasOverrideTag) {
 			encoder.openElement(ELEM_OVERRIDE);
 			PcodeDataTypeManager dtmanage = getDataTypeManager();
+			Program prog = func.getProgram();
 			for (DataTypeSymbol sym : protoOverrides) {
 				Address addr = sym.getAddress();
+				int firstVarArg = HighFunctionDBUtil.getFirstVarArg(prog, addr);
 				FunctionPrototype fproto = new FunctionPrototype(
 					(FunctionSignature) sym.getDataType(), compilerSpec, false);
 				encoder.openElement(ELEM_PROTOOVERRIDE);
 				AddressXML.encode(encoder, addr);
-				fproto.encodePrototype(encoder, dtmanage);
+				fproto.encodePrototype(encoder, dtmanage, firstVarArg);
 				encoder.closeElement(ELEM_PROTOOVERRIDE);
 			}
 			encoder.closeElement(ELEM_OVERRIDE);
@@ -480,14 +491,22 @@ public class HighFunction extends PcodeSyntaxTree {
 		}
 	}
 
+	public static boolean isOverrideNamespace(Namespace namespace) {
+		if (!OVERRIDE_NAMESPACE_NAME.equals(namespace.getName())) {
+			return false;
+		}
+		Namespace parent = namespace.getParentNamespace();
+		return (parent instanceof Function);
+	}
+
 	public static Namespace findOverrideSpace(Function func) {
 		SymbolTable symtab = func.getProgram().getSymbolTable();
-		return findNamespace(symtab, func, "override");
+		return findNamespace(symtab, func, OVERRIDE_NAMESPACE_NAME);
 	}
 
 	public static Namespace findCreateOverrideSpace(Function func) {
 		SymbolTable symtab = func.getProgram().getSymbolTable();
-		return findCreateNamespace(symtab, func, "override");
+		return findCreateNamespace(symtab, func, OVERRIDE_NAMESPACE_NAME);
 	}
 
 	public static Namespace findNamespace(SymbolTable symtab, Namespace parent, String name) {
@@ -575,9 +594,11 @@ public class HighFunction extends PcodeSyntaxTree {
 	 * from the root (global) namespace up to the given namespace
 	 * @param encoder is the stream encoder
 	 * @param namespace is the namespace being described
+	 * @param transformer is used to computer the displayed version of each namespace
 	 * @throws IOException for errors in the underlying stream
 	 */
-	static public void encodeNamespace(Encoder encoder, Namespace namespace) throws IOException {
+	static public void encodeNamespace(Encoder encoder, Namespace namespace,
+			NameTransformer transformer) throws IOException {
 		encoder.openElement(ELEM_PARENT);
 		if (namespace != null) {
 			ArrayList<Namespace> arr = new ArrayList<>();
@@ -595,7 +616,12 @@ public class HighFunction extends PcodeSyntaxTree {
 				Namespace curScope = arr.get(i);
 				encoder.openElement(ELEM_VAL);
 				encoder.writeUnsignedInteger(ATTRIB_ID, curScope.getID());
-				encoder.writeString(ATTRIB_CONTENT, curScope.getName());
+				String nm = curScope.getName();
+				String altName = transformer.simplify(nm);
+				if (!nm.equals(altName)) {
+					encoder.writeString(ATTRIB_LABEL, altName);
+				}
+				encoder.writeString(ATTRIB_CONTENT, nm);
 				encoder.closeElement(ELEM_VAL);
 			}
 		}

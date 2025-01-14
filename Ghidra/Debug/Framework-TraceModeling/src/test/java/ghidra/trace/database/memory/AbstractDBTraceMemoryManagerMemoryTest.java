@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -25,12 +25,12 @@ import java.util.*;
 import org.junit.Test;
 
 import db.DBHandle;
+import db.Transaction;
+import ghidra.framework.data.OpenMode;
 import ghidra.program.model.address.*;
 import ghidra.trace.database.DBTrace;
 import ghidra.trace.model.TraceAddressSnapRange;
 import ghidra.trace.model.memory.TraceMemoryState;
-import ghidra.util.database.DBOpenMode;
-import ghidra.util.database.UndoableTransaction;
 import ghidra.util.task.ConsoleTaskMonitor;
 import ghidra.util.task.TaskMonitor;
 
@@ -39,7 +39,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testSetState() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			memory.setState(0, b.addr(0x4000), b.addr(0x5000), TraceMemoryState.KNOWN);
 
 			// +1 Overflow
@@ -80,7 +80,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 	public void testSetGetStateOneByte() {
 		assertEquals(null, memory.getState(3, b.addr(0x4000)));
 
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			memory.setState(3, b.addr(0x4000), TraceMemoryState.KNOWN);
 		}
 
@@ -90,7 +90,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 		assertEquals(TraceMemoryState.UNKNOWN, memory.getState(2, b.addr(0x4000)));
 		assertEquals(TraceMemoryState.UNKNOWN, memory.getState(4, b.addr(0x4000)));
 
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			memory.setState(3, b.addr(0x4000), TraceMemoryState.ERROR);
 		}
 
@@ -103,7 +103,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testSetRangeGetState() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			memory.setState(3, b.addr(0x4000), b.addr(0x5000), TraceMemoryState.KNOWN);
 		}
 
@@ -118,7 +118,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testGetMostRecentStateSingleRange() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			memory.setState(3, b.addr(0x4000), b.addr(0x5000), TraceMemoryState.KNOWN);
 		}
 
@@ -147,7 +147,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testGetMostRecentStateSameSnap() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			memory.setState(3, b.addr(0x4000), b.addr(0x5000), TraceMemoryState.KNOWN);
 			memory.setState(3, b.addr(0x4020), b.addr(0x4080), TraceMemoryState.ERROR);
 		}
@@ -197,7 +197,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testGetMostRecentStateLaterBefore() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			memory.setState(3, b.addr(0x4000), b.addr(0x5000), TraceMemoryState.KNOWN);
 			memory.setState(4, b.addr(0x3000), b.addr(0x3500), TraceMemoryState.ERROR);
 		}
@@ -255,7 +255,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testGetMostRecentStateLaterOverStart() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			memory.setState(3, b.addr(0x4000), b.addr(0x5000), TraceMemoryState.KNOWN);
 			memory.setState(4, b.addr(0x3000), b.addr(0x4500), TraceMemoryState.ERROR);
 		}
@@ -319,7 +319,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testGetMostRecentStates() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			memory.setState(3, b.addr(0x4000), b.addr(0x7000), TraceMemoryState.KNOWN);
 			memory.setState(3, b.addr(0x5000), b.addr(0x6000), TraceMemoryState.ERROR);
 			memory.setState(4, b.addr(0x3000), b.addr(0x4800), TraceMemoryState.KNOWN);
@@ -351,7 +351,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testGetAddressesWithState() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			memory.setState(3, b.addr(0x4000), b.addr(0x7000), TraceMemoryState.KNOWN);
 			memory.setState(3, b.addr(0x5000), b.addr(0x6000), TraceMemoryState.ERROR);
 			memory.setState(4, b.addr(0x3000), b.addr(0x4800), TraceMemoryState.KNOWN);
@@ -390,7 +390,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testGetStates() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			memory.setState(3, b.addr(0x4000), b.addr(0x7000), TraceMemoryState.KNOWN);
 			memory.setState(3, b.addr(0x5000), b.addr(0x6000), TraceMemoryState.ERROR);
 		}
@@ -406,7 +406,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testBytes0Length() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			assertEquals(0, memory.putBytes(3, b.addr(0x4000), b.buf()));
 			assertEquals(0, getBlockRecordCount());
 			assertEquals(0, getBufferRecordCount());
@@ -423,7 +423,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testBytesSimple4Zeros() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			assertEquals(4, memory.putBytes(3, b.addr(0x4000), b.buf(0, 0, 0, 0)));
 			assertEquals(4, memory.putBytes(3, b.addr(0x4000), b.buf(0, 0, 0, 0))); // Should have no effect
 			assertEquals(1, getBlockRecordCount());
@@ -444,7 +444,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testBytesSimple4Bytes() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			assertEquals(4, memory.putBytes(3, b.addr(0x4000), b.buf(1, 2, 3, 4)));
 			assertEquals(1, getBlockRecordCount());
 			assertEquals(1, getBufferRecordCount());
@@ -465,7 +465,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testBytesSpan4Bytes() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			assertEquals(4, memory.putBytes(3, b.addr(0x3ffe), b.buf(1, 2, 3, 4)));
 			assertEquals(2, getBlockRecordCount());
 			assertEquals(2, getBufferRecordCount());
@@ -478,7 +478,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testBytesSpan12BytesInChunks() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			assertEquals(4, memory.putBytes(3, b.addr(0x3ffa), b.buf(1, 2, 3, 4)));
 			assertEquals(1, getBlockRecordCount());
 			assertEquals(4, memory.putBytes(3, b.addr(0x3ffe), b.buf(5, 6, 7, 8)));
@@ -495,7 +495,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testBytesOverflow() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			ByteBuffer write = b.buf(1, 2, 3, 4);
 			assertEquals(2, memory.putBytes(3, b.addr(0xfffffffffffffffeL), write));
 			assertEquals(2, write.remaining());
@@ -511,7 +511,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testBytesWriteSameLater() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			assertEquals(4, memory.putBytes(3, b.addr(0x4000), b.buf(1, 2, 3, 4)));
 			assertEquals(1, getBlockRecordCount());
 			assertEquals(1, getBufferRecordCount());
@@ -543,7 +543,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testBytesArrayOffset() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			byte[] array = new byte[20];
 			array[9] = -1;
 			array[10] = 1;
@@ -564,7 +564,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testGetBytesMostRecent() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			assertEquals(4, memory.putBytes(3, b.addr(0x4000), b.buf(1, 2, 3, 4)));
 			assertEquals(4, memory.putBytes(4, b.addr(0x4002), b.buf(5, 6, 7, 8)));
 			assertEquals(1, memory.putBytes(5, b.addr(0x4003), b.buf(0)));
@@ -595,7 +595,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testPutBytesIntoPastGetBytesMostRecent() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			assertEquals(4, memory.putBytes(4, b.addr(0x4800), b.buf(5, 6, 7, 8)));
 			assertEquals(4, memory.putBytes(3, b.addr(0x4802), b.buf(1, 2, 3, 4)));
 			assertEquals(10,
@@ -627,7 +627,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testGetBytesCrossScratch() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			assertEquals(4, memory.putBytes(Long.MIN_VALUE, b.addr(0x4000), b.buf(1, 2, 3, 4)));
 		}
 
@@ -642,7 +642,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testPutBytesPackGetBytes() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			assertEquals(4, memory.putBytes(3, b.addr(0x4000), b.buf(1, 2, 3, 4)));
 			memory.pack();
 			assertEquals(1, getBlockRecordCount());
@@ -660,7 +660,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testPutBytesPackPutBytes() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			assertEquals(4, memory.putBytes(3, b.addr(0x4000), b.buf(1, 2, 3, 4)));
 			memory.pack();
 			assertEquals(1, getBlockRecordCount());
@@ -678,72 +678,62 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testFindBytes() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			assertEquals(5, memory.putBytes(3, b.addr(0x4000), b.buf(1, 2, 3, 4, 5)));
 		}
 
 		try {
-			memory.findBytes(3, b.range(0x4000, 0x4003), b.buf(1, 2, 3, 4), b.buf(-1, -1, -1),
-				true, TaskMonitor.DUMMY);
+			memory.findBytes(3, b.range(0x4000, 0x4003), b.buf(1, 2, 3, 4), b.buf(-1, -1, -1), true,
+				TaskMonitor.DUMMY);
 		}
 		catch (IllegalArgumentException e) {
 			// pass
 		}
 
 		// Degenerate
-		assertNull(
-			memory.findBytes(2, b.range(0x4000, 0x4003), b.buf(), b.buf(),
-				true, TaskMonitor.DUMMY));
+		assertNull(memory.findBytes(2, b.range(0x4000, 0x4003), b.buf(), b.buf(), true,
+			TaskMonitor.DUMMY));
 
 		// Too soon
-		assertNull(
-			memory.findBytes(2, b.range(0x4000, 0x4003), b.buf(1, 2, 3, 4), b.buf(-1, -1, -1, -1),
-				true, TaskMonitor.DUMMY));
+		assertNull(memory.findBytes(2, b.range(0x4000, 0x4003), b.buf(1, 2, 3, 4),
+			b.buf(-1, -1, -1, -1), true, TaskMonitor.DUMMY));
 
 		// Too small
-		assertNull(
-			memory.findBytes(3, b.range(0x4000, 0x4002), b.buf(1, 2, 3, 4), b.buf(-1, -1, -1, -1),
-				true, TaskMonitor.DUMMY));
+		assertNull(memory.findBytes(3, b.range(0x4000, 0x4002), b.buf(1, 2, 3, 4),
+			b.buf(-1, -1, -1, -1), true, TaskMonitor.DUMMY));
 
 		// Too high
-		assertNull(
-			memory.findBytes(3, b.range(0x4001, 0x4004), b.buf(1, 2, 3, 4), b.buf(-1, -1, -1, -1),
-				true, TaskMonitor.DUMMY));
+		assertNull(memory.findBytes(3, b.range(0x4001, 0x4004), b.buf(1, 2, 3, 4),
+			b.buf(-1, -1, -1, -1), true, TaskMonitor.DUMMY));
 
 		// Too high, into unknown
-		assertNull(
-			memory.findBytes(3, b.range(0x4001, 0x4005), b.buf(1, 2, 3, 4, 5),
-				b.buf(-1, -1, -1, -1, -1), true, TaskMonitor.DUMMY));
+		assertNull(memory.findBytes(3, b.range(0x4001, 0x4005), b.buf(1, 2, 3, 4, 5),
+			b.buf(-1, -1, -1, -1, -1), true, TaskMonitor.DUMMY));
 
 		// Too low
-		assertNull(
-			memory.findBytes(3, b.range(0x3fff, 0x4002), b.buf(1, 2, 3, 4), b.buf(-1, -1, -1, -1),
-				true, TaskMonitor.DUMMY));
+		assertNull(memory.findBytes(3, b.range(0x3fff, 0x4002), b.buf(1, 2, 3, 4),
+			b.buf(-1, -1, -1, -1), true, TaskMonitor.DUMMY));
 
 		// Perfect match
-		assertEquals(b.addr(0x4000),
-			memory.findBytes(3, b.range(0x4000, 0x4003), b.buf(1, 2, 3, 4), b.buf(-1, -1, -1, -1),
-				true, TaskMonitor.DUMMY));
+		assertEquals(b.addr(0x4000), memory.findBytes(3, b.range(0x4000, 0x4003), b.buf(1, 2, 3, 4),
+			b.buf(-1, -1, -1, -1), true, TaskMonitor.DUMMY));
+
+		// Make it work for the match
+		assertEquals(b.addr(0x4000), memory.findBytes(3, b.range(0x0, -1), b.buf(1, 2, 3, 4),
+			b.buf(-1, -1, -1, -1), true, TaskMonitor.DUMMY));
 
 		// Make it work for the match
 		assertEquals(b.addr(0x4000),
-			memory.findBytes(3, b.range(0x0, -1), b.buf(1, 2, 3, 4), b.buf(-1, -1, -1, -1),
-				true, TaskMonitor.DUMMY));
-
-		// Make it work for the match
-		assertEquals(b.addr(0x4000),
-			memory.findBytes(3, b.range(0x0, -1), b.buf(1), b.buf(-1),
-				true, TaskMonitor.DUMMY));
+			memory.findBytes(3, b.range(0x0, -1), b.buf(1), b.buf(-1), true, TaskMonitor.DUMMY));
 
 		// Sub match
-		assertEquals(b.addr(0x4001),
-			memory.findBytes(3, b.range(0x4000, 0x4003), b.buf(2, 3, 4), b.buf(-1, -1, -1),
-				true, TaskMonitor.DUMMY));
+		assertEquals(b.addr(0x4001), memory.findBytes(3, b.range(0x4000, 0x4003), b.buf(2, 3, 4),
+			b.buf(-1, -1, -1), true, TaskMonitor.DUMMY));
 	}
 
 	@Test
 	public void testRemoveBytes() {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			assertEquals(10,
 				memory.putBytes(2, b.addr(0x47fe), b.buf(9, 10, 11, 12, 13, 14, 15, 16, 17, 18)));
 			assertEquals(4, memory.putBytes(4, b.addr(0x4800), b.buf(5, 6, 7, 8)));
@@ -798,7 +788,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testSaveAndLoad() throws Exception {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			assertEquals(4, memory.putBytes(3, b.addr(0x4000), b.buf(1, 2, 3, 4)));
 			assertEquals(1, getBlockRecordCount());
 			assertEquals(1, getBufferRecordCount());
@@ -811,7 +801,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 		DBHandle opened = new DBHandle(tmp.toFile());
 		DBTrace restored = null;
 		try {
-			restored = new DBTrace(opened, DBOpenMode.UPDATE, new ConsoleTaskMonitor(), this);
+			restored = new DBTrace(opened, OpenMode.UPDATE, new ConsoleTaskMonitor(), this);
 
 			DBTraceMemorySpace rSpace =
 				restored.getMemoryManager().getMemorySpace(b.language.getDefaultDataSpace(), true);
@@ -836,7 +826,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testAddButAbortedStillEmpty() throws Exception {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			assertEquals(4, memory.putBytes(3, b.addr(0x4000), b.buf(1, 2, 3, 4)));
 			assertEquals(1, getBlockRecordCount());
 			assertEquals(1, getBufferRecordCount());
@@ -847,7 +837,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 			expected.put(b.srange(3, 0x4000, 0x4003), TraceMemoryState.KNOWN);
 			assertEquals(expected, collectAsMap(memory.getStates(3, b.range(0x3000, 0x5000))));
 
-			tid.abort();
+			tx.abort();
 		}
 		assertEquals(0, getBlockRecordCount());
 		assertEquals(0, getBufferRecordCount());
@@ -864,7 +854,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testAddThenUndo() throws Exception {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			assertEquals(4, memory.putBytes(3, b.addr(0x4000), b.buf(1, 2, 3, 4)));
 			assertEquals(1, getBlockRecordCount());
 			assertEquals(1, getBufferRecordCount());
@@ -892,7 +882,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testAddThenUndoThenRedo() throws Exception {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			assertEquals(4, memory.putBytes(3, b.addr(0x4000), b.buf(1, 2, 3, 4)));
 			assertEquals(1, getBlockRecordCount());
 			assertEquals(1, getBufferRecordCount());
@@ -939,7 +929,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 		 * situation by writing to the same b.address at more than 127 different snaps.
 		 */
 
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			for (int i = 0; i < 300; i++) {
 				memory.putBytes(i, b.addr(0x4000), b.buf(1, 2, 3, i % 256));
 			}
@@ -954,7 +944,7 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 	@Test
 	public void testOverlaySpaces() throws Exception {
-		try (UndoableTransaction tid = b.startTransaction()) {
+		try (Transaction tx = b.startTransaction()) {
 			AddressSpace os = memory.createOverlayAddressSpace("test",
 				b.trace.getBaseAddressFactory().getDefaultAddressSpace());
 			DBTraceMemorySpace space = memory.getMemorySpace(os, true);
@@ -968,6 +958,37 @@ public abstract class AbstractDBTraceMemoryManagerMemoryTest
 
 			assertEquals(4, space.getBytes(0, os.getAddress(0x4000), read));
 			assertArrayEquals(b.arr(1, 2, 3, 4), read.array());
+		}
+	}
+
+	@Test
+	public void testReplicateNpeScenario() throws Exception {
+		ByteBuffer buf4k = ByteBuffer.allocate(0x1000);
+		AddressSetView set = b.set(
+			b.range(0x00400000, 0x00404fff),
+			b.range(0x00605000, 0x00606fff),
+			b.range(0x7ffff7a2c000L, 0x7ffff7a33fffL));
+		Random random = new Random();
+		for (int i = 0; i < 30; i++) {
+			try (Transaction tx = b.startTransaction()) {
+				for (int j = 0; j < 3; j++) {
+					for (AddressRange r : set) {
+						for (AddressRange rc : new AddressRangeChunker(r, 0x1000)) {
+							if (random.nextInt(100) < 20) {
+								memory.setState(0, rc, TraceMemoryState.ERROR);
+								continue;
+							}
+							buf4k.position(0);
+							buf4k.limit(0x1000);
+							memory.putBytes(0, rc.getMinAddress(), buf4k);
+						}
+					}
+				}
+			}
+
+			try (Transaction tx = b.startTransaction()) {
+				memory.setState(0, b.range(0, -1), TraceMemoryState.UNKNOWN);
+			}
 		}
 	}
 }

@@ -17,6 +17,8 @@ package generic.theme;
 
 import java.awt.Color;
 
+import org.apache.commons.lang3.StringUtils;
+
 import ghidra.util.Msg;
 import ghidra.util.WebColors;
 import utilities.util.reflection.ReflectionUtilities;
@@ -28,9 +30,12 @@ import utilities.util.reflection.ReflectionUtilities;
  * and if the class's refId is non-null, then the color value will be null.
  */
 public class ColorValue extends ThemeValue<Color> {
+
+	public static final String LAF_ID_PREFIX = "laf.color.";
+	public static final String EXTERNAL_LAF_ID_PREFIX = "[laf.color]";
+
 	private static final String COLOR_ID_PREFIX = "color.";
 	private static final String EXTERNAL_PREFIX = "[color]";
-	private static final String SYSTEM_COLOR_PREFIX = "system.color";
 
 	public static final Color LAST_RESORT_DEFAULT = new Color(128, 128, 128);
 
@@ -61,14 +66,19 @@ public class ColorValue extends ThemeValue<Color> {
 		return outputId + " = " + getSerializedValue();
 	}
 
-	/** 
+	@Override
+	public boolean isExternal() {
+		return !id.startsWith(COLOR_ID_PREFIX);
+	}
+
+	/**
 	 * Returns true if the given key string is a valid external key for a color value
 	 * @param key the key string to test
 	 * @return true if the given key string is a valid external key for a color value
 	 */
 	public static boolean isColorKey(String key) {
-		return key.startsWith(COLOR_ID_PREFIX) || key.startsWith(EXTERNAL_PREFIX) ||
-			key.startsWith(SYSTEM_COLOR_PREFIX);
+		return StringUtils.startsWithAny(key, COLOR_ID_PREFIX, EXTERNAL_PREFIX,
+			EXTERNAL_LAF_ID_PREFIX);
 	}
 
 	/**
@@ -93,32 +103,40 @@ public class ColorValue extends ThemeValue<Color> {
 	}
 
 	@Override
-	protected Color getUnresolvedReferenceValue(String id, String unresolvedId) {
+	protected Color getUnresolvedReferenceValue(String primaryId, String unresolvedId) {
 
-		Throwable t = ReflectionUtilities.createThrowableWithStackOlderThan();
+		Throwable t = ReflectionUtilities.createThrowableWithStackOlderThan(getClass());
 		StackTraceElement[] trace = t.getStackTrace();
 		StackTraceElement[] filtered =
 			ReflectionUtilities.filterStackTrace(trace, "docking.theme", "classfinder",
 				"Application", "ghidra.GhidraRun", "java.lang.Class", "java.lang.Thread");
 		t.setStackTrace(filtered);
 
-		Msg.error(this,
-			"Could not resolve indirect color path for \"" + unresolvedId +
-				"\" for primary id \"" + id + "\", using last resort default",
-			t);
+		Msg.error(this, "Could not resolve indirect color path for \"" + unresolvedId +
+			"\" for primary id \"" + primaryId + "\", using last resort default", t);
+
 		return LAST_RESORT_DEFAULT;
 	}
 
 	private static String toExternalId(String internalId) {
-		if (internalId.startsWith(COLOR_ID_PREFIX) || internalId.startsWith(SYSTEM_COLOR_PREFIX)) {
+		if (internalId.startsWith(COLOR_ID_PREFIX)) {
 			return internalId;
 		}
+
+		if (internalId.startsWith(LAF_ID_PREFIX)) {
+			String baseId = internalId.substring(LAF_ID_PREFIX.length());
+			return EXTERNAL_LAF_ID_PREFIX + baseId;
+		}
+
 		return EXTERNAL_PREFIX + internalId;
 	}
 
 	private static String fromExternalId(String externalId) {
 		if (externalId.startsWith(EXTERNAL_PREFIX)) {
 			return externalId.substring(EXTERNAL_PREFIX.length());
+		}
+		if (externalId.startsWith(EXTERNAL_LAF_ID_PREFIX)) {
+			return LAF_ID_PREFIX + externalId.substring(EXTERNAL_LAF_ID_PREFIX.length());
 		}
 		return externalId;
 	}

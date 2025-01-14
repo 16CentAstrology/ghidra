@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -41,15 +41,12 @@ import ghidra.app.plugin.core.debug.gui.memory.DebuggerRegionsPlugin;
 import ghidra.app.plugin.core.debug.gui.model.DebuggerModelPlugin;
 import ghidra.app.plugin.core.debug.gui.modules.DebuggerModulesPlugin;
 import ghidra.app.plugin.core.debug.gui.modules.DebuggerStaticMappingPlugin;
-import ghidra.app.plugin.core.debug.gui.objects.DebuggerObjectsPlugin;
 import ghidra.app.plugin.core.debug.gui.pcode.DebuggerPcodeStepperPlugin;
 import ghidra.app.plugin.core.debug.gui.register.DebuggerRegistersPlugin;
 import ghidra.app.plugin.core.debug.gui.stack.DebuggerStackPlugin;
-import ghidra.app.plugin.core.debug.gui.target.DebuggerTargetsPlugin;
 import ghidra.app.plugin.core.debug.gui.thread.DebuggerThreadsPlugin;
 import ghidra.app.plugin.core.debug.gui.time.DebuggerTimePlugin;
 import ghidra.app.plugin.core.debug.gui.watch.DebuggerWatchesPlugin;
-import ghidra.app.plugin.core.debug.service.model.launch.DebuggerProgramLaunchOffer;
 import ghidra.app.services.DebuggerTraceManagerService.BooleanChangeAdapter;
 import ghidra.async.AsyncUtils;
 import ghidra.framework.plugintool.Plugin;
@@ -62,12 +59,15 @@ import ghidra.util.exception.CancelledException;
 import resources.MultiIcon;
 
 public interface DebuggerResources {
+
 	String OPTIONS_CATEGORY_DEBUGGER = "Debugger";
 	String OPTIONS_CATEGORY_WORKFLOW = "Workflow";
 
 	Icon ICON_DEBUGGER = new GIcon("icon.debugger");
 
 	Icon ICON_CONNECTION = new GIcon("icon.debugger.connect");
+	Icon ICON_CONNECT_ACCEPT = new GIcon("icon.debugger.connect.accept");
+	Icon ICON_CONNECT_OUTBOUND = new GIcon("icon.debugger.connect.outbound");
 	Icon ICON_DISCONNECT = new GIcon("icon.debugger.disconnect");
 
 	Icon ICON_PROCESS = new GIcon("icon.debugger.process");
@@ -86,9 +86,9 @@ public interface DebuggerResources {
 
 	Icon ICON_STEP_INTO = new GIcon("icon.debugger.step.into");
 	Icon ICON_STEP_OVER = new GIcon("icon.debugger.step.over");
-	Icon ICON_SKIP_OVER = new GIcon("icon.debugger.step.back");
+	Icon ICON_SKIP_OVER = new GIcon("icon.debugger.skip.over");
 	Icon ICON_STEP_FINISH = new GIcon("icon.debugger.step.finish");
-	Icon ICON_STEP_BACK = new GIcon("icon.debugger.skip.over");
+	Icon ICON_STEP_BACK = new GIcon("icon.debugger.step.back");
 	Icon ICON_STEP_LAST = new GIcon("icon.debugger.step.last");
 
 	Icon ICON_SNAP_FORWARD = new GIcon("icon.debugger.snap.forward");
@@ -116,7 +116,7 @@ public interface DebuggerResources {
 	Icon ICON_STACK = new GIcon("icon.debugger.provider.stack");
 	Icon ICON_BREAKPOINTS = new GIcon("icon.debugger.provider.breakpoints");
 	Icon ICON_MODULES = new GIcon("icon.debugger.provider.modules");
-	Icon ICON_MAPPINGS = ICON_PROGRAM; // TODO: A better icon 
+	Icon ICON_MAPPINGS = new GIcon("icon.debugger.provider.mappings"); // TODO: A better icon
 	Icon ICON_PCODE = new GIcon("icon.debugger.provider.pcode"); // TODO
 	Icon ICON_REGIONS = new GIcon("icon.debugger.provider.regions");
 	Icon ICON_TIME = new GIcon("icon.debugger.provider.time");
@@ -129,7 +129,7 @@ public interface DebuggerResources {
 	Icon ICON_DELETE = new GIcon("icon.debugger.delete");
 	Icon ICON_CLEAR = new GIcon("icon.debugger.clear");
 	Icon ICON_REFRESH = new GIcon("icon.debugger.refresh");
-	Icon ICON_FILTER = new GIcon("icon.debugger.filter"); // Eww.
+	Icon ICON_FILTER = new GIcon("icon.debugger.filter");
 	Icon ICON_SELECT_ROWS = new GIcon("icon.debugger.select.rows");
 	Icon ICON_AUTOREAD = new GIcon("icon.debugger.autoread");
 
@@ -146,6 +146,8 @@ public interface DebuggerResources {
 	Icon ICON_MAP_MODULES = new GIcon("icon.debugger.map.modules");
 	Icon ICON_MAP_SECTIONS = new GIcon("icon.debugger.map.sections"); // TODO
 	Icon ICON_MAP_REGIONS = new GIcon("icon.debugger.map.regions"); // TODO
+	Icon ICON_MAP_AUTO = new GIcon("icon.debugger.map.auto");
+	Icon ICON_MAP_MANUALLY = new GIcon("icon.debugger.map.manual");
 	Icon ICON_BLOCK = new GIcon("icon.debugger.block"); // TODO
 	// TODO: Draw an icon
 	Icon ICON_SELECT_ADDRESSES = new GIcon("icon.debugger.select.addresses");
@@ -173,17 +175,6 @@ public interface DebuggerResources {
 	Icon ICON_DIFF = new GIcon("icon.debugger.diff");
 	Icon ICON_DIFF_PREV = new GIcon("icon.debugger.diff.previous");
 	Icon ICON_DIFF_NEXT = new GIcon("icon.debugger.diff.next");
-
-	Icon ICON_EDIT_MODE_READ_ONLY = new GIcon("icon.debugger.edit.mode.read.only");
-	Icon ICON_EDIT_MODE_WRITE_TARGET = new GIcon("icon.debugger.edit.mode.write.target");
-	Icon ICON_EDIT_MODE_WRITE_TRACE = new GIcon("icon.debugger.edit.mode.write.trace");
-	Icon ICON_EDIT_MODE_WRITE_EMULATOR =
-		new GIcon("icon.debugger.edit.mode.write.emulator");
-
-	String NAME_EDIT_MODE_READ_ONLY = "Control Target w/ Edits Disabled";
-	String NAME_EDIT_MODE_WRITE_TARGET = "Control Target";
-	String NAME_EDIT_MODE_WRITE_TRACE = "Control Trace";
-	String NAME_EDIT_MODE_WRITE_EMULATOR = "Control Emulator";
 
 	HelpLocation HELP_PACKAGE = new HelpLocation("Debugger", "package");
 
@@ -234,11 +225,6 @@ public interface DebuggerResources {
 	HelpLocation HELP_PROVIDER_REGISTERS = new HelpLocation(
 		PluginUtils.getPluginNameFromClass(DebuggerRegistersPlugin.class), HELP_ANCHOR_PLUGIN);
 
-	String TITLE_PROVIDER_TARGETS = "Debugger Targets";
-	Icon ICON_PROVIDER_TARGETS = ICON_CONNECTION; // TODO: Same icon as action
-	HelpLocation HELP_PROVIDER_TARGETS = new HelpLocation(
-		PluginUtils.getPluginNameFromClass(DebuggerTargetsPlugin.class), HELP_ANCHOR_PLUGIN);
-
 	String TITLE_PROVIDER_STACK = "Stack";
 	Icon ICON_PROVIDER_STACK = ICON_STACK;
 	HelpLocation HELP_PROVIDER_STACK = new HelpLocation(
@@ -254,11 +240,6 @@ public interface DebuggerResources {
 	HelpLocation HELP_PROVIDER_TIME = new HelpLocation(
 		PluginUtils.getPluginNameFromClass(DebuggerTimePlugin.class), HELP_ANCHOR_PLUGIN);
 
-	String TITLE_PROVIDER_OBJECTS = "Objects";
-	Icon ICON_PROVIDER_OBJECTS = new GIcon("icon.debugger.provider.objects");
-	HelpLocation HELP_PROVIDER_OBJECTS = new HelpLocation(
-		PluginUtils.getPluginNameFromClass(DebuggerObjectsPlugin.class), HELP_ANCHOR_PLUGIN);
-
 	String TITLE_PROVIDER_MODEL = "Model"; // TODO: An icon
 	Icon ICON_PROVIDER_MODEL = new GIcon("icon.debugger.provider.model");
 	HelpLocation HELP_PROVIDER_MODEL = new HelpLocation(
@@ -269,102 +250,24 @@ public interface DebuggerResources {
 	HelpLocation HELP_PROVIDER_WATCHES = new HelpLocation(
 		PluginUtils.getPluginNameFromClass(DebuggerWatchesPlugin.class), HELP_ANCHOR_PLUGIN);
 
-	String TITLE_PROVIDER_INTERPRETER = "Interpreter";
-
 	String BOOKMARK_CATEGORY_MEMORY_READ_ERROR = "Debugger Memory Read Error";
 
-	String OPTION_NAME_COLORS_STALE_MEMORY = "Colors.Stale Memory";
-	GColor DEFAULT_COLOR_BACKGROUND_STALE = new GColor("color.bg.debugger.plugin.resources.stale");
-
-	String OPTION_NAME_COLORS_ERROR_MEMORY = "Colors.Error Memory";
-	Color DEFAULT_COLOR_BACKGROUND_ERROR = new GColor("color.bg.debugger.plugin.resources.error");
+	GColor COLOR_BACKGROUND_STALE = new GColor("color.bg.debugger.plugin.resources.stale");
+	Color COLOR_BACKGROUND_ERROR = new GColor("color.bg.debugger.plugin.resources.error");
 
 	int PRIORITY_REGISTER_MARKER = 10;
-	String OPTION_NAME_COLORS_TRACKING_MARKERS = "Colors.Tracking Markers";
-	Color DEFAULT_COLOR_REGISTER_MARKERS =
-		new GColor("color.debugger.plugin.resources.register.marker");
+	Color COLOR_REGISTER_MARKERS = new GColor("color.debugger.plugin.resources.register.marker");
 	Icon ICON_REGISTER_MARKER = new GIcon("icon.debugger.marker.register");
 
-	Icon ICON_EVENT_MARKER = new GIcon("icon.debugger.marker.event"); // TODO: Another icon?
-	// At least rename to "marker-arrow", and then have both ref it.
+	Icon ICON_EVENT_MARKER = new GIcon("icon.debugger.marker.event");
 
-	//@formatter:off
-	String OPTION_NAME_COLORS_REGISTER_STALE = "Colors.Stale Registers";
-	Color DEFAULT_COLOR_REGISTER_STALE = new GColor("color.debugger.plugin.resources.register.stale");
-	String OPTION_NAME_COLORS_REGISTER_STALE_SEL = "Colors.Stale Registers (selected)";
-	Color DEFAULT_COLOR_REGISTER_STALE_SEL = new GColor("color.debugger.plugin.resources.register.stale.selected");
-	String OPTION_NAME_COLORS_REGISTER_CHANGED = "Colors.Changed Registers";
-	Color DEFAULT_COLOR_REGISTER_CHANGED = new GColor("color.debugger.plugin.resources.register.changed");
-	String OPTION_NAME_COLORS_REGISTER_CHANGED_SEL = "Colors.Changed Registers (selected)";
-	Color DEFAULT_COLOR_REGISTER_CHANGED_SEL = new GColor("color.debugger.plugin.resources.register.changed.selected");
-	//@formatter:on
-
-	//@formatter:off
-	String OPTION_NAME_COLORS_WATCH_STALE = "Colors.Stale Watches";
-	Color DEFAULT_COLOR_WATCH_STALE = new GColor("color.debugger.plugin.resources.watch.stale");
-	String OPTION_NAME_COLORS_WATCH_STALE_SEL = "Colors.Stale Watches (selected)";
-	Color DEFAULT_COLOR_WATCH_STALE_SEL = new GColor("color.debugger.plugin.resources.watch.stale.selected");
-	String OPTION_NAME_COLORS_WATCH_CHANGED = "Colors.Changed Watches";
-	Color DEFAULT_COLOR_WATCH_CHANGED = new GColor("color.debugger.plugin.resources.watch.changed");
-	String OPTION_NAME_COLORS_WATCH_CHANGED_SEL = "Colors.Changed Watches (selected)";
-	Color DEFAULT_COLOR_WATCH_CHANGED_SEL = new GColor("color.debugger.plugin.resources.watch.changed.selected");
-	//@formatter:on
-
-	//@formatter:off	
-	String OPTION_NAME_COLORS_VALUE_CHANGED = "Colors.Changed Values";
-	Color DEFAULT_COLOR_VALUE_CHANGED = new GColor("color.debugger.plugin.resources.value.changed");
-	String OPTION_NAME_COLORS_VALUE_CHANGED_SEL = "Colors.Changed Values (selected)";
-	Color DEFAULT_COLOR_VALUE_CHANGED_SEL = new GColor("color.debugger.plugin.resources.value.changed.selected");
-	//@formatter:on
-
-	String OPTION_NAME_COLORS_PCODE_COUNTER = "Colors.Pcode Counter";
-	Color DEFAULT_COLOR_PCODE_COUNTER = new GColor("color.debugger.plugin.resources.pcode.counter");
-
-	String NAME_BREAKPOINT_MARKER_ENABLED = "Enabled Breakpoint";
-	String NAME_BREAKPOINT_MARKER_DISABLED = "Disabled Breakpoint";
-	String NAME_BREAKPOINT_MARKER_MIXED = "Mixed Breakpoint";
-	String NAME_BREAKPOINT_MARKER_INEFF_EN = "Ineffective Enabled Breakpoint";
-	String NAME_BREAKPOINT_MARKER_INEFF_DIS = "Ineffective Disabled Breakpoint";
-	String NAME_BREAKPOINT_MARKER_INEFF_MIX = "Ineffective Mixed Breakpoint";
-	String NAME_BREAKPOINT_MARKER_INCON_EN = "Inconsistent Enabled Breakpoint";
-	String NAME_BREAKPOINT_MARKER_INCON_DIS = "Inconsistent Disabled Breakpoint";
-	String NAME_BREAKPOINT_MARKER_INCON_MIX = "Inconsistent Mixed Breakpoint";
-
-	Icon ICON_BREAKPOINT_OVERLAY_INCONSISTENT =
-		new GIcon("icon.debugger.breakpoint.overlay.inconsistent");
-	Icon ICON_BREAKPOINT_MARKER_ENABLED = new GIcon("icon.debugger.breakpoint.marker.enabled");
-	Icon ICON_BREAKPOINT_MARKER_DISABLED = new GIcon("icon.debugger.breakpoint.marker.disabled");
-	Icon ICON_BREAKPOINT_MARKER_MIXED =
-		new GIcon("icon.debugger.breakpoint.marker.mixed");
-
-	Icon ICON_BREAKPOINT_MARKER_INEFF_EN =
-		new GIcon("icon.debugger.breakpoint.marker.ineffective.enabled");
-	Icon ICON_BREAKPOINT_MARKER_INEFF_DIS =
-		new GIcon("icon.debugger.breakpoint.marker.ineffective.disabled");
-	Icon ICON_BREAKPOINT_MARKER_INEFF_MIX =
-		new GIcon("icon.debugger.breakpoint.marker.ineffective.mixed");
-
-	Icon ICON_BREAKPOINT_MARKER_INCON_EN =
-		new MultiIcon(ICON_BREAKPOINT_MARKER_ENABLED, ICON_BREAKPOINT_OVERLAY_INCONSISTENT);
-	Icon ICON_BREAKPOINT_MARKER_INCON_DIS =
-		new MultiIcon(ICON_BREAKPOINT_MARKER_DISABLED, ICON_BREAKPOINT_OVERLAY_INCONSISTENT);
-	Icon ICON_BREAKPOINT_MARKER_INCON_MIX =
-		new MultiIcon(ICON_BREAKPOINT_MARKER_MIXED, ICON_BREAKPOINT_OVERLAY_INCONSISTENT);
+	Color COLOR_VALUE_CHANGED = new GColor("color.debugger.plugin.resources.value.changed");
+	Color COLOR_VALUE_CHANGED_SEL =
+		new GColor("color.debugger.plugin.resources.value.changed.selected");
 
 	Icon ICON_UNIQUE_REF_READ = new GIcon("icon.debugger.unique.ref.read"); // TODO
 	Icon ICON_UNIQUE_REF_WRITE = new GIcon("icon.debugger.unique.ref.write"); // TODO
 	Icon ICON_UNIQUE_REF_RW = new MultiIcon(ICON_UNIQUE_REF_READ, ICON_UNIQUE_REF_WRITE); // TODO
-
-	//@formatter:off
-	String OPTION_NAME_COLORS_ENABLED_BREAKPOINT_MARKERS = "Colors.Enabled Breakpoint Markers";
-	Color DEFAULT_COLOR_ENABLED_BREAKPOINT_MARKERS = new GColor("color.debugger.plugin.resources.breakpoint.marker.enabled");
-	String OPTION_NAME_COLORS_DISABLED_BREAKPOINT_MARKERS = "Colors.Disabled Breakpoint Markers";
-	Color DEFAULT_COLOR_DISABLED_BREAKPOINT_MARKERS = new GColor("color.debugger.plugin.resources.breakpoint.marker.disabled");
-	String OPTION_NAME_COLORS_INEFF_EN_BREAKPOINT_MARKERS = "Colors.Ineffective Enabled Breakpoint Markers";
-	Color DEFAULT_COLOR_INEFF_EN_BREAKPOINT_MARKERS = new GColor("color.debugger.plugin.resources.breakpoint.marker.enabled.ineffective");
-	String OPTION_NAME_COLORS_INEFF_DIS_BREAKPOINT_MARKERS = "Colors.Ineffective Disabled Breakpoint Markers";
-	Color DEFAULT_COLOR_INEFF_DIS_BREAKPOINT_MARKERS = new GColor("color.debugger.plugin.resources.breakpoint.marker.disabled.ineffective");
-	//@formatter:on
 
 	String OPTION_NAME_COLORS_ENABLED_BREAKPOINT_COLORING_BACKGROUND =
 		"Colors.Enabled Breakpoint Markers Have Background";
@@ -383,7 +286,7 @@ public interface DebuggerResources {
 	boolean DEFAULT_COLOR_INEFF_DIS_BREAKPOINT_COLORING_BACKGROUND = false;
 
 	String OPTION_NAME_LOG_BUFFER_LIMIT = "Log Buffer Size";
-	int DEFAULT_LOG_BUFFER_LIMIT = 100;
+	int DEFAULT_LOG_BUFFER_LIMIT = 20;
 
 	// TODO: Re-assign/name groups
 	String GROUP_GENERAL = "Dbg1. General";
@@ -464,7 +367,7 @@ public interface DebuggerResources {
 
 		public AbstractConnectAction(Plugin owner) {
 			super(NAME, owner.getName());
-			setDescription("Create a new connection to an debugging agent");
+			setDescription("Create a new connection to a debugging agent");
 			setHelpLocation(new HelpLocation(owner.getName(), HELP_ANCHOR));
 		}
 	}
@@ -511,83 +414,6 @@ public interface DebuggerResources {
 		Icon ICON = ICON_DEBUGGER;
 		String GROUP = GROUP_GENERAL;
 		String HELP_ANCHOR = "debug_program";
-
-		static <T> MultiStateActionBuilder<T> buttonBuilder(Plugin owner, Plugin helpOwner) {
-			return new MultiStateActionBuilder<T>(NAME, owner.getName())
-					.toolBarIcon(ICON)
-					.toolBarGroup(GROUP)
-					.helpLocation(new HelpLocation(helpOwner.getName(), HELP_ANCHOR));
-		}
-
-		static ActionBuilder menuBuilder(DebuggerProgramLaunchOffer offer, Plugin owner,
-				Plugin helpOwner) {
-			return new ActionBuilder(offer.getConfigName(), owner.getName())
-					.description(offer.getButtonTitle())
-					.menuPath(DebuggerPluginPackage.NAME, offer.getMenuParentTitle(),
-						offer.getMenuTitle())
-					.menuIcon(offer.getIcon())
-					.menuGroup(GROUP)
-					.helpLocation(new HelpLocation(helpOwner.getName(), HELP_ANCHOR));
-		}
-	}
-
-	interface EmulateProgramAction {
-		String NAME = "Emulate Program in new Trace";
-		String DESCRIPTION = "Emulate the current program in a new trace starting at the cursor";
-		Icon ICON = ICON_EMULATE;
-		String GROUP = GROUP_GENERAL;
-		String HELP_ANCHOR = "emulate_program";
-
-		static ActionBuilder builder(Plugin owner) {
-			String ownerName = owner.getName();
-			return new ActionBuilder(NAME, ownerName)
-					.description(DESCRIPTION)
-					.toolBarIcon(ICON)
-					.toolBarGroup(GROUP)
-					.menuPath(DebuggerPluginPackage.NAME, NAME)
-					.menuIcon(ICON)
-					.menuGroup(GROUP)
-					.popupMenuPath(NAME)
-					.popupMenuIcon(ICON)
-					.popupMenuGroup(GROUP)
-					.helpLocation(new HelpLocation(ownerName, HELP_ANCHOR));
-		}
-	}
-
-	interface EmulateAddThreadAction {
-		String NAME = "Add Emulated Thread to Trace";
-		String DESCRIPTION = "Add an emulated thread to the current trace starting here";
-		Icon ICON = ICON_THREAD;
-		String GROUP = GROUP_GENERAL;
-		String HELP_ANCHOR = "add_emulated_thread";
-
-		static ActionBuilder builder(Plugin owner) {
-			String ownerName = owner.getName();
-			return new ActionBuilder(NAME, ownerName)
-					.description(DESCRIPTION)
-					.menuPath(DebuggerPluginPackage.NAME, NAME)
-					.menuIcon(ICON)
-					.menuGroup(GROUP)
-					.popupMenuPath(NAME)
-					.popupMenuIcon(ICON)
-					.popupMenuGroup(GROUP)
-					.helpLocation(new HelpLocation(ownerName, HELP_ANCHOR));
-		}
-	}
-
-	interface ConfigureEmulatorAction {
-		String NAME = "Configure Emulator";
-		String DESCRIPTION = "Choose and configure the current emulator";
-		String GROUP = GROUP_MAINTENANCE;
-		String HELP_ANCHOR = "configure_emulator";
-
-		static ToggleActionBuilder builder(Plugin owner) {
-			String ownerName = owner.getName();
-			return new ToggleActionBuilder(NAME, ownerName)
-					.description(DESCRIPTION)
-					.menuGroup(GROUP)
-					.helpLocation(new HelpLocation(ownerName, HELP_ANCHOR));
-		}
 	}
 
 	abstract class AbstractQuickLaunchAction extends DockingAction {
@@ -957,40 +783,6 @@ public interface DebuggerResources {
 		}
 	}
 
-	interface ImportMissingModuleAction {
-		String NAME = "Import Missing Module";
-		String DESCRIPTION = "Import the missing module from disk";
-		Icon ICON = ICON_IMPORT;
-		String HELP_ANCHOR = "import_missing_module";
-
-		static ActionBuilder builder(Plugin owner) {
-			String ownerName = owner.getName();
-			return new ActionBuilder(NAME, ownerName)
-					.description(DESCRIPTION)
-					.toolBarIcon(ICON)
-					.popupMenuIcon(ICON)
-					.popupMenuPath(NAME)
-					.helpLocation(new HelpLocation(ownerName, HELP_ANCHOR));
-		}
-	}
-
-	interface MapMissingModuleAction {
-		String NAME = "Map Missing Module";
-		String DESCRIPTION = "Map the missing module to an existing import";
-		Icon ICON = ICON_MAP_MODULES;
-		String HELP_ANCHOR = "map_missing_module";
-
-		static ActionBuilder builder(Plugin owner) {
-			String ownerName = owner.getName();
-			return new ActionBuilder(NAME, ownerName)
-					.description(DESCRIPTION)
-					.toolBarIcon(ICON)
-					.popupMenuIcon(ICON)
-					.popupMenuPath(NAME)
-					.helpLocation(new HelpLocation(ownerName, HELP_ANCHOR));
-		}
-	}
-
 	interface FollowsCurrentThreadAction {
 		String NAME = "Follows Selected Thread";
 		String DESCRIPTION = "Register tracking follows selected thread (and contents" +
@@ -1022,7 +814,8 @@ public interface DebuggerResources {
 
 		static <T> MultiStateActionBuilder<T> builder(Plugin owner) {
 			String ownerName = owner.getName();
-			return new MultiStateActionBuilder<T>(NAME, ownerName).description(DESCRIPTION)
+			return new MultiStateActionBuilder<T>(NAME, ownerName)
+					.description(DESCRIPTION)
 					.helpLocation(new HelpLocation(ownerName, HELP_ANCHOR));
 		}
 	}
@@ -1260,19 +1053,6 @@ public interface DebuggerResources {
 		}
 	}
 
-	abstract class AbstractToggleBreakpointAction extends DockingAction {
-		public static final String NAME = "Toggle Breakpoint";
-		// TODO: A "toggle breakpoint" icon
-		public static final Icon ICON = ICON_BREAKPOINT_MARKER_MIXED;
-		public static final String HELP_ANCHOR = "toggle_breakpoint";
-
-		public AbstractToggleBreakpointAction(Plugin owner) {
-			super(NAME, owner.getName());
-			setDescription("Set, enable, or disable a breakpoint");
-			setHelpLocation(new HelpLocation(owner.getName(), HELP_ANCHOR));
-		}
-	}
-
 	abstract class AbstractSetBreakpointAction extends DockingAction {
 		public static final String NAME = "Set Breakpoint";
 		public static final Icon ICON = ICON_SET_BREAKPOINT;
@@ -1496,30 +1276,6 @@ public interface DebuggerResources {
 		}
 	}
 
-	abstract class AbstractCaptureTypesAction extends DockingAction {
-		public static final String NAME = "Capture Data Types";
-		public static final Icon ICON = ICON_DATA_TYPES;
-		public static final String HELP_ANCHOR = "capture_types";
-
-		public AbstractCaptureTypesAction(Plugin owner) {
-			super(NAME, owner.getName());
-			setDescription("Capture data types from selected modules");
-			setHelpLocation(new HelpLocation(owner.getName(), HELP_ANCHOR));
-		}
-	}
-
-	abstract class AbstractCaptureSymbolsAction extends DockingAction {
-		public static final String NAME = "Capture Symbols";
-		public static final Icon ICON = ICON_CAPTURE_SYMBOLS;
-		public static final String HELP_ANCHOR = "capture_symbols";
-
-		public AbstractCaptureSymbolsAction(Plugin owner) {
-			super(NAME, owner.getName());
-			setDescription("Capture symbols from selected modules");
-			setHelpLocation(new HelpLocation(owner.getName(), HELP_ANCHOR));
-		}
-	}
-
 	abstract class AbstractImportFromFileSystemAction extends DockingAction {
 		public static final String NAME = "Import From File System";
 		public static final String HELP_ANCHOR = "import_from_fs";
@@ -1705,23 +1461,6 @@ public interface DebuggerResources {
 		}
 	}
 
-	interface SeekTracePresentAction {
-		String NAME = "Seek Trace Present";
-		String DESCRIPTION = "Track the tool to the latest snap";
-		Icon ICON = ICON_SEEK_PRESENT;
-		String GROUP = "zz";
-		String HELP_ANCHOR = "seek_trace_present";
-
-		static ToggleActionBuilder builder(Plugin owner) {
-			String ownerName = owner.getName();
-			return new ToggleActionBuilder(NAME, ownerName)
-					.description(DESCRIPTION)
-					.toolBarIcon(ICON)
-					.toolBarGroup(GROUP)
-					.helpLocation(new HelpLocation(ownerName, HELP_ANCHOR));
-		}
-	}
-
 	// TODO: Perhaps to reduce overloading of "snapshot" we should use "event" instead?
 	interface RenameSnapshotAction {
 		String NAME = "Rename Current Snapshot";
@@ -1738,37 +1477,6 @@ public interface DebuggerResources {
 					.menuPath(DebuggerPluginPackage.NAME, NAME)
 					.menuGroup(GROUP, "zzz")
 					.keyBinding("CTRL SHIFT N")
-					.helpLocation(new HelpLocation(ownerName, HELP_ANCHOR));
-		}
-	}
-
-	interface SynchronizeFocusAction {
-		String NAME = "Synchronize Focus";
-		String DESCRIPTION = "Synchronize trace activation with debugger focus/select";
-		Icon ICON = ICON_SYNC;
-		String HELP_ANCHOR = "sync_focus";
-
-		static ToggleActionBuilder builder(Plugin owner) {
-			String ownerName = owner.getName();
-			return new ToggleActionBuilder(NAME, ownerName).description(DESCRIPTION)
-					.menuPath(NAME)
-					.menuIcon(ICON)
-					.helpLocation(new HelpLocation(ownerName, HELP_ANCHOR));
-		}
-	}
-
-	interface GoToTimeAction {
-		String NAME = "Go To Time";
-		String DESCRIPTION = "Go to a specific time, optionally using emulation";
-		Icon ICON = ICON_TIME;
-		String HELP_ANCHOR = "goto_time";
-
-		static ActionBuilder builder(Plugin owner) {
-			String ownerName = owner.getName();
-			return new ActionBuilder(NAME, ownerName).description(DESCRIPTION)
-					.menuPath(NAME)
-					.menuIcon(ICON)
-					.keyBinding("CTRL SHIFT T")
 					.helpLocation(new HelpLocation(ownerName, HELP_ANCHOR));
 		}
 	}
@@ -1858,7 +1566,7 @@ public interface DebuggerResources {
 	}
 
 	interface CloseAllTracesAction extends CloseTraceAction {
-		String NAME = NAME_PREFIX + " All Traces";
+		String NAME = NAME_PREFIX + "All Traces";
 		String DESCRIPTION = "Close all traces";
 		String HELP_ANCHOR = "close_all_traces";
 
@@ -1885,7 +1593,7 @@ public interface DebuggerResources {
 	}
 
 	interface CloseOtherTracesAction extends CloseTraceAction {
-		String NAME = NAME_PREFIX + " Other Traces";
+		String NAME = NAME_PREFIX + "Other Traces";
 		String DESCRIPTION = "Close all traces except the current one";
 		String HELP_ANCHOR = "close_other_traces";
 
@@ -1912,7 +1620,7 @@ public interface DebuggerResources {
 	}
 
 	interface CloseDeadTracesAction extends CloseTraceAction {
-		String NAME = NAME_PREFIX + " Dead Traces";
+		String NAME = NAME_PREFIX + "Dead Traces";
 		String DESCRIPTION = "Close all traces not being recorded";
 		String HELP_ANCHOR = "close_dead_traces";
 
@@ -2024,22 +1732,6 @@ public interface DebuggerResources {
 		}
 	}
 
-	interface ForceFullViewAction {
-		String NAME = "Force Full View";
-		String DESCRIPTION = "Ignore regions and fiew full address spaces";
-		String GROUP = GROUP_GENERAL;
-		String HELP_ANCHOR = "force_full_view";
-
-		static ToggleActionBuilder builder(Plugin owner) {
-			String ownerName = owner.getName();
-			return new ToggleActionBuilder(NAME, ownerName)
-					.description(DESCRIPTION)
-					.menuGroup(GROUP_GENERAL)
-					.menuPath(NAME)
-					.helpLocation(new HelpLocation(ownerName, HELP_ANCHOR));
-		}
-	}
-
 	interface CompareTimesAction {
 		String NAME = "Compare";
 		String DESCRIPTION = "Compare this point in time to another";
@@ -2087,87 +1779,6 @@ public interface DebuggerResources {
 					.description(DESCRIPTION)
 					.toolBarGroup(GROUP)
 					.toolBarIcon(ICON)
-					.helpLocation(new HelpLocation(ownerName, HELP_ANCHOR));
-		}
-	}
-
-	interface LimitToCurrentSnapAction {
-		String NAME = "Limit to Current Snap";
-		String DESCRIPTION = "Choose whether displayed objects must be alive at the current snap";
-		String GROUP = GROUP_GENERAL;
-		Icon ICON = ICON_TIME; // TODO
-		String HELP_ANCHOR = "limit_to_current_snap";
-
-		static ToggleActionBuilder builder(Plugin owner) {
-			String ownerName = owner.getName();
-			return new ToggleActionBuilder(NAME, ownerName)
-					.description(DESCRIPTION)
-					.toolBarGroup(GROUP)
-					.toolBarIcon(ICON)
-					.helpLocation(new HelpLocation(ownerName, HELP_ANCHOR));
-		}
-	}
-
-	interface ShowHiddenAction {
-		String NAME = "Show Hidden";
-		String DESCRIPTION = "Choose whether to display hidden children";
-		String GROUP = GROUP_GENERAL;
-		String HELP_ANCHOR = "show_hidden";
-
-		static ToggleActionBuilder builder(Plugin owner) {
-			String ownerName = owner.getName();
-			return new ToggleActionBuilder(NAME, ownerName)
-					.description(DESCRIPTION)
-					.menuPath(NAME)
-					.menuGroup(GROUP)
-					.helpLocation(new HelpLocation(ownerName, HELP_ANCHOR));
-		}
-	}
-
-	interface ShowPrimitivesInTreeAction {
-		String NAME = "Show Primitives in Tree";
-		String DESCRIPTION = "Choose whether to display primitive values in the tree";
-		String GROUP = GROUP_GENERAL;
-		String HELP_ANCHOR = "show_primitives";
-
-		static ToggleActionBuilder builder(Plugin owner) {
-			String ownerName = owner.getName();
-			return new ToggleActionBuilder(NAME, ownerName)
-					.description(DESCRIPTION)
-					.menuPath(NAME)
-					.menuGroup(GROUP)
-					.helpLocation(new HelpLocation(ownerName, HELP_ANCHOR));
-		}
-	}
-
-	interface ShowMethodsInTreeAction {
-		String NAME = "Show Methods in Tree";
-		String DESCRIPTION = "Choose whether to display methods in the tree";
-		String GROUP = GROUP_GENERAL;
-		String HELP_ANCHOR = "show_methods";
-
-		static ToggleActionBuilder builder(Plugin owner) {
-			String ownerName = owner.getName();
-			return new ToggleActionBuilder(NAME, ownerName)
-					.description(DESCRIPTION)
-					.menuPath(NAME)
-					.menuGroup(GROUP)
-					.helpLocation(new HelpLocation(ownerName, HELP_ANCHOR));
-		}
-	}
-
-	interface FollowLinkAction {
-		String NAME = "Follow Link";
-		String DESCRIPTION = "Navigate to the link target";
-		String GROUP = GROUP_GENERAL;
-		String HELP_ANCHOR = "follow_link";
-
-		static ActionBuilder builder(Plugin owner) {
-			String ownerName = owner.getName();
-			return new ActionBuilder(NAME, ownerName)
-					.description(DESCRIPTION)
-					.popupMenuPath(NAME)
-					.popupMenuGroup(GROUP)
 					.helpLocation(new HelpLocation(ownerName, HELP_ANCHOR));
 		}
 	}

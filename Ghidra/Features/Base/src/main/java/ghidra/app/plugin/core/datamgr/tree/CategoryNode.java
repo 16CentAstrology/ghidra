@@ -104,8 +104,11 @@ public class CategoryNode extends DataTypeTreeNode {
 		if (getClass() != o.getClass()) {
 			return false;
 		}
+
 		CategoryNode otherNode = (CategoryNode) o;
-		if (!category.equals(otherNode.category)) {
+		CategoryPath otherPath = otherNode.getCategory().getCategoryPath();
+		CategoryPath path = getCategory().getCategoryPath();
+		if (!path.equals(otherPath)) {
 			return false;
 		}
 		return name.equals(otherNode.name);
@@ -250,18 +253,20 @@ public class CategoryNode extends DataTypeTreeNode {
 
 	@Override
 	public void valueChanged(Object newValue) {
-		int transactionID = category.getDataTypeManager().startTransaction("rename");
+		String newName = newValue.toString();
+		int transactionID =
+			category.getDataTypeManager().startTransaction("Rename Category " + newName);
 		try {
-			category.setName(newValue.toString());
+			category.setName(newName);
 		}
 		catch (DuplicateNameException e) {
 			Msg.showError(getClass(), null, "Rename Failed",
-				"Category by the name " + newValue + " already exists in this category.");
+				"Category by the name " + newName + " already exists in this category.");
 		}
 		catch (InvalidNameException exc) {
 			String msg = exc.getMessage();
 			if (msg == null) {
-				msg = "Invalid name specified: " + newValue;
+				msg = "Invalid name specified: " + newName;
 			}
 			Msg.showError(getClass(), null, "Invalid name specified", exc.getMessage());
 		}

@@ -30,6 +30,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import docking.action.DockingActionIf;
+import docking.options.OptionsService;
 import docking.options.editor.GhidraColorChooser;
 import docking.widgets.dialogs.InputDialog;
 import docking.widgets.fieldpanel.FieldPanel;
@@ -44,8 +45,8 @@ import ghidra.app.plugin.core.decompile.DecompilerProvider;
 import ghidra.app.plugin.core.decompile.actions.*;
 import ghidra.app.util.AddEditDialog;
 import ghidra.framework.options.ToolOptions;
-import ghidra.framework.plugintool.util.OptionsService;
 import ghidra.program.model.listing.CodeUnit;
+import ghidra.util.Msg;
 
 public class DecompilerClangTest extends AbstractDecompilerTest {
 
@@ -69,40 +70,41 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 
 		/*
 			 1|
-			 2|	int _main(int argc,char **argv)
+			 2| int _main(int argc,char **argv)
 			 3|
-			 4|	{
-			 5|	  _a.id = 1;
-			 6|	  _a.name = "A";
-			 7|	  _b.id = 2;
-			 8|	  _b.name = "B";
-			 9|	  _c.id = 3;
-			10|	  _c.name = "C";
-			11|	  _d.id = 4;
-			12|	  _d.name = "D";
-			13|	  _e.id = 5;
-			14|	  _e.name = "E";
-			15|	  _c.d.e._0_8_ = CONCAT44(_e._4_4_,5);
-			16|	  _d.e.name = "E";
-			17|	  _c.d._0_8_ = CONCAT44(_d._4_4_,4);
-			18|	  _c.d.name = "D";
-			19|	  _c.d.e.name = "E";
-			20|	  _d.e._0_8_ = _c.d.e._0_8_;
-			21|	  _memcpy(&_b.c,&_c,0x30);
-			22|	  _memcpy(&_a.b,&_b,0x40);
-			23|	  _call_structure_A(&_a);
-			24|	  return 0;
-			25|	}
-			16|
+			 4| {
+			 5|   _a.id = 1;
+			 6|   _a.name = "A";
+			 7|   _b.id = 2;
+			 8|   _b.name = "B";
+			 9|   _c.id = 3;
+			10|   _c.name = "C";
+			11|   _d.id = 4;
+			12|   _d.name = "D";
+			13|   _e.id = 5;
+			14|   _e.name = "E";
+			15|   _c.d.e._4_4_ = _e._4_4_;
+			16|   _c.d.e.id = 5;
+			17|   _d.e.name = "E";
+			18|   _c.d._4_4_ = _d._4_4_;
+			19|   _c.d.id = 4;
+			20|   _c.d.name = "D";
+			21|   _c.d.e.name = "E";
+			22|   _d.e._0_8_ = _c.d.e._0_8_;
+			23|   __stubs::_memcpy(&_b.c,&_c,0x30);
+			24|   __stubs::_memcpy(&_a.b,&_b,0x40);
+			25|   _call_structure_A(&_a);
+			26|   return 0;
+			27| }
 		 	
 		 */
 
 		decompile("100000bf0"); // 'main'
 
 		/*
-		 	24: return 0;
+		 	26: return 0;
 		 */
-		int line = 24;
+		int line = 26;
 		assertToken("return", line, 0, 1, 2, 3, 4, 5);
 		assertTokenIndex(0, line, 0, 1, 2, 3, 4, 5);
 		assertToken(" ", line, 6);
@@ -117,41 +119,41 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 	public void testClangTextField_getNextTokenIndex() {
 
 		/*
-			 1|
-			 2|	int _main(int argc,char **argv)
-			 3|
-			 4|	{
-			 5|	  _a.id = 1;
-			 6|	  _a.name = "A";
-			 7|	  _b.id = 2;
-			 8|	  _b.name = "B";
-			 9|	  _c.id = 3;
-			10|	  _c.name = "C";
-			11|	  _d.id = 4;
-			12|	  _d.name = "D";
-			13|	  _e.id = 5;
-			14|	  _e.name = "E";
-			15|	  _c.d.e._0_8_ = CONCAT44(_e._4_4_,5);
-			16|	  _d.e.name = "E";
-			17|	  _c.d._0_8_ = CONCAT44(_d._4_4_,4);
-			18|	  _c.d.name = "D";
-			19|	  _c.d.e.name = "E";
-			20|	  _d.e._0_8_ = _c.d.e._0_8_;
-			21|	  _memcpy(&_b.c,&_c,0x30);
-			22|	  _memcpy(&_a.b,&_b,0x40);
-			23|	  _call_structure_A(&_a);
-			24|	  return 0;
-			25|	}
-			16|
-		 	
-		 */
-
+		 1|
+		 2| int _main(int argc,char **argv)
+		 3|
+		 4| {
+		 5|   _a.id = 1;
+		 6|   _a.name = "A";
+		 7|   _b.id = 2;
+		 8|   _b.name = "B";
+		 9|   _c.id = 3;
+		10|   _c.name = "C";
+		11|   _d.id = 4;
+		12|   _d.name = "D";
+		13|   _e.id = 5;
+		14|   _e.name = "E";
+		15|   _c.d.e._4_4_ = _e._4_4_;
+		16|   _c.d.e.id = 5;
+		17|   _d.e.name = "E";
+		18|   _c.d._4_4_ = _d._4_4_;
+		19|   _c.d.id = 4;
+		20|   _c.d.name = "D";
+		21|   _c.d.e.name = "E";
+		22|   _d.e._0_8_ = _c.d.e._0_8_;
+		23|   __stubs::_memcpy(&_b.c,&_c,0x30);
+		24|   __stubs::_memcpy(&_a.b,&_b,0x40);
+		25|   _call_structure_A(&_a);
+		26|   return 0;
+		27| }
+		
+		*/
 		decompile("100000bf0"); // 'main'
 
 		/*
-		 	24: return 0;
+		 	26: return 0;
 		 */
-		int line = 24;
+		int line = 26;
 		int nextIndex = 1;
 		assertToken("return", line, 1, 2, 3, 4, 5);
 		assertNextTokenIndex(nextIndex, line, 1, 2, 3, 4, 5);
@@ -382,29 +384,32 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 		setDecompilerLocation(line, charPosition);
 
 		ClangToken token = getToken();
-		String text = token.getText();
-		assertEquals("_printf", text);
+		String printfText = token.getText();
+		assertEquals("_printf", printfText);
 
-		highlight();
+		highlight(); // "printf" is secondary highlighted
 
 		// 5:30 "a->name"
 		line = 5;
 		charPosition = 38;
 		setDecompilerLocation(line, charPosition);
 		ClangToken token2 = getToken();
-		String text2 = token2.getText();
-		assertEquals("name", text2);
+		String nameText = token2.getText();
+		assertEquals("name", nameText);
 
-		Color color2 = highlight();
+		Color color2 = highlight();  // "name" is secondary highlighted
 
 		// 5:2 "_printf"
 		line = 5;
 		charPosition = 2;
 		setDecompilerLocation(line, charPosition);
-		removeSecondaryHighlight();
 
-		assertNoFieldsSecondaryHighlighted(text);
-		assertAllFieldsHighlighted(text2, color2);
+		Msg.debug(this, "test - remove");
+
+		removeSecondaryHighlight(); // remove "printf" highlight
+
+		assertNoFieldsSecondaryHighlighted(printfText);
+		assertAllFieldsHighlighted(nameText, color2);
 	}
 
 	@Test
@@ -811,7 +816,106 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 	}
 
 	@Test
-	public void testSecondaryHighlighting_MiddleMouseDoesNotClearSecondaryHighlight() {
+	public void testSecondaryHighlighting_MiddleMouse_SecondaryHighlight() {
+
+		/*
+		
+		 The middle mouse is a secondary highlight so that it persists as the user clicks around.
+		 
+		 Middle mousing on an already middle moused highlight should clear the highlight.  Middle
+		 mousing on a new token should clear the original highlight and highlight the new token.
+		
+		 Decomp of '_call_structure_A':
+		 
+			1|
+			2| void _call_structure_A(A *a)
+			3|
+			4| {
+			5|  	_printf("call_structure_A: %s\n",a->name);
+			6|  	_printf("call_structure_A: %s\n",(a->b).name);
+			7|  	_printf("call_structure_A: %s\n",(a->b).c.name);
+			8|  	_printf("call_structure_A: %s\n",(a->b).c.d.name);
+			9|  	_printf("call_structure_A: %s\n",(a->b).c.d.e.name);
+		   10|  	_call_structure_B(&a->b);
+		   11|  	return;
+		   12|	}
+		
+		 */
+
+		decompile("100000d60"); // '_call_structure_A'
+
+		// 5:2 "_printf"
+		int line = 5;
+		int charPosition = 2;
+		setDecompilerLocation(line, charPosition);
+
+		ClangToken token = getToken();
+		String tokenText = token.getText();
+		assertEquals("_printf", tokenText);
+
+		middleMouse();
+		assertCombinedHighlightColor(token);
+
+		middleMouse();
+		assertNoFieldsSecondaryHighlighted(tokenText);
+	}
+
+	@Test
+	public void testSecondaryHighlighting_MiddleMouse_SecondaryHighlight_NewToken() {
+
+		/*
+		
+		 The middle mouse is a secondary highlight so that it persists as the user clicks around.
+		 
+		 Middle mousing on an already middle moused highlight should clear the highlight.  Middle
+		 mousing on a new token should clear the original highlight and highlight the new token.
+		
+		 Decomp of '_call_structure_A':
+		 
+			1|
+			2| void _call_structure_A(A *a)
+			3|
+			4| {
+			5|  	_printf("call_structure_A: %s\n",a->name);
+			6|  	_printf("call_structure_A: %s\n",(a->b).name);
+			7|  	_printf("call_structure_A: %s\n",(a->b).c.name);
+			8|  	_printf("call_structure_A: %s\n",(a->b).c.d.name);
+			9|  	_printf("call_structure_A: %s\n",(a->b).c.d.e.name);
+		   10|  	_call_structure_B(&a->b);
+		   11|  	return;
+		   12|	}
+		
+		 */
+
+		decompile("100000d60"); // '_call_structure_A'
+
+		// 5:2 "_printf"
+		int line = 5;
+		int charPosition = 2;
+		setDecompilerLocation(line, charPosition);
+
+		ClangToken token = getToken();
+		String tokenText = token.getText();
+		assertEquals("_printf", tokenText);
+
+		middleMouse();
+		assertCombinedHighlightColor(token);
+
+		// 5:30 "a->name"
+		line = 5;
+		charPosition = 38;
+		setDecompilerLocation(line, charPosition);
+		ClangToken token2 = getToken();
+		String text2 = token2.getText();
+		assertEquals("name", text2);
+
+		middleMouse();
+		assertNoFieldsSecondaryHighlighted(tokenText);
+		assertCombinedHighlightColor(token2);
+	}
+
+	@Test
+	public void testSecondaryHighlighting_MiddleMouseDoesNotClearSecondaryHighlight_ExistingHighlight() {
 
 		/*
 		
@@ -849,7 +953,9 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 		assertCombinedHighlightColor(token);
 
 		middleMouse();
-		assertAllFieldsHighlighted(tokenText, color);
+		ClangToken cursorToken = getToken(provider);
+		Predicate<ClangToken> ignores = t -> t == cursorToken;
+		assertAllFieldsHighlighted(tokenText, color, ignores);
 	}
 
 	@Test
@@ -2006,8 +2112,8 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 		assertAllFieldsHighlighted(name, cm, noIgnores);
 	}
 
-	private void assertAllHighlighterFieldsHighlighted(
-			SpyCTokenHighlightMatcher spyMatcher, String hlText, Color hlColor) {
+	private void assertAllHighlighterFieldsHighlighted(SpyCTokenHighlightMatcher spyMatcher,
+			String hlText, Color hlColor) {
 
 		ClangToken cursorToken = getToken(provider);
 		Predicate<ClangToken> ignores = t -> t == cursorToken;
@@ -2092,8 +2198,8 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 			}
 
 			Color actual = token.getHighlight();
-			assertTrue("Token is not highlighted: '" + token + "'" + "\n\texpected: " +
-				cm + "; found: " + toString(actual), cm.matches(actual));
+			assertTrue("Token is not highlighted: '" + token + "'" + "\n\texpected: " + cm +
+				"; found: " + toString(actual), cm.matches(actual));
 		}
 	}
 
@@ -2119,8 +2225,8 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 			}
 
 			Color actual = token.getHighlight();
-			assertTrue("Token is not highlighted: '" + token + "'" + "\n\texpected: " +
-				cm + "; found: " + toString(actual), cm.matches(actual));
+			assertTrue("Token is not highlighted: '" + token + "'" + "\n\texpected: " + cm +
+				"; found: " + toString(actual), cm.matches(actual));
 		}
 	}
 
@@ -2175,8 +2281,9 @@ public class DecompilerClangTest extends AbstractDecompilerTest {
 			Color actual = otherToken.getHighlight();
 			Color combinedColor = getCombinedHighlightColor(otherToken);
 			ColorMatcher combinedColorMatcher = colorMatcher.with(combinedColor);
-			assertTrue("Token is not highlighted: '" + otherToken + "'" + "\n\texpected: " +
-				combinedColorMatcher + "; found: " + toString(actual),
+			assertTrue(
+				"Token is not highlighted: '" + otherToken + "'" + "\n\texpected: " +
+					combinedColorMatcher + "; found: " + toString(actual),
 				combinedColorMatcher.matches(actual));
 		}
 	}

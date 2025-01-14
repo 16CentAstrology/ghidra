@@ -4,22 +4,24 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+%define api.prefix {grammar}
 %{
 #include "grammar.hh"
 
-extern int yylex(void);
-extern int yyerror(const char *str);
+namespace ghidra {
+
+extern int grammarlex(void);
+extern int grammarerror(const char *str);
 static CParse *parse;
-extern int yydebug;
 %}
 
 %union {
@@ -717,18 +719,22 @@ bool FunctionModifier::isValid(void) const
 Datatype *FunctionModifier::modType(Datatype *base,const TypeDeclarator *decl,Architecture *glb) const
 
 {
-  vector<Datatype *> intypes;
+  PrototypePieces proto;
 
+  if (base == (Datatype *)0)
+    proto.outtype = glb->types->getTypeVoid();
+  else
+    proto.outtype = base;
   // Varargs is encoded as extra null pointer in paramlist
-  bool dotdotdot = false;
+  proto.firstVarArgSlot = -1;
   if ((!paramlist.empty())&&(paramlist.back() == (TypeDeclarator *)0)) {
-    dotdotdot = true;
+    proto.firstVarArgSlot = paramlist.size() - 1;
   }
 
-  getInTypes(intypes,glb);
+  getInTypes(proto.intypes,glb);
 
-  ProtoModel *protomodel = decl->getModel(glb);
-  return glb->types->getTypeCode(protomodel,base,intypes,dotdotdot);
+  proto.model = decl->getModel(glb);
+  return glb->types->getTypeCode(proto);
 }
 
 TypeDeclarator::~TypeDeclarator(void)
@@ -779,7 +785,7 @@ bool TypeDeclarator::getPrototype(PrototypePieces &pieces,Architecture *glb) con
   fmod->getInTypes(pieces.intypes,glb);
   pieces.innames.clear();
   fmod->getInNames(pieces.innames);
-  pieces.dotdotdot = fmod->isDotdotdot();
+  pieces.firstVarArgSlot = fmod->isDotdotdot() ? pieces.intypes.size() : -1;
 
   // Construct the output type
   pieces.outtype = basetype;
@@ -1040,9 +1046,14 @@ Datatype *CParse::newStruct(const string &ident,vector<TypeDeclarator *> *declis
     sublist.emplace_back(0,-1,decl->getIdentifier(),decl->buildType(glb));
   }
 
-  TypeStruct::assignFieldOffsets(sublist,glb->types->getStructAlign());
-  if (!glb->types->setFields(sublist,res,-1,0)) {
-    setError("Bad structure definition");
+  try {
+    int4 newSize;
+    int4 newAlign;
+    TypeStruct::assignFieldOffsets(sublist,newSize,newAlign);
+    glb->types->setFields(sublist,res,newSize,newAlign,0);
+  }
+  catch (LowlevelError &err) {
+    setError(err.explain);
     glb->types->destroyType(res);
     return (Datatype *)0;
   }
@@ -1074,8 +1085,14 @@ Datatype *CParse::newUnion(const string &ident,vector<TypeDeclarator *> *declist
     sublist.emplace_back(i,0,decl->getIdentifier(),decl->buildType(glb));
   }
 
-  if (!glb->types->setFields(sublist,res,-1,0)) {
-    setError("Bad union definition");
+  try {
+    int4 newSize;
+    int4 newAlign;
+    TypeUnion::assignFieldOffsets(sublist,newSize,newAlign,res);
+    glb->types->setFields(sublist,res,newSize,newAlign,0);
+  }
+  catch (LowlevelError &err) {
+    setError(err.explain);
     glb->types->destroyType(res);
     return (Datatype *)0;
   }
@@ -1128,8 +1145,13 @@ Datatype *CParse::newEnum(const string &ident,vector<Enumerator *> *vecenum)
     vallist.push_back(enumer->value);
     assignlist.push_back(enumer->constantassigned);
   }
-  if (!glb->types->setEnumValues(namelist,vallist,assignlist,res)) {
-    setError("Bad enumeration values");
+  try {
+    map<uintb,string> namemap;
+    TypeEnum::assignValues(namemap,namelist,vallist,assignlist,res);
+    glb->types->setEnumValues(namemap, res);
+  }
+  catch (LowlevelError &err) {
+    setError(err.explain);
     glb->types->destroyType(res);
     return (Datatype *)0;
   }
@@ -1329,13 +1351,13 @@ bool CParse::parseStream(istream &s,uint4 doctype)
   return runParse(doctype);
 }
 
-int yylex(void)
+int grammarlex(void)
 
 {
   return parse->lex();
 }
 
-int yyerror(const char *str)
+int grammarerror(const char *str)
 
 {
   return 0;
@@ -1344,7 +1366,7 @@ int yyerror(const char *str)
 Datatype *parse_type(istream &s,string &name,Architecture *glb)
 
 {
-  CParse parser(glb,1000);
+  CParse parser(glb,4096);
 
   if (!parser.parseStream(s,CParse::doc_parameter_declaration))
     throw ParseError(parser.getError());
@@ -1363,7 +1385,7 @@ Datatype *parse_type(istream &s,string &name,Architecture *glb)
 void parse_protopieces(PrototypePieces &pieces,
 		       istream &s,Architecture *glb)
 {
-  CParse parser(glb,1000);
+  CParse parser(glb,4096);
 
   if (!parser.parseStream(s,CParse::doc_declaration))
     throw ParseError(parser.getError());
@@ -1383,7 +1405,7 @@ void parse_protopieces(PrototypePieces &pieces,
 void parse_C(Architecture *glb,istream &s)
 
 { // Load type data straight into datastructures
-  CParse parser(glb,1000);
+  CParse parser(glb,4096);
 
   if (!parser.parseStream(s,CParse::doc_declaration))
     throw ParseError(parser.getError());
@@ -1567,3 +1589,4 @@ Address parse_machaddr(istream &s,int4 &defaultsize,const TypeFactory &typegrp,b
   return res;
 }
 
+} // End namespace ghidra

@@ -18,11 +18,13 @@
 ///
 /// Classes for keeping track of spaces and registers (for a single architecture).
 
-#ifndef __CPUI_TRANSLATE__
-#define __CPUI_TRANSLATE__
+#ifndef __TRANSLATE_HH__
+#define __TRANSLATE_HH__
 
 #include "pcoderaw.hh"
 #include "float.hh"
+
+namespace ghidra {
 
 extern AttributeId ATTRIB_CODE;		///< Marshaling attribute "code"
 extern AttributeId ATTRIB_CONTAIN;	///< Marshaling attribute "contain"
@@ -183,7 +185,6 @@ public:
   virtual const VarnodeData &getSpacebaseFull(int4 i) const;
   virtual bool stackGrowsNegative(void) const { return isNegativeStack; }
   virtual AddrSpace *getContain(void) const { return contain; } ///< Return containing space
-  virtual void saveXml(ostream &s) const;
   virtual void decode(Decoder &decoder);
 };
 
@@ -194,7 +195,7 @@ public:
 /// from \e most \e significant to \e least \e significant.
 class JoinRecord {
   friend class AddrSpaceManager;
-  vector<VarnodeData> pieces;	///< All the physical pieces of the symbol
+  vector<VarnodeData> pieces;	///< All the physical pieces of the symbol, most significant to least
   VarnodeData unified; ///< Special entry representing entire symbol in one chunk
 public:
   int4 numPieces(void) const { return pieces.size(); }	///< Get number of pieces in this record
@@ -233,7 +234,7 @@ class AddrSpaceManager {
   vector<JoinRecord *> splitlist; ///< JoinRecords indexed by join address
 protected:
   AddrSpace *decodeSpace(Decoder &decoder,const Translate *trans); ///< Add a space to the model based an on XML tag
-  void decodeSpaces(Decoder &decoder,const Translate *trans); ///< Restore address spaces in the model from an XML tag
+  void decodeSpaces(Decoder &decoder,const Translate *trans); ///< Restore address spaces in the model from a stream
   void setDefaultCodeSpace(int4 index); ///< Set the default address space (for code)
   void setDefaultDataSpace(int4 index);	///< Set the default address space for data
   void setReverseJustified(AddrSpace *spc); ///< Set reverse justified property on this space
@@ -602,4 +603,5 @@ inline uint4 Translate::getUniqueStart(UniqueLayout layout) const {
   return (layout != ANALYSIS) ? layout + unique_base : layout;
 }
 
+} // End namespace ghidra
 #endif

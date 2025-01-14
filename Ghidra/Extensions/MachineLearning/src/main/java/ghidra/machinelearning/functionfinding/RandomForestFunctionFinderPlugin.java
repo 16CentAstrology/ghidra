@@ -97,6 +97,15 @@ public class RandomForestFunctionFinderPlugin extends ProgramPlugin
 	}
 
 	@Override
+	protected void dispose() {
+		super.dispose();
+
+		if (paramsDialog != null) {
+			paramsDialog.dispose();
+		}
+	}
+
+	@Override
 	public void optionsChanged(ToolOptions options, String optionName, Object oldValue,
 			Object newValue) throws OptionsVetoException {
 		switch (optionName) {
@@ -196,17 +205,16 @@ public class RandomForestFunctionFinderPlugin extends ProgramPlugin
 	private void createActions() {
 
 		new ActionBuilder(ACTION_NAME, getName())
-				.menuPath(ToolConstants.MENU_SEARCH, MENU_PATH_ENTRY)
-				.menuGroup("search for", null)
-				.description("Train models to search for function starts")
-				.helpLocation(new HelpLocation(getName(), getName()))
-				.withContext(NavigatableActionContext.class)
-				.validContextWhen(c -> !(c instanceof RestrictedAddressSetContext))
-				.supportsDefaultToolContext(true)
-				.onAction(c -> {
-					displayDialog(c);
-				})
-				.buildAndInstall(tool);
+			.menuPath(ToolConstants.MENU_SEARCH, MENU_PATH_ENTRY)
+			.menuGroup("search for", null)
+			.description("Train models to search for function starts")
+			.helpLocation(new HelpLocation(getName(), getName()))
+			.withContext(NavigatableActionContext.class, true)
+			.validContextWhen(c -> !(c instanceof RestrictedAddressSetContext))
+			.onAction(c -> {
+				displayDialog(c);
+			})
+			.buildAndInstall(tool);
 	}
 
 	private void displayDialog(NavigatableActionContext c) {

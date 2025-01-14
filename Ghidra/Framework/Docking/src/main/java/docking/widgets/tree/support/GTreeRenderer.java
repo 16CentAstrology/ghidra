@@ -34,6 +34,7 @@ public class GTreeRenderer extends DefaultTreeCellRenderer implements GComponent
 	private static final int DEFAULT_MIN_ICON_WIDTH = 22;
 	private static final Color BACKGROUND_UNSELECTED = new GColor("color.bg.tree");
 	private static final Color BACKGROUND_SELECTED = new GColor("color.bg.tree.selected");
+	private static final Color FOREGROUND_SELECTED = new GColor("color.fg.tree.selected");
 
 	private Object dropTarget;
 	private boolean paintDropTarget;
@@ -46,6 +47,7 @@ public class GTreeRenderer extends DefaultTreeCellRenderer implements GComponent
 		setHTMLRenderingEnabled(false);
 		setBackgroundNonSelectionColor(BACKGROUND_UNSELECTED);
 		setBackgroundSelectionColor(BACKGROUND_SELECTED);
+		setTextSelectionColor(FOREGROUND_SELECTED);
 	}
 
 	@Override
@@ -70,7 +72,7 @@ public class GTreeRenderer extends DefaultTreeCellRenderer implements GComponent
 		setText(text);
 		setToolTipText(node.getToolTip());
 
-		Icon icon = node.getIcon(expanded);
+		Icon icon = getNodeIcon(node, expanded);
 		if (icon == null) {
 			icon = getIcon();
 		}
@@ -86,6 +88,10 @@ public class GTreeRenderer extends DefaultTreeCellRenderer implements GComponent
 		boolean isBold = (filter != null) && filter.showFilterMatches() && filter.acceptsNode(node);
 		setFont(getFont(isBold));
 		return this;
+	}
+
+	protected Icon getNodeIcon(GTreeNode node, boolean expanded) {
+		return node.getIcon(expanded);
 	}
 
 	/**
@@ -150,7 +156,7 @@ public class GTreeRenderer extends DefaultTreeCellRenderer implements GComponent
 	}
 
 	// allows us to change the font to bold as needed without erasing the original font
-	private Font getFont(boolean bold) {
+	protected Font getFont(boolean bold) {
 		Font font = getFont();
 		// check if someone set a  new font on the renderer
 		if (font != cachedDefaultFont && font != cachedBoldFont) {

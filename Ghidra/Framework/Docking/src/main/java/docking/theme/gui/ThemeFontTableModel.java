@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,8 +17,7 @@ package docking.theme.gui;
 
 import java.awt.Component;
 import java.awt.Font;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 import java.util.function.Supplier;
 
 import javax.swing.JLabel;
@@ -39,19 +38,48 @@ public class ThemeFontTableModel extends GDynamicColumnTableModel<FontValue, Obj
 	private GThemeValueMap currentValues;
 	private GThemeValueMap themeValues;
 	private GThemeValueMap defaultValues;
-	private ThemeManager themeManager;
+	private GThemeValuesCache valuesProvider;
+	private boolean showSystemValues;
 
-	public ThemeFontTableModel(ThemeManager themeManager) {
+	public ThemeFontTableModel(GThemeValuesCache valuesProvider) {
 		super(new ServiceProviderStub());
-		this.themeManager = themeManager;
+		this.valuesProvider = valuesProvider;
 		load();
+	}
+
+	public void setShowSystemValues(boolean show) {
+		this.showSystemValues = show;
+	}
+
+	public boolean isShowingSystemValues() {
+		return showSystemValues;
+	}
+
+	protected void filter() {
+
+		List<FontValue> filtered = new ArrayList<>();
+
+		for (FontValue fontValue : fonts) {
+			String id = fontValue.getId();
+			if (showSystemValues) {
+				filtered.add(fontValue);
+				continue;
+			}
+
+			if (!Gui.isSystemId(id)) {
+				filtered.add(fontValue);
+			}
+
+		}
+
+		fonts = filtered;
 	}
 
 	/**
 	 * Reloads the just the current values shown in the table. Called whenever a font changes.
 	 */
 	public void reloadCurrent() {
-		currentValues = themeManager.getCurrentValues();
+		currentValues = valuesProvider.getCurrentValues();
 		fonts = currentValues.getFonts();
 		fireTableDataChanged();
 	}
@@ -66,10 +94,12 @@ public class ThemeFontTableModel extends GDynamicColumnTableModel<FontValue, Obj
 	}
 
 	private void load() {
-		currentValues = themeManager.getCurrentValues();
+		currentValues = valuesProvider.getCurrentValues();
 		fonts = currentValues.getFonts();
-		themeValues = themeManager.getThemeValues();
-		defaultValues = themeManager.getDefaults();
+		themeValues = valuesProvider.getThemeValues();
+		defaultValues = valuesProvider.getDefaultValues();
+
+		filter();
 	}
 
 	@Override
@@ -97,19 +127,28 @@ public class ThemeFontTableModel extends GDynamicColumnTableModel<FontValue, Obj
 		return null;
 	}
 
-	private String getValueText(FontValue fontValue) {
-		if (fontValue == null) {
+	/**
+	 * Returns the original value for the id as defined by the current theme
+	 * @param id the resource id to get a font value for
+	 * @return  the original value for the id as defined by the current theme
+	 */
+	public FontValue getThemeValue(String id) {
+		return themeValues.getFont(id);
+	}
+
+	private String getValueText(ResolvedFont resolvedFont) {
+		if (resolvedFont == null) {
 			return "<No Value>";
 		}
-		if (fontValue.getReferenceId() != null) {
-			return "[" + fontValue.getReferenceId() + "]";
+		if (resolvedFont.refId() != null) {
+			return resolvedFont.getValueText();
 		}
 
-		Font font = fontValue.getRawValue();
+		Font font = resolvedFont.font();
 		return FontValue.fontToString(font);
 	}
 
-	class IdColumn extends AbstractDynamicTableColumn<FontValue, String, Object> {
+	private class IdColumn extends AbstractDynamicTableColumn<FontValue, String, Object> {
 
 		@Override
 		public String getColumnName() {
@@ -128,7 +167,8 @@ public class ThemeFontTableModel extends GDynamicColumnTableModel<FontValue, Obj
 		}
 	}
 
-	class FontValueColumn extends AbstractDynamicTableColumn<FontValue, FontValue, Object> {
+	private class FontValueColumn
+			extends AbstractDynamicTableColumn<FontValue, ResolvedFont, Object> {
 		private ThemeFontRenderer renderer;
 		private String name;
 		private Supplier<GThemeValueMap> valueSupplier;
@@ -145,19 +185,25 @@ public class ThemeFontTableModel extends GDynamicColumnTableModel<FontValue, Obj
 		}
 
 		@Override
-		public FontValue getValue(FontValue fontValue, Settings settings, Object data,
+		public ResolvedFont getValue(FontValue themeFont, Settings settings, Object data,
 				ServiceProvider provider) throws IllegalArgumentException {
 			GThemeValueMap valueMap = valueSupplier.get();
-			String id = fontValue.getId();
-			return valueMap.getFont(id);
+			String id = themeFont.getId();
+			FontValue fontValue = valueMap.getFont(id);
+			if (fontValue == null) {
+				return null;
+			}
+			return new ResolvedFont(fontValue, id, fontValue.getReferenceId(),
+				valueMap.getResolvedFont(id));
 		}
 
 		@Override
-		public GColumnRenderer<FontValue> getColumnRenderer() {
+		public GColumnRenderer<ResolvedFont> getColumnRenderer() {
 			return renderer;
 		}
 
-		public Comparator<FontValue> getComparator() {
+		@Override
+		public Comparator<ResolvedFont> getComparator() {
 			return (v1, v2) -> {
 				if (v1 == null && v2 == null) {
 					return 0;
@@ -179,33 +225,67 @@ public class ThemeFontTableModel extends GDynamicColumnTableModel<FontValue, Obj
 
 	}
 
-	private class ThemeFontRenderer extends AbstractGColumnRenderer<FontValue> {
+	private class ThemeFontRenderer extends AbstractGColumnRenderer<ResolvedFont> {
 
 		@Override
 		public Component getTableCellRendererComponent(GTableCellRenderingData data) {
 			JLabel label = (JLabel) super.getTableCellRendererComponent(data);
-			FontValue fontValue = (FontValue) data.getValue();
+			ResolvedFont resolvedFont = (ResolvedFont) data.getValue();
 
-			String text = getValueText(fontValue);
+			String text = getValueText(resolvedFont);
 			label.setText(text);
 			label.setOpaque(true);
+
+			Font font = resolvedFont.font();
+			if (font != null) {
+				setToolTipText(resolvedFont.getFullValueText());
+			}
+
 			return label;
 		}
 
 		@Override
-		public String getFilterString(FontValue fontValue, Settings settings) {
-			return getValueText(fontValue);
+		public String getFilterString(ResolvedFont resolvedFont, Settings settings) {
+			return getValueText(resolvedFont);
 		}
 
 	}
 
-	/**
-	 * Returns the original value for the id as defined by the current theme
-	 * @param id the resource id to get a font value for
-	 * @return  the original value for the id as defined by the current theme
-	 */
-	public FontValue getThemeValue(String id) {
-		return themeValues.getFont(id);
-	}
+	// This class is used as a column cell value.  It holds the info that defines the font in the
+	// theme files, as long as the final font that was loaded by the system.
+	private record ResolvedFont(FontValue fontValue, String id, String refId, Font font) {
 
+		String getValueText() {
+
+			if (refId == null) {
+				return FontValue.fontToString(font);
+			}
+
+			FontModifier modifier = fontValue.getModifier();
+			String modifierText = "";
+			if (modifier != null) {
+				modifierText = "*";
+			}
+
+			// ex: [font.foo] 
+			//     [font.foo]*
+			return "[" + refId + "]" + modifierText;
+		}
+
+		String getFullValueText() {
+			if (refId == null) {
+				return FontValue.fontToString(font);
+			}
+
+			FontModifier modifier = fontValue.getModifier();
+			String modifierText = "";
+			if (modifier != null) {
+				modifierText = "    [%s]%s".formatted(refId, modifier.toString());
+			}
+
+			// ex: monospaced-PLAIN-13 
+			//     monospaced-PLAIN-13    [font.foo][monospaced]
+			return FontValue.fontToString(font) + modifierText;
+		}
+	}
 }

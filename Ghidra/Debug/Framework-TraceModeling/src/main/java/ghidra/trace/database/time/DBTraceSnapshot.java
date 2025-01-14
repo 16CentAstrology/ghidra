@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,12 +18,15 @@ package ghidra.trace.database.time;
 import java.io.IOException;
 
 import db.DBRecord;
+import ghidra.trace.database.target.DBTraceObject;
 import ghidra.trace.model.Trace;
-import ghidra.trace.model.Trace.TraceSnapshotChangeType;
+import ghidra.trace.model.target.TraceObject;
+import ghidra.trace.model.target.TraceObjectValue;
+import ghidra.trace.model.target.iface.TraceObjectEventScope;
+import ghidra.trace.model.thread.TraceObjectThread;
 import ghidra.trace.model.thread.TraceThread;
 import ghidra.trace.model.time.TraceSnapshot;
 import ghidra.trace.model.time.schedule.TraceSchedule;
-import ghidra.trace.util.TraceChangeRecord;
 import ghidra.util.LockHold;
 import ghidra.util.Msg;
 import ghidra.util.database.*;
@@ -35,6 +38,7 @@ public class DBTraceSnapshot extends DBAnnotatedObject implements TraceSnapshot 
 
 	protected static final String REAL_TIME_COLUMN_NAME = "RealTime";
 	protected static final String SCHEDULE_COLUMN_NAME = "Schedule";
+	protected static final String VERSION_COLUMN_NAME = "Version";
 	protected static final String DESCRIPTION_COLUMN_NAME = "Description";
 	protected static final String THREAD_COLUMN_NAME = "Thread";
 
@@ -42,6 +46,8 @@ public class DBTraceSnapshot extends DBAnnotatedObject implements TraceSnapshot 
 	static DBObjectColumn REAL_TIME_COLUMN;
 	@DBAnnotatedColumn(SCHEDULE_COLUMN_NAME)
 	static DBObjectColumn SCHEDULE_COLUMN;
+	@DBAnnotatedColumn(VERSION_COLUMN_NAME)
+	static DBObjectColumn VERSION_COLUMN;
 	@DBAnnotatedColumn(DESCRIPTION_COLUMN_NAME)
 	static DBObjectColumn DESCRIPTION_COLUMN;
 	@DBAnnotatedColumn(THREAD_COLUMN_NAME)
@@ -51,6 +57,8 @@ public class DBTraceSnapshot extends DBAnnotatedObject implements TraceSnapshot 
 	long realTime; // milliseconds
 	@DBAnnotatedField(column = SCHEDULE_COLUMN_NAME, indexed = true)
 	String scheduleStr = "";
+	@DBAnnotatedField(column = VERSION_COLUMN_NAME)
+	long version;
 	@DBAnnotatedField(column = DESCRIPTION_COLUMN_NAME)
 	String description;
 	@DBAnnotatedField(column = THREAD_COLUMN_NAME)
@@ -107,7 +115,9 @@ public class DBTraceSnapshot extends DBAnnotatedObject implements TraceSnapshot 
 
 	@Override
 	public long getRealTime() {
-		return realTime;
+		try (LockHold hold = LockHold.lock(manager.lock.readLock())) {
+			return realTime;
+		}
 	}
 
 	@Override
@@ -121,7 +131,9 @@ public class DBTraceSnapshot extends DBAnnotatedObject implements TraceSnapshot 
 
 	@Override
 	public String getDescription() {
-		return description;
+		try (LockHold hold = LockHold.lock(manager.lock.readLock())) {
+			return description;
+		}
 	}
 
 	@Override
@@ -135,7 +147,28 @@ public class DBTraceSnapshot extends DBAnnotatedObject implements TraceSnapshot 
 
 	@Override
 	public TraceThread getEventThread() {
-		return eventThread;
+		try (LockHold hold = LockHold.lock(manager.lock.readLock())) {
+			if (eventThread != null) {
+				return eventThread;
+			}
+			// TODO: Can it be something other than root?
+			DBTraceObject root = manager.trace.getObjectManager().getRootObject();
+			if (root == null) {
+				return null;
+			}
+			if (!root.getSchema().getInterfaces().contains(TraceObjectEventScope.class)) {
+				return null;
+			}
+			TraceObjectValue eventAttr =
+				root.getAttribute(getKey(), TraceObjectEventScope.KEY_EVENT_THREAD);
+			if (eventAttr == null) {
+				return null;
+			}
+			if (!(eventAttr.getValue() instanceof TraceObject eventObj)) {
+				return null;
+			}
+			return eventObj.queryInterface(TraceObjectThread.class);
+		}
 	}
 
 	@Override
@@ -156,12 +189,16 @@ public class DBTraceSnapshot extends DBAnnotatedObject implements TraceSnapshot 
 
 	@Override
 	public TraceSchedule getSchedule() {
-		return schedule;
+		try (LockHold hold = LockHold.lock(manager.lock.readLock())) {
+			return schedule;
+		}
 	}
 
 	@Override
 	public String getScheduleString() {
-		return scheduleStr;
+		try (LockHold hold = LockHold.lock(manager.lock.readLock())) {
+			return scheduleStr;
+		}
 	}
 
 	@Override
@@ -170,6 +207,22 @@ public class DBTraceSnapshot extends DBAnnotatedObject implements TraceSnapshot 
 			this.schedule = schedule;
 			this.scheduleStr = schedule == null ? "" : schedule.toString();
 			update(SCHEDULE_COLUMN);
+			manager.notifySnapshotChanged(this);
+		}
+	}
+
+	@Override
+	public long getVersion() {
+		try (LockHold hold = LockHold.lock(manager.lock.readLock())) {
+			return version;
+		}
+	}
+
+	@Override
+	public void setVersion(long version) {
+		try (LockHold hold = LockHold.lock(manager.lock.writeLock())) {
+			this.version = version;
+			update(VERSION_COLUMN);
 			manager.notifySnapshotChanged(this);
 		}
 	}

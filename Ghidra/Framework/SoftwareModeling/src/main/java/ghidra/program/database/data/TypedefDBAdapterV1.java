@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -25,7 +25,9 @@ import ghidra.util.exception.VersionException;
  * Version 1 implementation for accessing the Typedef database table. 
  */
 class TypedefDBAdapterV1 extends TypedefDBAdapter implements RecordTranslator {
+
 	static final int VERSION = 1;
+
 	static final int V1_TYPEDEF_DT_ID_COL = 0;
 	static final int V1_TYPEDEF_NAME_COL = 1;
 	static final int V1_TYPEDEF_CAT_COL = 2;
@@ -40,12 +42,13 @@ class TypedefDBAdapterV1 extends TypedefDBAdapter implements RecordTranslator {
 //			LongField.INSTANCE, LongField.INSTANCE, LongField.INSTANCE, LongField.INSTANCE },
 //		new String[] { "Data Type ID", "Name", "Category ID", "Source Archive ID",
 //			"Universal Data Type ID", "Source Sync Time", "Last Change Time" });
+
 	private Table table;
 
 	/**
 	 * Gets a version 1 adapter for the Typedef database table.
 	 * @param handle handle to the database containing the table.
-	 * @throws VersionException if the the table's version does not match the expected version
+	 * @throws VersionException if the table's version does not match the expected version
 	 * for this adapter.
 	 */
 	public TypedefDBAdapterV1(DBHandle handle) throws VersionException {
@@ -56,12 +59,7 @@ class TypedefDBAdapterV1 extends TypedefDBAdapter implements RecordTranslator {
 		}
 		int version = table.getSchema().getVersion();
 		if (version != VERSION) {
-			String msg = "Expected version " + VERSION + " for table " + TYPEDEF_TABLE_NAME +
-				" but got " + table.getSchema().getVersion();
-			if (version < VERSION) {
-				throw new VersionException(msg, VersionException.OLDER_VERSION, true);
-			}
-			throw new VersionException(msg, VersionException.NEWER_VERSION, false);
+			throw new VersionException(version < VERSION);
 		}
 	}
 
@@ -110,8 +108,8 @@ class TypedefDBAdapterV1 extends TypedefDBAdapter implements RecordTranslator {
 	DBRecord getRecordWithIDs(UniversalID sourceID, UniversalID datatypeID) throws IOException {
 		Field[] keys =
 			table.findRecords(new LongField(datatypeID.getValue()), V1_TYPEDEF_UNIVERSAL_DT_ID_COL);
-		for (int i = 0; i < keys.length; i++) {
-			DBRecord record = table.getRecord(keys[i]);
+		for (Field key : keys) {
+			DBRecord record = table.getRecord(key);
 			if (record.getLongValue(V1_TYPEDEF_SOURCE_ARCHIVE_ID_COL) == sourceID.getValue()) {
 				return translateRecord(record);
 			}
@@ -138,5 +136,10 @@ class TypedefDBAdapterV1 extends TypedefDBAdapter implements RecordTranslator {
 		rec.setLongValue(TYPEDEF_LAST_CHANGE_TIME_COL,
 			oldRec.getLongValue(V1_TYPEDEF_LAST_CHANGE_TIME_COL));
 		return rec;
+	}
+
+	@Override
+	public int getRecordCount() {
+		return table.getRecordCount();
 	}
 }

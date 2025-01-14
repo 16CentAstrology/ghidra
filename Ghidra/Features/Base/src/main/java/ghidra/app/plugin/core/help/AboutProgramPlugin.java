@@ -27,8 +27,8 @@ import ghidra.app.context.ProgramContextAction;
 import ghidra.app.plugin.PluginCategoryNames;
 import ghidra.app.util.GenericHelpTopics;
 import ghidra.app.util.HelpTopics;
-import ghidra.framework.main.FrontEndTool;
 import ghidra.framework.main.ApplicationLevelPlugin;
+import ghidra.framework.main.FrontEndTool;
 import ghidra.framework.main.datatable.FrontendProjectTreeAction;
 import ghidra.framework.main.datatable.ProjectDataContext;
 import ghidra.framework.model.DomainFile;
@@ -106,8 +106,8 @@ public class AboutProgramPlugin extends Plugin implements ApplicationLevelPlugin
 						ProgramActionContext pac = (ProgramActionContext) context;
 						Program program = pac.getProgram();
 						if (program != null) {
-							String menuName = "About " + program.getDomainFile().getName();
-							getMenuBarData().setMenuItemName(menuName);
+							getMenuBarData().setMenuItemNamePlain(
+								"About " + program.getDomainFile().getName());
 							return true;
 						}
 					}
@@ -116,7 +116,8 @@ public class AboutProgramPlugin extends Plugin implements ApplicationLevelPlugin
 				}
 			};
 			aboutAction.addToWindowWhen(ProgramActionContext.class);
-			aboutAction.setSupportsDefaultToolContext(true);
+			// use the CodeBrowser as a backup context provider
+			aboutAction.setContextClass(ProgramActionContext.class, true);
 
 			aboutAction.setMenuBarData(
 				new MenuData(new String[] { ToolConstants.MENU_HELP, ACTION_NAME }, null, "ZZZ"));

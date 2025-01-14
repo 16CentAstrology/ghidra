@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -34,11 +34,11 @@ import ghidra.program.util.ProgramSelection;
  * Subclasses should override the following methods if they are interested in the corresponding
  * events:
  * <ul>
- *	<LI> {@link #programOpened(Program)}
- * 	<LI> {@link #programClosed(Program)}
- * 	<LI> {@link #locationChanged(ProgramLocation)}
- * 	<LI> {@link #selectionChanged(ProgramSelection)}
- * 	<LI> {@link #highlightChanged(ProgramSelection)}
+ *	<LI> {@link #programOpened(Program)}</LI>
+ * 	<LI> {@link #programClosed(Program)}</LI>
+ * 	<LI> {@link #locationChanged(ProgramLocation)}</LI>
+ * 	<LI> {@link #selectionChanged(ProgramSelection)}</LI>
+ * 	<LI> {@link #highlightChanged(ProgramSelection)}</LI>
  * </ul>
  */
 public abstract class ProgramPlugin extends Plugin {
@@ -55,6 +55,7 @@ public abstract class ProgramPlugin extends Plugin {
 	public ProgramPlugin(PluginTool plugintool) {
 		super(plugintool);
 		internalRegisterEventConsumed(ProgramActivatedPluginEvent.class);
+		internalRegisterEventConsumed(ProgramPostActivatedPluginEvent.class);
 		internalRegisterEventConsumed(ProgramLocationPluginEvent.class);
 		internalRegisterEventConsumed(ProgramSelectionPluginEvent.class);
 		internalRegisterEventConsumed(ProgramHighlightPluginEvent.class);
@@ -160,18 +161,36 @@ public abstract class ProgramPlugin extends Plugin {
 			}
 			highlightChanged(currentHighlight);
 		}
+		else if (event instanceof ProgramPostActivatedPluginEvent ev) {
+			postProgramActivated(ev.getActiveProgram());
+		}
+
 	}
 
 	/**
 	 * Subclass should override this method if it is interested when programs become active.
 	 * Note: this method is called in response to a ProgramActivatedPluginEvent.
-	 *
+	 * <P>
 	 * At the time this method is called,
 	 * the "currentProgram" variable will be set the new active program.
 	 *
 	 * @param program the new program going active.
 	 */
 	protected void programActivated(Program program) {
+		// override
+	}
+
+	/**
+	 * Subclass should override this method if it is interested when programs become active and
+	 * all plugins have had a chance to process the {@link ProgramActivatedPluginEvent}.
+	 * Note: this method is called in response to a {@link ProgramPostActivatedPluginEvent}
+	 * <P>
+	 * At the time this method is called,
+	 * the "currentProgram" variable will be set the new active program.
+	 *
+	 * @param program the new program going active.
+	 */
+	protected void postProgramActivated(Program program) {
 		// override
 	}
 

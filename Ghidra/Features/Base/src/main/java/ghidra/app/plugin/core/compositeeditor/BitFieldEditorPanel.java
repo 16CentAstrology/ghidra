@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -25,11 +25,14 @@ import javax.swing.event.ChangeEvent;
 import com.google.common.base.Predicate;
 
 import docking.ActionContext;
+import docking.DefaultActionContext;
 import docking.widgets.DropDownSelectionTextField;
 import docking.widgets.OptionDialog;
+import docking.widgets.button.GButton;
 import docking.widgets.label.GDLabel;
 import generic.theme.GIcon;
-import generic.theme.GThemeDefaults.Colors;
+import generic.theme.GThemeDefaults.Colors.Messages;
+import generic.theme.GThemeDefaults.Colors.Viewport;
 import ghidra.app.plugin.core.compositeeditor.BitFieldPlacementComponent.BitAttributes;
 import ghidra.app.plugin.core.compositeeditor.BitFieldPlacementComponent.BitFieldAllocation;
 import ghidra.app.services.DataTypeManagerService;
@@ -80,7 +83,6 @@ public class BitFieldEditorPanel extends JPanel {
 
 	BitFieldEditorPanel(Composite composite, DataTypeManagerService dtmService,
 			Predicate<DataType> dataTypeValidator) {
-		super();
 		this.composite = composite;
 
 		if (composite.isPackingEnabled()) {
@@ -126,13 +128,13 @@ public class BitFieldEditorPanel extends JPanel {
 
 		JPanel panel = new JPanel(new HorizontalLayout(5));
 
-		decrementButton = new JButton(DECREMENT_ICON);
+		decrementButton = new GButton(DECREMENT_ICON);
 		decrementButton.setFocusable(false);
 		decrementButton.setToolTipText("Decrement allocation unit offset");
 		decrementButton.addActionListener(e -> adjustAllocationOffset(-1));
 		panel.add(decrementButton);
 
-		incrementButton = new JButton(INCREMENT_ICON);
+		incrementButton = new GButton(INCREMENT_ICON);
 		incrementButton.setFocusable(false);
 		incrementButton.setToolTipText("Increment allocation unit offset");
 		incrementButton.addActionListener(e -> adjustAllocationOffset(1));
@@ -165,8 +167,7 @@ public class BitFieldEditorPanel extends JPanel {
 			else {
 				allocOffsetStr = Integer.toString(allocOffset);
 			}
-			String text =
-				"Structure Offset of Allocation Unit: " + allocOffsetStr;
+			String text = "Structure Offset of Allocation Unit: " + allocOffsetStr;
 			allocationOffsetLabel.setText(text);
 
 			int offset = placementComponent.getAllocationOffset();
@@ -181,7 +182,7 @@ public class BitFieldEditorPanel extends JPanel {
 
 		statusTextField = new GDLabel(" ");
 		statusTextField.setHorizontalAlignment(SwingConstants.CENTER);
-		statusTextField.setForeground(Colors.ERROR);
+		statusTextField.setForeground(Messages.ERROR);
 
 		// use a strut panel so the size of the message area does not change if we make
 		// the message label not visible
@@ -254,8 +255,8 @@ public class BitFieldEditorPanel extends JPanel {
 
 	private JComponent createDataTypeChoiceEditor() {
 
-		dtChoiceEditor =
-			new DataTypeSelectionEditor(dtmService, AllowedDataTypes.BITFIELD_BASE_TYPE);
+		dtChoiceEditor = new DataTypeSelectionEditor(composite.getDataTypeManager(), dtmService,
+			AllowedDataTypes.BITFIELD_BASE_TYPE);
 		dtChoiceEditor.setConsumeEnterKeyPress(false);
 		dtChoiceEditor.setTabCommitsEdit(true);
 		//dtChoiceEditor.setPreferredDataTypeManager(composite.getDataTypeManager());
@@ -465,7 +466,8 @@ public class BitFieldEditorPanel extends JPanel {
 		JScrollPane scrollPane =
 			new JScrollPane(placementComponent, ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER,
 				ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-		scrollPane.getViewport().setBackground(getBackground());
+
+		scrollPane.getViewport().setBackground(Viewport.UNEDITABLE_BACKGROUND);
 		scrollPane.setBorder(null);
 
 		bitViewPanel.add(scrollPane);
@@ -643,8 +645,14 @@ public class BitFieldEditorPanel extends JPanel {
 			}
 			deleteConflicts = (option == OptionDialog.OPTION_ONE);
 		}
-		placementComponent.applyBitField(baseDataType, fieldNameTextField.getText().trim(),
-			fieldCommentTextField.getText().trim(), deleteConflicts, listener);
+
+		boolean doDeleteConflicts = deleteConflicts;
+		this.composite.getDataTypeManager()
+				.withTransaction("Apply Bitfield",
+					() -> placementComponent.applyBitField(baseDataType,
+						fieldNameTextField.getText().trim(), fieldCommentTextField.getText().trim(),
+						doDeleteConflicts, listener));
+
 		enableControls(false);
 		return true;
 	}
@@ -751,7 +759,7 @@ public class BitFieldEditorPanel extends JPanel {
 		return null;
 	}
 
-	class BitFieldEditorContext extends ActionContext {
+	class BitFieldEditorContext extends DefaultActionContext {
 
 		private int selectedBitOffset;
 		private DataTypeComponent selectedDtc;

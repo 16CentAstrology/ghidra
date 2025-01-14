@@ -21,10 +21,9 @@ import ghidra.program.model.mem.MemBuffer;
 import ghidra.program.model.util.CodeUnitInsertionException;
 import ghidra.trace.database.memory.DBTraceMemorySpace;
 import ghidra.trace.model.*;
-import ghidra.trace.model.Trace.TraceCodeChangeType;
-import ghidra.trace.model.Trace.TraceCompositeDataChangeType;
 import ghidra.trace.model.listing.TraceCodeSpace;
 import ghidra.trace.util.TraceChangeRecord;
+import ghidra.trace.util.TraceEvents;
 import ghidra.util.LockHold;
 
 /**
@@ -131,21 +130,8 @@ public class DBTraceDefinedDataView extends AbstractBaseDBTraceDefinedUnitsView<
 			Address endAddress = address.addNoWrap(length - 1);
 			AddressRangeImpl createdRange = new AddressRangeImpl(address, endAddress);
 
-			// First, truncate lifespan to the next code unit when upper bound is max
-			if (!lifespan.maxIsFinite()) {
-				lifespan = space.instructions.truncateSoonestDefined(lifespan, createdRange);
-				lifespan = space.definedData.truncateSoonestDefined(lifespan, createdRange);
-			}
-
-			// Second, extend to the next change of bytes in the range within lifespan
-			// Then, check that against existing code units.
-			long endSnap = memSpace.getFirstChange(lifespan, createdRange);
-			if (endSnap == Long.MIN_VALUE) {
-				endSnap = lifespan.lmax();
-			}
-			else {
-				endSnap--;
-			}
+			// Truncate, then check that against existing code units.
+			long endSnap = computeTruncatedMax(lifespan, null, createdRange);
 			TraceAddressSnapRange tasr = new ImmutableTraceAddressSnapRange(createdRange,
 				Lifespan.span(startSnap, endSnap));
 			if (!space.undefinedData.coversRange(tasr)) {
@@ -158,24 +144,24 @@ public class DBTraceDefinedDataView extends AbstractBaseDBTraceDefinedUnitsView<
 			}
 
 			long dataTypeID = space.dataTypeManager.getResolvedID(dataType);
-			DBTraceData created = space.dataMapSpace.put(tasr, null);
+			DBTraceData created = mapSpace.put(tasr, null);
 			// TODO: data units with a guest platform
 			created.set(space.trace.getPlatformManager().getHostPlatform(), dataTypeID);
 			// TODO: Explicitly remove undefined from cache, or let weak refs take care of it?
 
-			cacheForContaining.notifyNewEntry(lifespan, createdRange, created);
-			cacheForSequence.notifyNewEntry(lifespan, createdRange, created);
+			cacheForContaining.notifyNewEntry(tasr.getLifespan(), createdRange, created);
+			cacheForSequence.notifyNewEntry(tasr.getLifespan(), createdRange, created);
 			space.undefinedData.invalidateCache();
 
 			if (dataType instanceof Composite || dataType instanceof Array ||
 				dataType instanceof Dynamic) {
 				// TODO: Track composites?
-				space.trace.setChanged(new TraceChangeRecord<>(TraceCompositeDataChangeType.ADDED,
+				space.trace.setChanged(new TraceChangeRecord<>(TraceEvents.COMPOSITE_DATA_ADDED,
 					space, tasr, created));
 			}
 
-			space.trace.setChanged(new TraceChangeRecord<>(TraceCodeChangeType.ADDED,
-				space, tasr, created));
+			space.trace.setChanged(
+				new TraceChangeRecord<>(TraceEvents.CODE_ADDED, space, tasr, created));
 			return created;
 		}
 		catch (AddressOverflowException e) {
@@ -189,7 +175,7 @@ public class DBTraceDefinedDataView extends AbstractBaseDBTraceDefinedUnitsView<
 		DataType dataType = unit.getBaseDataType();
 		if (dataType instanceof Composite || dataType instanceof Array ||
 			dataType instanceof Dynamic) {
-			space.trace.setChanged(new TraceChangeRecord<>(TraceCompositeDataChangeType.REMOVED,
+			space.trace.setChanged(new TraceChangeRecord<>(TraceEvents.COMPOSITE_DATA_REMOVED,
 				space, unit.getBounds(), unit, null));
 		}
 	}
@@ -201,7 +187,7 @@ public class DBTraceDefinedDataView extends AbstractBaseDBTraceDefinedUnitsView<
 		if (dataType instanceof Composite || dataType instanceof Array ||
 			dataType instanceof Dynamic) {
 			space.trace.setChanged(
-				new TraceChangeRecord<>(TraceCompositeDataChangeType.LIFESPAN_CHANGED,
+				new TraceChangeRecord<>(TraceEvents.COMPOSITE_DATA_LIFESPAN_CHANGED,
 					space, unit, oldSpan, unit.getLifespan()));
 		}
 	}

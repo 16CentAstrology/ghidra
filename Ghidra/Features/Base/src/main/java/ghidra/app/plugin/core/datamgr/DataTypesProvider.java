@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -26,18 +26,17 @@ import javax.swing.event.*;
 import javax.swing.event.HyperlinkEvent.EventType;
 import javax.swing.tree.TreePath;
 
-import docking.ActionContext;
-import docking.DockingWindowManager;
+import docking.*;
 import docking.action.DockingAction;
 import docking.action.ToggleDockingAction;
 import docking.event.mouse.GMouseListenerAdapter;
 import docking.menu.MultiActionDockingAction;
 import docking.widgets.OptionDialog;
-import docking.widgets.PopupWindow;
 import docking.widgets.textpane.GHtmlTextPane;
 import docking.widgets.tree.*;
 import docking.widgets.tree.support.GTreeSelectionEvent.EventOrigin;
 import generic.theme.GIcon;
+import generic.theme.GThemeDefaults.Colors;
 import ghidra.app.plugin.core.datamgr.actions.*;
 import ghidra.app.plugin.core.datamgr.actions.associate.*;
 import ghidra.app.plugin.core.datamgr.archive.*;
@@ -95,15 +94,28 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 	private ToggleDockingAction filterPointersAction;
 	private ToggleDockingAction previewWindowAction;
 	private ToggleDockingAction includeDataMembersInSearchAction;
+	private FilterOnNameOnlyAction filterOnNameOnlyAction;
 	private boolean includeDataMembersInFilter;
+	private boolean filterOnNameOnly;
 
 	public DataTypesProvider(DataTypeManagerPlugin plugin, String providerName) {
+		this(plugin, providerName, false);
+	}
+
+	public DataTypesProvider(DataTypeManagerPlugin plugin, String providerName,
+			boolean isTransient) {
 		super(plugin.getTool(), providerName, plugin.getName(), DataTypesActionContext.class);
 		this.plugin = plugin;
 
+		if (isTransient) {
+			setTransient();
+		}
+		else {
+			addToToolbar();
+		}
+
 		setTitle(TITLE);
 		setIcon(new GIcon("icon.plugin.datatypes.provider"));
-		addToToolbar();
 
 		navigationHistory.setAllowDuplicates(true);
 
@@ -153,12 +165,6 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 		addLocalAction(new DeleteArchiveAction(plugin));
 		addLocalAction(new RenameAction(plugin));
 		addLocalAction(new EditAction(plugin));
-		// NOTE: it make very little sense to blindly enable packing
-//		  addLocalAction(new PackDataTypeAction(plugin));
-//        addLocalAction( new PackDataTypeAction( plugin ));
-//        addLocalAction( new PackSizeDataTypeAction( plugin ));
-//		  addLocalAction(new PackAllDataTypesAction(plugin));
-//        addLocalAction( new DefineDataTypeAlignmentAction( plugin ));
 		addLocalAction(new CreateEnumFromSelectionAction(plugin));
 
 		// File group
@@ -169,6 +175,12 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 		// FileEdit group
 		addLocalAction(new LockArchiveAction(plugin)); // Archive
 		addLocalAction(new UnlockArchiveAction(plugin)); // Archive
+		addLocalAction(new UndoArchiveTransactionAction(plugin)); // Archive
+		addLocalAction(new RedoArchiveTransactionAction(plugin)); // Archive
+
+		// Arch group
+		addLocalAction(new SetArchiveArchitectureAction(plugin)); // Archive
+		addLocalAction(new ClearArchiveArchitectureAction(plugin)); // Archive
 
 		// Repository group : version control actions
 		addVersionControlActions(); // Archive
@@ -185,6 +197,9 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 		includeDataMembersInSearchAction = new IncludeDataTypesInFilterAction(plugin, this, "5");
 		addLocalAction(includeDataMembersInSearchAction);
 
+		filterOnNameOnlyAction = new FilterOnNameOnlyAction(plugin, this, "6");
+		addLocalAction(filterOnNameOnlyAction);
+
 		addLocalAction(new ApplyFunctionDataTypesAction(plugin)); // Tree
 		addLocalAction(new CaptureFunctionDataTypesAction(plugin)); // Tree
 		addLocalAction(new SetFavoriteDataTypeAction(plugin)); // Data Type
@@ -193,7 +208,7 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 
 		// ZVeryLast group
 		addLocalAction(new FindReferencesToDataTypeAction(plugin)); // DataType
-		addLocalAction(new FindReferencesToFieldAction(plugin)); // DataType
+		addLocalAction(new FindReferencesToFieldByNameOrOffsetAction(plugin)); // DataType
 		addLocalAction(new FindBaseDataTypeAction(plugin)); // DataType
 		addLocalAction(new DisplayTypeAsGraphAction(plugin));
 
@@ -202,12 +217,9 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 		addLocalAction(previousAction);
 		nextAction = new NextPreviousDataTypeAction(this, plugin.getName(), true);
 		addLocalAction(nextAction);
-		filterArraysAction = getFilterArraysAction();
-		addLocalAction(filterArraysAction);
-		filterPointersAction = getFilterPointersAction();
-		addLocalAction(filterPointersAction);
-		conflictHandlerModesAction = getConflictHandlerModesAction();
-		addLocalAction(conflictHandlerModesAction);
+		addLocalAction(getFilterArraysAction());
+		addLocalAction(getFilterPointersAction());
+		addLocalAction(getConflictHandlerModesAction());
 
 		// toolbar menu
 		addLocalAction(new OpenArchiveAction(plugin));
@@ -299,6 +311,7 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 	private ToggleDockingAction getFilterPointersAction() {
 		if (filterPointersAction == null) {
 			filterPointersAction = new FilterPointersAction(plugin);
+			archiveGTree.enablePointerFilter(filterPointersAction.isSelected());
 		}
 
 		return filterPointersAction;
@@ -307,6 +320,7 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 	private ToggleDockingAction getFilterArraysAction() {
 		if (filterArraysAction == null) {
 			filterArraysAction = new FilterArraysAction(plugin);
+			archiveGTree.enableArrayFilter(filterArraysAction.isSelected());
 		}
 
 		return filterArraysAction;
@@ -334,7 +348,7 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 			Object source = event.getSource();
 			if (source instanceof JTextField || source instanceof JTextPane) {
 				Component component = (Component) source;
-				return new ActionContext(this, source, component);
+				return new DefaultActionContext(this, source, component);
 			}
 
 			Point point = event.getPoint();
@@ -357,7 +371,10 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 
 	@Override // overridden to handle special logic in plugin
 	public void closeComponent() {
-		plugin.closeProvider(this);
+		super.closeComponent();
+		if (isTransient()) {
+			dispose();
+		}
 	}
 
 	private void buildComponent() {
@@ -442,6 +459,7 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 		previewPane = new GHtmlTextPane();
 		previewPane.setEditable(false);
 		previewPane.setBorder(BorderFactory.createLoweredBevelBorder());
+		previewPane.setBackground(Colors.BACKGROUND);
 
 		// This listener responds to the user hovering/clicking the preview's hyperlinks
 		previewPane.addHyperlinkListener(event -> {
@@ -459,15 +477,10 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 				setDataTypeSelected(dt);
 			}
 			else if (type == EventType.ENTERED) {
-				//
-				// The user hovered over the link--show something useful, like the path
-				//
-				JToolTip toolTip = new JToolTip();
-				CategoryPath path = dt.getCategoryPath();
-				toolTip.setTipText(path.toString());
-				PopupWindow popup = new PopupWindow(toolTip);
-				popup.setCloseWindowDelay(10000);
-				popup.showPopup((MouseEvent) event.getInputEvent());
+				previewPane.setToolTipText(dt.getCategoryPath().toString());
+			}
+			else if (type == EventType.EXITED) {
+				previewPane.setToolTipText(null);
 			}
 
 		});
@@ -807,23 +820,24 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 		return selectedDataTypes;
 	}
 
-	// this is a callback from the action--we need this to prevent callbacks, as the other
-	// version of this method will update the action, which would trigger a callback
+	// this is called from the action
 	public void setIncludeDataTypeMembersInFilterCallback(boolean newValue) {
 		includeDataMembersInFilter = newValue;
-		archiveGTree.setIncludeDataTypeMembersInSearch(includeDataMembersInFilter);
+		archiveGTree.updateDataTransformer(this);
+	}
+
+	// this is called from the action
+	public void setFilterOnNameOnlyCallback(boolean newValue) {
+		filterOnNameOnly = newValue;
+		archiveGTree.updateDataTransformer(this);
 	}
 
 	public void setIncludeDataTypeMembersInFilter(boolean newValue) {
-		includeDataMembersInFilter = newValue;
-		archiveGTree.setIncludeDataTypeMembersInSearch(includeDataMembersInFilter);
+		includeDataMembersInSearchAction.setSelected(newValue);
+	}
 
-		// make sure the action is in sync
-		ToggleDockingAction action = includeDataMembersInSearchAction;
-		boolean selected = action.isSelected();
-		if (selected != includeDataMembersInFilter) {
-			action.setSelected(includeDataMembersInFilter);
-		}
+	public void setFilterOnNameOnly(boolean newValue) {
+		filterOnNameOnlyAction.setSelected(newValue);
 	}
 
 	public void setFilteringArrays(boolean b) {
@@ -834,8 +848,12 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 		archiveGTree.enablePointerFilter(b);
 	}
 
-	boolean includeDataMembersInSearch() {
+	public boolean isIncludeDataMembersInSearch() {
 		return includeDataMembersInFilter;
+	}
+
+	public boolean isFilterOnNameOnly() {
+		return filterOnNameOnly;
 	}
 
 	@Override
@@ -965,4 +983,5 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 		navigationHistory.add(new DataTypeUrl(dt));
 		contextChanged();
 	}
+
 }

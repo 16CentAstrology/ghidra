@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,8 +21,9 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.*;
 import java.net.*;
-import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -34,9 +35,8 @@ import javax.swing.text.html.*;
 import javax.swing.text.html.HTML.Tag;
 
 import generic.jar.ResourceFile;
-import generic.theme.GIcon;
+import generic.theme.GColor;
 import generic.theme.Gui;
-import ghidra.framework.Application;
 import ghidra.framework.preferences.Preferences;
 import ghidra.util.Msg;
 import resources.*;
@@ -44,16 +44,16 @@ import utilities.util.FileUtilities;
 
 /**
  * A class that allows Ghidra to intercept JavaHelp navigation events in order to resolve them
- * to Ghidra's help system.  Without this class, contribution plugins have no way of 
+ * to Ghidra's help system.  Without this class, contribution plugins have no way of
  * referencing help documents within Ghidra's default help location.
  * <p>
  * This class is currently installed by the {@link GHelpSet}.
- * 
+ *
  * @see GHelpSet
  */
 public class GHelpHTMLEditorKit extends HTMLEditorKit {
 
-	private static final String G_HELP_STYLE_SHEET = "Frontpage.css";
+	private static final String G_HELP_STYLE_SHEET = "DefaultStyle.css";
 	private static final String DARK_G_HELP_STYLE_SHEET = "DarkStyle.css";
 
 	private static final Pattern EXTERNAL_URL_PATTERN = Pattern.compile("https?://.*");
@@ -62,6 +62,24 @@ public class GHelpHTMLEditorKit extends HTMLEditorKit {
 	private static final Pattern FONT_SIZE_PATTERN = Pattern.compile("font-size:\\s*(\\d{1,2})");
 	private static final String HELP_WINDOW_ZOOM_FACTOR = "HELP.WINDOW.FONT.SIZE.MODIFIER";
 	private static int fontSizeModifier;
+
+	/**
+	 * A mapping of known style sheet colors to convert from the values in the style sheet to colors
+	 * defined in the system theme.
+	 */
+	private static final Map<String, GColor> colorsById = new HashMap<>();
+	static {
+		colorsById.put("h1", new GColor("color.fg.help.selector.h1"));
+		colorsById.put("h2", new GColor("color.fg.help.selector.h2"));
+		colorsById.put("h3", new GColor("color.fg.help.selector.h3"));
+		colorsById.put("p.providedbyplugin",
+			new GColor("color.fg.help.selector.p.provided.by.plugin"));
+		colorsById.put("p.relatedtopic", new GColor("color.fg.help.selector.p.related.topic"));
+		colorsById.put("th", new GColor("color.fg.help.selector.th"));
+		colorsById.put("code", new GColor("color.fg.help.selector.code"));
+		colorsById.put("code.path", new GColor("color.fg.help.selector.code.path"));
+	}
+	private static final Pattern COLOR_PATTERN = Pattern.compile("(color:\\s*#{0,1}\\w+;)");
 
 	private HyperlinkListener[] delegateListeners = null;
 	private HyperlinkListener resolverHyperlinkListener;
@@ -158,13 +176,17 @@ public class GHelpHTMLEditorKit extends HTMLEditorKit {
 		}
 	}
 
-	/** 
+	/**
 	 * Tests the URL of the given event.  If the URL is invalid, a new event may be created if
-	 *  a new, valid URL can be created. Creates a new event with a patched URL if 
+	 *  a new, valid URL can be created. Creates a new event with a patched URL if
 	 *  the given event's URL is invalid.
 	 */
 	private HyperlinkEvent validateURL(HyperlinkEvent event) {
 		URL url = event.getURL();
+		if (url == null) {
+			Msg.trace(this, "No URL for link: " + event);
+			return maybeCreateNewHyperlinkEventWithUpdatedURL(event);
+		}
 		try {
 			url.openStream();// assume that this will fail if the file does not exist
 		}
@@ -217,11 +239,11 @@ public class GHelpHTMLEditorKit extends HTMLEditorKit {
 		}
 
 		//
-		// The item was not found by the ResourceManager (i.e., it is not in a 'resources' 
+		// The item was not found by the ResourceManager (i.e., it is not in a 'resources'
 		// directory).  See if it may be a relative link to a build's installation root (like
 		// a file in <install dir>/docs).
-		// 
-		newUrl = findApplicationfile(HREF);
+		//
+		newUrl = HelpBuildUtils.findApplicationUrl(HREF);
 		return newUrl;
 	}
 
@@ -236,7 +258,7 @@ public class GHelpHTMLEditorKit extends HTMLEditorKit {
 		}
 
 		try {
-			// put the anchor back into the URL                
+			// put the anchor back into the URL
 			return new URL(anchorlessURL, anchor);
 		}
 		catch (MalformedURLException e) {
@@ -279,11 +301,19 @@ public class GHelpHTMLEditorKit extends HTMLEditorKit {
 			return null;
 		}
 
-		StringBuffer buffy = new StringBuffer();
+		StringBuilder buffy = new StringBuilder();
 		try {
 			List<String> lines = FileUtilities.getLines(url);
 			for (String line : lines) {
-				changePixels(line, fontSizeModifier, buffy);
+
+				StringBuilder lineBuilder = new StringBuilder();
+				changePixels(line, fontSizeModifier, lineBuilder);
+
+				String updatedLine = lineBuilder.toString();
+				lineBuilder.delete(0, lineBuilder.length());
+				changeColor(updatedLine, lineBuilder);
+
+				buffy.append(lineBuilder.toString());
 				buffy.append('\n');
 			}
 		}
@@ -296,7 +326,31 @@ public class GHelpHTMLEditorKit extends HTMLEditorKit {
 		return reader;
 	}
 
-	private void changePixels(String line, int amount, StringBuffer buffy) {
+	private void changeColor(String line, StringBuilder buffy) {
+
+		int blockStart = line.indexOf("{");
+		if (blockStart == -1) {
+			buffy.append(line);
+			return;
+		}
+
+		String cssSelector = line.substring(0, blockStart).trim();
+		cssSelector = cssSelector.toLowerCase(); // normalize
+		GColor gColor = colorsById.get(cssSelector);
+		if (gColor == null) {
+			buffy.append(line);
+			return;
+		}
+
+		Matcher matcher = COLOR_PATTERN.matcher(line);
+		if (matcher.find()) {
+			matcher.appendReplacement(buffy, "color: " + gColor.toHexString() + ";");
+		}
+
+		matcher.appendTail(buffy);
+	}
+
+	private void changePixels(String line, int amount, StringBuilder buffy) {
 
 		Matcher matcher = FONT_SIZE_PATTERN.matcher(line);
 		while (matcher.find()) {
@@ -335,37 +389,15 @@ public class GHelpHTMLEditorKit extends HTMLEditorKit {
 			return url;
 		}
 
-		return findModuleFile("help/shared/" + name);
-	}
-
-	private URL findApplicationfile(String relativePath) {
-		ResourceFile installDir = Application.getInstallationDirectory();
-		ResourceFile file = new ResourceFile(installDir, relativePath);
-		if (file.exists()) {
+		ResourceFile file = HelpBuildUtils.findModuleFile("help/shared/" + name);
+		if (file != null) {
 			try {
 				return file.toURL();
 			}
 			catch (MalformedURLException e) {
 				Msg.showError(this, null, "Unexpected Error",
 					"Unexpected error parsing file to URL: " + file);
-			}
-		}
-		return null;
-	}
-
-	private URL findModuleFile(String relativePath) {
-		Collection<ResourceFile> moduleDirs = Application.getModuleRootDirectories();
-		for (ResourceFile dir : moduleDirs) {
-			ResourceFile file = new ResourceFile(dir, relativePath);
-			if (file.exists()) {
-				try {
-					return file.toURL();
-				}
-				catch (MalformedURLException e) {
-					Msg.showError(this, null, "Unexpected Error",
-						"Unexpected error parsing file to URL: " + file);
-					return null;
-				}
+				return null;
 			}
 		}
 		return null;
@@ -388,7 +420,7 @@ public class GHelpHTMLEditorKit extends HTMLEditorKit {
 
 //==================================================================================================
 // Inner Classes
-//==================================================================================================	
+//==================================================================================================
 
 	private class GHelpHTMLFactory extends HTMLFactory {
 		@Override
@@ -415,7 +447,7 @@ public class GHelpHTMLEditorKit extends HTMLEditorKit {
 	}
 
 	/**
-	 * Overridden to allow us to find images that are defined as constants in places like 
+	 * Overridden to allow us to find images that are defined as constants in places like
 	 * {@link Icons}
 	 */
 	private class GHelpImageView extends ImageView {
@@ -424,22 +456,22 @@ public class GHelpHTMLEditorKit extends HTMLEditorKit {
 		 * 						Unusual Code Alert!
 		 * This class exists to enable our help system to find custom icons defined in source
 		 * code.   The default behavior herein is to supply a URL to the base class to load.  This
-		 * works fine.   
-		 * 
+		 * works fine.
+		 *
 		 * There is another use case where we wish to have the base class load an image of our
 		 * choosing.  Why?  Well, we modify, in memory, some icons we use.  We do this for things
 		 * like overlays and rotations.
-		 * 
+		 *
 		 * In order to have our base class use the image that we want (and not the one
 		 * it loads via a URL), we have to play a small game.   We have to allow the base class
 		 * to load the image it wants, which is done asynchronously.  If we install our custom
 		 * image during that process, the loading will throw away the image and not render
-		 * anything.    
-		 * 
-		 * To get the base class to use our image, we override getImage().  However, we should 
+		 * anything.
+		 *
+		 * To get the base class to use our image, we override getImage().  However, we should
 		 * only return our image when the base class is finished loading.  (See the base class'
 		 * paint() method for why we need to do this.)
-		 * 
+		 *
 		 * Note: if we start seeing unusual behavior, like images not rendering, or any size
 		 * issues, then we can revert this code.
 		 */
@@ -491,32 +523,15 @@ public class GHelpHTMLEditorKit extends HTMLEditorKit {
 				return null;
 			}
 
-			String srcString = src.toString();
-
-			// check if the srcString is a defined theme icon id
-			if (Gui.hasIcon(srcString)) {
-				return new GIcon(srcString).getUrl();
+			String srcString = src.toString().trim();
+			IconProvider iconProvider = HelpBuildUtils.getRuntimeIcon(srcString);
+			if (iconProvider != null && !iconProvider.isInvalid()) {
+				// note: store the image off for later use; the url will not be used by us
+				this.image = iconProvider.getImage();
+				return iconProvider.getOrCreateUrl();
 			}
 
-			if (isJavaCode(srcString)) {
-				return installImageFromJavaCode(srcString);
-			}
-
-			URL url = doGetImageURL(srcString);
-			return url;
-		}
-
-		private URL installImageFromJavaCode(String srcString) {
-
-			IconProvider iconProvider = getIconFromJavaCode(srcString);
-			if (iconProvider == null || iconProvider.isInvalid()) {
-				return null;
-			}
-
-			this.image = iconProvider.getImage();
-
-			URL url = iconProvider.getOrCreateUrl();
-			return url;
+			return doGetImageURL(srcString);
 		}
 
 		private URL doGetImageURL(String srcString) {
@@ -534,21 +549,11 @@ public class GHelpHTMLEditorKit extends HTMLEditorKit {
 				// check below
 			}
 
-			// Try the ResourceManager.  This will work for images that start with GHelp 
+			// Try the ResourceManager.  This will work for images that start with GHelp
 			// relative link syntax such as 'help/', 'help/topics/' and 'images/'
 			URL resource = ResourceManager.getResource(srcString);
 			return resource;
 		}
-
-		private boolean isJavaCode(String src) {
-			// not sure of the best way to handle this--be exact for now
-			return Icons.isIconsReference(src);
-		}
-
-		private IconProvider getIconFromJavaCode(String src) {
-			return Icons.getIconForIconsReference(src);
-		}
-
 	}
 
 }

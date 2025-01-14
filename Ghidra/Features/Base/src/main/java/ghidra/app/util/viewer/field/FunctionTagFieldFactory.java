@@ -15,7 +15,6 @@
  */
 package ghidra.app.util.viewer.field;
 
-import java.awt.Color;
 import java.math.BigInteger;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -24,10 +23,9 @@ import org.apache.commons.lang3.StringUtils;
 
 import docking.widgets.fieldpanel.field.*;
 import docking.widgets.fieldpanel.support.FieldLocation;
-import generic.theme.GThemeDefaults.Colors.Palette;
-import ghidra.app.util.HighlightProvider;
+import ghidra.app.util.ListingHighlightProvider;
+import ghidra.app.util.viewer.field.ListingColors.FunctionColors;
 import ghidra.app.util.viewer.format.FieldFormatModel;
-import ghidra.app.util.viewer.options.OptionsGui;
 import ghidra.app.util.viewer.proxy.FunctionProxy;
 import ghidra.app.util.viewer.proxy.ProxyObj;
 import ghidra.framework.options.Options;
@@ -45,9 +43,6 @@ import ghidra.program.util.ProgramLocation;
 public class FunctionTagFieldFactory extends FieldFactory {
 
 	public static final String FIELD_NAME = "Function Tags";
-	public static final Color DEFAULT_COLOR = Palette.MAROON;
-
-	private Color literalColor;
 
 	/**
 	 * Default Constructor
@@ -64,13 +59,9 @@ public class FunctionTagFieldFactory extends FieldFactory {
 	 * @param displayOptions the Options for display properties.
 	 * @param fieldOptions the Options for field specific properties.
 	 */
-	private FunctionTagFieldFactory(FieldFormatModel model, HighlightProvider hlProvider,
+	private FunctionTagFieldFactory(FieldFormatModel model, ListingHighlightProvider hlProvider,
 			Options displayOptions, Options fieldOptions) {
 		super(FIELD_NAME, model, hlProvider, displayOptions, fieldOptions);
-		color = displayOptions.getColor(OptionsGui.FUN_TAG.getColorOptionName(),
-			OptionsGui.FUN_TAG.getDefaultColor());
-		literalColor = displayOptions.getColor(OptionsGui.SEPARATOR.getColorOptionName(),
-			OptionsGui.SEPARATOR.getDefaultColor());
 	}
 
 	@Override
@@ -134,21 +125,9 @@ public class FunctionTagFieldFactory extends FieldFactory {
 	}
 
 	@Override
-	public FieldFactory newInstance(FieldFormatModel formatModel, HighlightProvider provider,
+	public FieldFactory newInstance(FieldFormatModel formatModel, ListingHighlightProvider provider,
 			ToolOptions toolOptions, ToolOptions fieldOptions) {
 		return new FunctionTagFieldFactory(formatModel, provider, toolOptions, fieldOptions);
-	}
-
-	@Override
-	public void displayOptionsChanged(Options options, String optionName, Object oldValue,
-			Object newValue) {
-		if (optionName.equals(OptionsGui.FUN_TAG.getColorOptionName())) {
-			color = (Color) newValue;
-		}
-		else if (optionName.equals(OptionsGui.SEPARATOR.getColorOptionName())) {
-			literalColor = (Color) newValue;
-		}
-		super.displayOptionsChanged(options, optionName, oldValue, newValue);
 	}
 
 	/**
@@ -169,11 +148,11 @@ public class FunctionTagFieldFactory extends FieldFactory {
 		AttributedString as;
 		int elementIndex = 0;
 
-		as = new AttributedString("Tags: ", literalColor, getMetrics());
+		as = new AttributedString("Tags: ", ListingColors.SEPARATOR, getMetrics());
 		textElements.add(new TextFieldElement(as, elementIndex++, 0));
 
 		String tagNamesStr = StringUtils.join(tagNames, ", ");
-		as = new AttributedString(tagNamesStr, color, getMetrics());
+		as = new AttributedString(tagNamesStr, FunctionColors.TAG, getMetrics());
 		textElements.add(new TextFieldElement(as, elementIndex++, 0));
 
 		return textElements;

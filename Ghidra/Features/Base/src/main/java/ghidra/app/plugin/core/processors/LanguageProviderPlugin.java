@@ -17,6 +17,7 @@ package ghidra.app.plugin.core.processors;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.util.List;
 
 import javax.swing.SwingUtilities;
 
@@ -47,7 +48,7 @@ import ghidra.util.task.*;
 @PluginInfo(
 	status = PluginStatus.RELEASED,
 	packageName = CorePluginPackage.NAME,
-	category = PluginCategoryNames.SUPPORT,
+	category = PluginCategoryNames.COMMON,
 	shortDescription = "Set Language",
 	description = "This plugin provides the set language feature."
 )
@@ -220,7 +221,8 @@ public final class LanguageProviderPlugin extends Plugin implements ApplicationL
 				Program program = (Program) dobj;
 
 				monitor.setMessage("Identify Language...");
-				SetLanguageDialog dialog = new SetLanguageDialog(tool, program);
+				SetLanguageDialog dialog = new SetLanguageDialog(tool, program,
+					"Set Language: " + program.getDomainFile().getName());
 				LanguageID langDescID = dialog.getLanguageDescriptionID();
 				CompilerSpecID compilerSpecDescID = dialog.getCompilerSpecDescriptionID();
 				if ((langDescID == null) || (compilerSpecDescID == null)) {
@@ -316,18 +318,7 @@ public final class LanguageProviderPlugin extends Plugin implements ApplicationL
 			try {
 				SwingUtilities.invokeAndWait(() -> {
 					ToolServices toolServices = tool.getToolServices();
-					ToolTemplate defaultToolTemplate = toolServices.getDefaultToolTemplate(file);
-					if (defaultToolTemplate != null) {
-						String defaultToolName = defaultToolTemplate.getName();
-						for (PluginTool t : toolServices.getRunningTools()) {
-							if (t.getName().equals(defaultToolName)) {
-								openTool = t;
-								break;
-							}
-						}
-					}
-					if (openTool == null ||
-						!openTool.acceptDomainFiles(new DomainFile[] { file })) {
+					if (toolServices.launchDefaultTool(List.of(domainFile)) == null) {
 						Msg.showError(this, tool.getToolFrame(), "Failed to Open Program",
 							"A suitable default tool could not found!");
 					}

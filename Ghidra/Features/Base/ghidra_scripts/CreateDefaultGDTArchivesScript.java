@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -34,8 +34,6 @@ import ghidra.app.util.cparser.C.CParserUtils;
 import ghidra.app.util.cparser.C.ParseException;
 import ghidra.program.model.data.DataTypeManager;
 import ghidra.program.model.data.FileDataTypeManager;
-import ghidra.util.Msg;
-import ghidra.util.task.TaskMonitor;
 
 public class CreateDefaultGDTArchivesScript extends GhidraScript {
 
@@ -55,27 +53,25 @@ public class CreateDefaultGDTArchivesScript extends GhidraScript {
 
 	}
 	
-	private void parseHeaderFilesToGDT(File outputDir, String gdtName, String languageID, String compiler, String[] filenames, String[] args)
+	private void parseHeaderFilesToGDT(File outputDir, String gdtName, String languageID, String compiler,
+			String[] filenames, String includePaths[], String[] args)
 			throws ParseException, ghidra.app.util.cparser.CPP.ParseException, IOException {
 		DataTypeManager openTypes[] = null;
 		
-		parseHeaderFilesToGDT(openTypes, outputDir, gdtName, languageID, compiler, filenames, args);
+		parseHeaderFilesToGDT(openTypes, outputDir, gdtName, languageID, compiler, filenames, includePaths, args);
 	}
 
-	private void parseHeaderFilesToGDT(DataTypeManager openTypes[], File outputDir, String gdtName, String languageID, String compiler, String[] filenames, String[] args)
+	private void parseHeaderFilesToGDT(DataTypeManager openTypes[], File outputDir, String gdtName, String languageID, String compiler,
+			String[] filenames, String[] includePaths, String[] args)
 			throws ParseException, ghidra.app.util.cparser.CPP.ParseException, IOException {
 		
 		String dataTypeFile = outputDir + File.separator + gdtName + ".gdt";
-		
-		File f = getArchiveFile(dataTypeFile);
-		
-        FileDataTypeManager dtMgr = FileDataTypeManager.createFileArchive(f);
-        
-		String messages = CParserUtils.parseHeaderFiles(openTypes, filenames, args, dtMgr, languageID, compiler, null, monitor);
-		
-		Msg.info(this, messages);
 
-		dtMgr.save();
+		File f = getArchiveFile(dataTypeFile);
+
+		FileDataTypeManager dtMgr = CParserUtils.parseHeaderFiles(openTypes, filenames,
+			includePaths, args, f.getAbsolutePath(), languageID, compiler, monitor);
+		
 		dtMgr.close();
 	}
 
@@ -276,14 +272,16 @@ public class CreateDefaultGDTArchivesScript extends GhidraScript {
 				"wscapi.h",
 				"wsdapi.h",
 				"wspiapi.h",
-
 				"rpcproxy.h",
 		};
 		
+		String includePaths[] = {
+			headerFilePath+"/VC/VS12/src",
+			headerFilePath+"/VC/VS12/include",
+			headerFilePath+"/VC/SDK/v7.1A/Include",
+		};
+		
 		String args[] = {
-				"-I"+headerFilePath+"/VC/VS12/src",
-				"-I"+headerFilePath+"/VC/VS12/include",
-				"-I"+headerFilePath+"/VC/SDK/v7.1A/Include",
 				"-D_M_IX86=300",
 				"-D_MSC_VER=1200",
 				"-D_INTEGRAL_MAX_BITS=32",
@@ -294,10 +292,7 @@ public class CreateDefaultGDTArchivesScript extends GhidraScript {
 				"-D_USE_ATTRIBUTES_FOR_SAL",
 				"-D_CRTBLD",
 				"-D_OPENMP_NOFORCE_MANIFEST",
-				"-DSTRSAFE_LIB",
-				"-DSTRSAFE_LIB_IMPL",
 				"-DLPSKBINFO=LPARAM",
-				"-D_WCHAR_T_DEFINED",
 				"-DCONST=const",
 				"-D_CRT_SECURE_NO_WARNINGS",
 				"-D_CRT_NONSTDC_NO_DEPRECATE",
@@ -313,7 +308,7 @@ public class CreateDefaultGDTArchivesScript extends GhidraScript {
 				"-D__inner_checkReturn=",
 		};
 		
-		parseHeaderFilesToGDT(outputDirectory, "windows_vs12_32_new", "x86:LE:32:default", "windows", filenames, args);
+		parseHeaderFilesToGDT(outputDirectory, "windows_vs12_32_new", "x86:LE:32:default", "windows", filenames, includePaths, args);
 	}
 
 	
@@ -495,14 +490,16 @@ public class CreateDefaultGDTArchivesScript extends GhidraScript {
 				"wscapi.h",
 				"wsdapi.h",
 				"wspiapi.h",
-
 				"rpcproxy.h",
 		};
 		
+		String includePaths[] = {
+			headerFilePath+"/VC/VS12/src",
+			headerFilePath+"/VC/VS12/include",
+			headerFilePath+"/VC/SDK/v7.1A/Include",
+		};
+		
 		String args[] = {
-				"-I"+headerFilePath+"/VC/VS12/src",
-				"-I"+headerFilePath+"/VC/VS12/include",
-				"-I"+headerFilePath+"/VC/SDK/v7.1A/Include",
 				"-D_MSC_VER=1200",
 				"-D_INTEGRAL_MAX_BITS=64",
 				"-DWINVER=0x0900",
@@ -514,10 +511,7 @@ public class CreateDefaultGDTArchivesScript extends GhidraScript {
 				"-D_USE_ATTRIBUTES_FOR_SAL",
 				"-D_CRTBLD",
 				"-D_OPENMP_NOFORCE_MANIFEST",
-				"-DSTRSAFE_LIB",
-				"-DSTRSAFE_LIB_IMPL",
 				"-DLPSKBINFO=LPARAM",
-				"-D_WCHAR_T_DEFINED",
 				"-DCONST=const",
 				"-D_CRT_SECURE_NO_WARNINGS",
 				"-D_CRT_NONSTDC_NO_DEPRECATE",
@@ -534,7 +528,7 @@ public class CreateDefaultGDTArchivesScript extends GhidraScript {
 				"-D__inner_checkReturn=",
 		};
 		
-		parseHeaderFilesToGDT(outputDirectory, "windows_vs12_64_new", "x86:LE:64:default", "windows", filenames, args);
+		parseHeaderFilesToGDT(outputDirectory, "windows_vs12_64_new", "x86:LE:64:default", "windows", filenames, includePaths, args);
 	}
 	
 	
@@ -763,12 +757,15 @@ public class CreateDefaultGDTArchivesScript extends GhidraScript {
 				"arpa/tftp.h",
 		};
 		
+		String includePaths[] = {
+			headerFilePath+"/linux/include",
+			headerFilePath+"/linux/include/sys",
+			headerFilePath+"/linux/gcc/include",
+			headerFilePath+"/linux/x86_64-redhat-linux5E/include",
+			headerFilePath+"/linux/x86_64-redhat-linux5E/include/sys",
+		};
+		
 		String args[] = {
-				"-I"+headerFilePath+"/linux/include",
-				"-I"+headerFilePath+"/linux/include/sys",
-				"-I"+headerFilePath+"/linux/gcc/include",
-				"-I"+headerFilePath+"/linux/x86_64-redhat-linux5E/include",
-				"-I"+headerFilePath+"/linux/x86_64-redhat-linux5E/include/sys",
 				"-D_X86_",
 				"-D__STDC__",
 				"-D_GNU_SOURCE",
@@ -776,7 +773,6 @@ public class CreateDefaultGDTArchivesScript extends GhidraScript {
 				"-D__builtin_va_list=void *",
 				"-D__DO_NOT_DEFINE_COMPILE",
 				"-D_Complex",
-				"-D_WCHAR_T",
 				"-D__NO_STRING_INLINES",
 				"-D__signed__",
 				"-D__extension__=",
@@ -785,7 +781,7 @@ public class CreateDefaultGDTArchivesScript extends GhidraScript {
 				"-Daligned_u64=uint64_t",
 		};
 		
-		parseHeaderFilesToGDT(outputDirectory, "generic_clib_64_new", "x86:LE:64:default", "gcc", filenames, args);
+		parseHeaderFilesToGDT(outputDirectory, "generic_clib_64_new", "x86:LE:64:default", "gcc", filenames, includePaths, args);
 	}
 	
 	
@@ -1014,12 +1010,15 @@ public class CreateDefaultGDTArchivesScript extends GhidraScript {
 				"arpa/tftp.h",
 		};
 		
+		String includePaths[] = {
+			headerFilePath+"/linux/include",
+			headerFilePath+"/linux/include/sys",
+			headerFilePath+"/linux/gcc/include",
+			headerFilePath+"/linux/x86_64-redhat-linux5E/include",
+			headerFilePath+"/linux/x86_64-redhat-linux5E/include/sys",
+		};
+		
 		String args[] = {
-				"-I"+headerFilePath+"/linux/include",
-				"-I"+headerFilePath+"/linux/include/sys",
-				"-I"+headerFilePath+"/linux/gcc/include",
-				"-I"+headerFilePath+"/linux/x86_64-redhat-linux5E/include",
-				"-I"+headerFilePath+"/linux/x86_64-redhat-linux5E/include/sys",
 				"-D_X86_",
 				"-D__STDC__",
 				"-D_GNU_SOURCE",
@@ -1027,7 +1026,6 @@ public class CreateDefaultGDTArchivesScript extends GhidraScript {
 				"-D__builtin_va_list=void *",
 				"-D__DO_NOT_DEFINE_COMPILE",
 				"-D_Complex",
-				"-D_WCHAR_T",
 				"-D__NO_STRING_INLINES",
 				"-D__NO_LONG_DOUBLE_MATH",
 				"-D__signed__",
@@ -1036,6 +1034,6 @@ public class CreateDefaultGDTArchivesScript extends GhidraScript {
 				"-Daligned_u64=uint64_t",
 		};
 		
-		parseHeaderFilesToGDT(outputDirectory, "generic_clib_new", "x86:LE:32:default", "gcc", filenames, args);
+		parseHeaderFilesToGDT(outputDirectory, "generic_clib_new", "x86:LE:32:default", "gcc", filenames, includePaths, args);
 	}
 }
