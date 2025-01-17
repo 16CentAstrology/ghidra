@@ -21,15 +21,18 @@ import java.util.List;
 
 import javax.swing.*;
 import javax.swing.border.BevelBorder;
+import javax.swing.border.CompoundBorder;
 
 import docking.*;
 import docking.widgets.label.GDLabel;
 import generic.application.GenericApplicationLayout;
 import generic.theme.GColor;
+import generic.theme.GThemeDefaults.Colors;
 import generic.theme.Gui;
 import generic.util.WindowUtilities;
 import ghidra.framework.Application;
 import ghidra.util.Msg;
+import ghidra.util.Swing;
 import utility.application.ApplicationLayout;
 
 /**
@@ -49,34 +52,61 @@ public class SplashScreen extends JWindow {
 	private static Timer hideSplashWindowTimer;
 
 	/**
-	 * Show the splash screen; displayed only when Ghidra is first coming up
+	 * Show the splash screen on the Swing thread later.
+	 */
+	public static void showLater() {
+
+		Swing.runIfSwingOrRunLater(() -> {
+
+			if (splashWindow != null) {
+				return; // already showing
+			}
+
+			JFrame parentFrame = getParentFrame();
+			splashWindow = new SplashScreen(parentFrame);
+
+			initializeSplashWindowAndParent(parentFrame);
+
+			createSplashScreenCloseListeners(parentFrame);
+
+			parentFrame.setVisible(true);
+			splashWindow.setVisible(true);
+
+			// this call is needed for the splash screen to initially paint correctly on the Mac
+			splashWindow.repaint();
+		});
+	}
+
+	/**
+	 * Show the splash screen on the Swing thread now.  This will block.
 	 * @return the new splash screen
 	 */
-	public static SplashScreen showSplashScreen() {
-		if (splashWindow != null) {
-			return splashWindow; // already showing
-		}
+	public static SplashScreen showNow() {
+		return Swing.runNow(() -> {
+			if (splashWindow != null) {
+				return splashWindow; // already showing
+			}
 
-		final JFrame parentFrame = getParentFrame();
-		splashWindow = new SplashScreen(parentFrame);
+			JFrame parentFrame = getParentFrame();
+			splashWindow = new SplashScreen(parentFrame);
 
-		initializeSplashWindowAndParent(parentFrame);
+			initializeSplashWindowAndParent(parentFrame);
 
-		createSplashScreenCloseListeners(parentFrame);
+			createSplashScreenCloseListeners(parentFrame);
 
-		parentFrame.setVisible(true);
-		splashWindow.setVisible(true);
+			parentFrame.setVisible(true);
+			splashWindow.setVisible(true);
 
-		// this call is needed for the splash screen to initially paint correctly on the Mac
-		splashWindow.repaint();
-		return splashWindow;
+			// this call is needed for the splash screen to initially paint correctly on the Mac
+			splashWindow.repaint();
+			return splashWindow;
+		});
 	}
 
 	private static void initializeSplashWindowAndParent(final JFrame parentFrame) {
 
 		Dimension wd = splashWindow.getPreferredSize();
 		Point point = WindowUtilities.centerOnScreen(wd);
-
 		splashWindow.setLocation(point);
 
 		// move us when the parent frame moves
@@ -266,6 +296,10 @@ public class SplashScreen extends JWindow {
 		hideSplashWindowTimer.stop();
 		closeSplashScreen();
 		if (hiddenFrame != null) {
+			WindowListener[] windowListeners = hiddenFrame.getWindowListeners();
+			for (WindowListener l : windowListeners) {
+				hiddenFrame.removeWindowListener(l);
+			}
 			hiddenFrame.setVisible(false);
 			hiddenFrame.dispose();
 			hiddenFrame = null;
@@ -285,7 +319,7 @@ public class SplashScreen extends JWindow {
 	}
 
 	private static void updateStatus(String status) {
-		statusLabel.setText(status);
+		Swing.runIfSwingOrRunLater(() -> statusLabel.setText(status));
 	}
 
 	private JPanel createMainPanel() {
@@ -308,8 +342,12 @@ public class SplashScreen extends JWindow {
 		Gui.registerFont(statusLabel, FONT_ID);
 		statusLabel.setFont(Gui.getFont(FONT_ID));
 
-		statusLabel.setBorder(BorderFactory.createEmptyBorder(0, 10, 2, 10));
+		CompoundBorder border = BorderFactory.createCompoundBorder(
+			BorderFactory.createLoweredBevelBorder(), BorderFactory.createEmptyBorder(0, 5, 2, 5));
+		statusLabel.setBorder(border);
 		statusLabel.setOpaque(true);
+		statusLabel.setBackground(Colors.BACKGROUND);
+		statusLabel.setForeground(Colors.FOREGROUND);
 		return statusLabel;
 	}
 
@@ -323,7 +361,7 @@ public class SplashScreen extends JWindow {
 
 		config.setShowSplashScreen(false);
 		Application.initializeApplication(layout, config);
-		showSplashScreen();
+		showLater();
 
 // tests that modal dialogs popup on top of the splash screen
 //	    new Thread( new Runnable() {

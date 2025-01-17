@@ -24,8 +24,8 @@ import javax.swing.JToolTip;
 
 import docking.widgets.fieldpanel.field.Field;
 import docking.widgets.fieldpanel.support.FieldLocation;
-import generic.theme.GColor;
-import generic.theme.GThemeDefaults.Colors;
+import generic.theme.GThemeDefaults.Colors.Messages;
+import generic.theme.GThemeDefaults.Colors.Tooltips;
 import ghidra.app.plugin.core.gotoquery.GoToHelper;
 import ghidra.app.services.CodeFormatService;
 import ghidra.app.util.*;
@@ -46,8 +46,8 @@ import ghidra.util.bean.opteditor.OptionsVetoException;
 public abstract class AbstractReferenceHover extends AbstractConfigurableHover {
 
 	private static final int WINDOW_OFFSET = 50;
-	private static final Color BACKGROUND_COLOR = Colors.BACKGROUND_TOOLTIP;
-	private static final Color FG_COLOR_NOT_IN_MEMORY = new GColor("color.fg.hint");
+	private static final Color BACKGROUND_COLOR = Tooltips.BACKGROUND;
+	private static final Color FG_COLOR_NOT_IN_MEMORY = Messages.HINT;
 
 	private CodeFormatService codeFormatService;
 	private ListingPanel panel;
@@ -128,8 +128,7 @@ public abstract class AbstractReferenceHover extends AbstractConfigurableHover {
 		String widthOptionName = optionName + Options.DELIMITER + "Dialog Width";
 		String heightOptionName = optionName + Options.DELIMITER + "Dialog Height";
 
-		if (optionName.equals(widthOptionName) ||
-			optionName.equals(heightOptionName)) {
+		if (optionName.equals(widthOptionName) || optionName.equals(heightOptionName)) {
 			int dialogWidth = options.getInt(widthOptionName, 600);
 			if (dialogWidth <= 0) {
 				throw new OptionsVetoException(
@@ -252,21 +251,21 @@ public abstract class AbstractReferenceHover extends AbstractConfigurableHover {
 
 		/*
 		 		Format
-		 	
+
 		 	Address: ram:1234
 		 	Address not in memory
-		 	
-		 	
+
+
 		 		Or, when multiple symbols at destination
-		 		
-		 		
+
+
 		 	Address: ram:1234
-		 	Symbols (3): 
+		 	Symbols (3):
 		 		foo
 		 		bar
 		 		baz
 		 	Address not in memory
-		 	
+
 		 */
 
 		String newline = HTMLUtilities.HTML_NEW_LINE;

@@ -431,18 +431,24 @@ public class ResourceManager {
 	 * @return the name
 	 */
 	public static String getIconName(Icon icon) {
-		String iconName = icon.toString();
-
 		if (icon instanceof FileBasedIcon) {
 			return ((FileBasedIcon) icon).getFilename();
 		}
 		if (icon instanceof ImageIcon) {
-			iconName = ((ImageIcon) icon).getDescription();
+			return ((ImageIcon) icon).getDescription();
 		}
-		if (icon instanceof GIcon) {
+		if (icon instanceof GIcon gIcon) {
+			Icon delegateIcon = gIcon.getDelegate();
+			String name = getIconName(delegateIcon);
+			if (name != null) {
+				return name;
+			}
 			return ((GIcon) icon).getId();
 		}
-		return iconName;
+		if (icon instanceof TranslateIcon) {
+			return getIconName(((TranslateIcon) icon).getBaseIcon());
+		}
+		return icon.toString();
 	}
 
 	/**
@@ -520,10 +526,12 @@ public class ResourceManager {
 		ImageIcon icon = iconMap.get(iconPath);
 		if (icon == null) {
 			icon = doLoadIcon(iconPath);
-			iconMap.put(iconPath, icon == null ? DEFAULT_ICON : icon);
+			if (icon != null) {
+				iconMap.put(iconPath, icon);
+			}
 		}
 
-		return icon == DEFAULT_ICON ? null : icon;
+		return icon;
 	}
 
 	/**
@@ -537,20 +545,19 @@ public class ResourceManager {
 		ImageIcon icon = iconMap.get(iconPath);
 		if (icon == null) {
 			icon = doLoadIcon(iconPath);
-			iconMap.put(iconPath, icon == null ? DEFAULT_ICON : icon);
+			if (icon != null) {
+				iconMap.put(iconPath, icon);
+			}
 		}
 		return icon == null ? new UnresolvedIcon(iconPath, DEFAULT_ICON) : icon;
 	}
 
-	public static Set<Icon> getLoadedUrlIcons() {
-		Set<Icon> icons = new HashSet<>();
-		for (Icon icon : iconMap.values()) {
-			if (icon instanceof UrlImageIcon) {
-				icons.add(icon);
-			}
-		}
-
-		return icons;
+	/**
+	 * Returns a list of all loaded icons.
+	 * @return a list of all loaded icons
+	 */
+	public static Set<Icon> getLoadedIcons() {
+		return new HashSet<>(iconMap.values());
 	}
 
 	private static UrlImageIcon doLoadIcon(String path) {
@@ -644,8 +651,7 @@ public class ResourceManager {
 		if (url != null) {
 			return new UrlImageIcon(BOMB, url);
 		}
-		Msg.error(ResourceManager.class,
-			"Could not find default icon: " + BOMB);
+		Msg.error(ResourceManager.class, "Could not find default icon: " + BOMB);
 		return getImageIcon(new ColorIcon3D(Color.RED, 16, 16));
 	}
 

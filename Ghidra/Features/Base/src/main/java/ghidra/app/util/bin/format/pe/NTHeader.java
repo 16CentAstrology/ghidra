@@ -139,22 +139,34 @@ public class NTHeader implements StructConverter, OffsetValidator {
 	 * Converts a relative virtual address (RVA) into a pointer.
 	
 	 * @param rva the relative virtual address
-	 * @return the pointer into binary image, 0 if not valid
+	 * @return the pointer into binary image, -1 if not valid
 	 */
 	public long rvaToPointer(long rva) {
 		SectionHeader[] sections = fileHeader.getSectionHeaders();
 		for (SectionHeader section : sections) {
 			long sectionVA = Integer.toUnsignedLong(section.getVirtualAddress());
-			long rawSize = Integer.toUnsignedLong(section.getSizeOfRawData());
+			long vSize = Integer.toUnsignedLong(section.getVirtualSize());
 			long rawPtr = Integer.toUnsignedLong(section.getPointerToRawData());
+			long rawSize = Integer.toUnsignedLong(section.getSizeOfRawData());
 
 			switch (layout) {
 				case MEMORY:
 					return rva;
 				case FILE:
 				default:
-					if (rva >= sectionVA && rva < sectionVA + rawSize) {
-						return rva + rawPtr - sectionVA;
+					if (rva >= sectionVA && rva < sectionVA + vSize) {
+						// NOTE: virtual size is used in the above check because it's already been
+						// adjusted for special-case scenarios when the sections were first 
+						// processed in FileHeader.java
+						long ptr = rva + rawPtr - sectionVA;
+
+						// Make sure the pointer points to actual section file byte, rather than
+						// padding bytes
+						if (ptr >= rawPtr + rawSize) {
+							return -1;
+						}
+
+						return ptr;
 					}
 					break;
 			}
@@ -252,6 +264,7 @@ public class NTHeader implements StructConverter, OffsetValidator {
 		}
 		tmpIndex += FileHeader.IMAGE_SIZEOF_FILE_HEADER;
 
+		// Process Optional Header.  Abort load on failure.
 		try {
 			optionalHeader = new OptionalHeaderImpl(this, reader, tmpIndex);
 		}
@@ -260,9 +273,22 @@ public class NTHeader implements StructConverter, OffsetValidator {
 			return;
 		}
 
-		fileHeader.processSections(optionalHeader);
-		fileHeader.processSymbols();
+		// Process symbols.  Allow parsing to continue on failure.
+		boolean symbolsProcessed = false;
+		try {
+			fileHeader.processSymbols();
+			symbolsProcessed = true;
+		}
+		catch (Exception e) {
+			Msg.error(this, "Failed to process symbols: " + e.getMessage());
+		}
 
+		// Process sections.  Resolving some sections names (i.e., "/21") requires symbols to have
+		// been successfully processed.  Resolving is optional though.
+		fileHeader.processSections(optionalHeader, symbolsProcessed);
+
+		// Perform advanced processing.  If advanced processing is disabled, these things may be
+		// independently parsed later in the load if they are needed.
 		if (advancedProcess) {
 			optionalHeader.processDataDirectories(TaskMonitor.DUMMY);
 		}

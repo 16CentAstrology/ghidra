@@ -15,14 +15,14 @@
  */
 package ghidra.app.plugin.core.debug.gui.action;
 
-import java.util.concurrent.CompletableFuture;
-
 import javax.swing.Icon;
 
-import ghidra.app.plugin.core.debug.DebuggerCoordinates;
 import ghidra.app.plugin.core.debug.gui.DebuggerResources.TrackLocationAction;
-import ghidra.framework.plugintool.PluginTool;
+import ghidra.debug.api.action.*;
+import ghidra.debug.api.tracemgr.DebuggerCoordinates;
+import ghidra.framework.plugintool.ServiceProvider;
 import ghidra.program.model.address.Address;
+import ghidra.program.util.ProgramLocation;
 import ghidra.trace.model.Trace;
 import ghidra.trace.model.TraceAddressSnapRange;
 import ghidra.trace.model.stack.TraceStack;
@@ -56,15 +56,31 @@ public enum PCByStackLocationTrackingSpec implements LocationTrackingSpec, Locat
 	}
 
 	@Override
+	public String getLocationLabel() {
+		return "pc";
+	}
+
+	@Override
 	public LocationTracker getTracker() {
 		return this;
 	}
 
-	public Address doComputeTraceAddress(PluginTool tool, DebuggerCoordinates coordinates) {
+	@Override
+	public Address computeTraceAddress(ServiceProvider provider, DebuggerCoordinates coordinates) {
 		Trace trace = coordinates.getTrace();
 		TraceThread thread = coordinates.getThread();
+		if (thread == null) {
+			return null;
+		}
 		long snap = coordinates.getSnap();
-		TraceStack stack = trace.getStackManager().getLatestStack(thread, snap);
+		TraceStack stack;
+		try {
+			stack = trace.getStackManager().getLatestStack(thread, snap);
+		}
+		catch (IllegalStateException e) {
+			// Schema does not specify a stack
+			return null;
+		}
 		if (stack == null) {
 			return null;
 		}
@@ -77,9 +93,14 @@ public enum PCByStackLocationTrackingSpec implements LocationTrackingSpec, Locat
 	}
 
 	@Override
-	public CompletableFuture<Address> computeTraceAddress(PluginTool tool,
-			DebuggerCoordinates coordinates) {
-		return CompletableFuture.supplyAsync(() -> doComputeTraceAddress(tool, coordinates));
+	public GoToInput getDefaultGoToInput(ServiceProvider provider, DebuggerCoordinates coordinates,
+			ProgramLocation location) {
+		Address address = computeTraceAddress(provider, coordinates);
+		if (address == null) {
+			return NoneLocationTrackingSpec.INSTANCE.getDefaultGoToInput(provider, coordinates,
+				location);
+		}
+		return GoToInput.fromAddress(address);
 	}
 
 	// Note it does no good to override affectByRegChange. It must do what we'd avoid anyway.
@@ -106,5 +127,10 @@ public enum PCByStackLocationTrackingSpec implements LocationTrackingSpec, Locat
 	public boolean affectedByBytesChange(TraceAddressSpace space, TraceAddressSnapRange range,
 			DebuggerCoordinates coordinates) {
 		return false;
+	}
+
+	@Override
+	public boolean shouldDisassemble() {
+		return true;
 	}
 }

@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -23,6 +23,7 @@ import javax.swing.*;
 import javax.swing.event.ChangeListener;
 
 import docking.ActionContext;
+import docking.DefaultActionContext;
 import docking.action.*;
 import docking.widgets.table.GTable;
 import generic.theme.GIcon;
@@ -248,7 +249,7 @@ public class LocationReferencesProvider extends ComponentProviderAdapter
 		selectionAction =
 			new MakeProgramSelectionAction(locationReferencesPlugin, referencesPanel.getTable());
 
-		highlightAction = new ToggleDockingAction("Highlight Matches", getName()) {
+		highlightAction = new ToggleDockingAction("Highlight Matches", getOwner()) {
 			@Override
 			public void actionPerformed(ActionContext context) {
 				updateHighlights();
@@ -366,6 +367,7 @@ public class LocationReferencesProvider extends ComponentProviderAdapter
 
 	@Override
 	public void closeComponent() {
+		super.closeComponent();
 		locationReferencesPlugin.providerDismissed(this);
 	}
 
@@ -401,7 +403,7 @@ public class LocationReferencesProvider extends ComponentProviderAdapter
 
 	@Override
 	public ActionContext getActionContext(MouseEvent event) {
-		return new ActionContext(this, referencesPanel.getTable());
+		return new DefaultActionContext(this, referencesPanel.getTable());
 	}
 
 //==================================================================================================

@@ -56,7 +56,7 @@ import ghidra.util.xml.GenericXMLOutputter;
 @PluginInfo(
 	status = PluginStatus.STABLE,
 	packageName = DeveloperPluginPackage.NAME,
-	category = PluginCategoryNames.MISC,
+	category = PluginCategoryNames.DIAGNOSTIC,
 	shortDescription = "Generate Old Language File",
 	description = "This plugin allows the user to generate an old-language XML " +
 			"file from the current version of a loaded language.  " +
@@ -134,7 +134,6 @@ public class GenerateOldLanguagePlugin extends Plugin implements ApplicationLeve
 
 		private JPanel panel;
 		private SelectLanguagePanel selectLangPanel;
-		private GhidraFileChooser chooser;
 
 		GenerateOldLanguageDialog(final boolean skipOldLangGeneration) {
 			super("Select Old Language", true, true, true, false);
@@ -169,17 +168,17 @@ public class GenerateOldLanguagePlugin extends Plugin implements ApplicationLeve
 						return;
 					}
 
-					if (chooser == null) {
-						chooser = new GhidraFileChooser(panel);
-						chooser.setTitle("Specify Old Language Output File");
-						chooser.setFileFilter(OLD_LANG_FILTER);
-						chooser.setApproveButtonText("Create");
-						// there's no single directory; you need to pick it yourself now
+					GhidraFileChooser chooser = new GhidraFileChooser(panel);
+					chooser.setTitle("Specify Old Language Output File");
+					chooser.setFileFilter(OLD_LANG_FILTER);
+					chooser.setApproveButtonText("Create");
+					// there's no single directory; you need to pick it yourself now
 //						chooser.setCurrentDirectory(LANGUAGE_DIR);
-						chooser.setCurrentDirectory(
-							Application.getApplicationRootDirectory().getFile(false));
-					}
+					chooser.setCurrentDirectory(
+						Application.getApplicationRootDirectory().getFile(false));
+
 					File file = chooser.getSelectedFile(true);
+					chooser.dispose();
 					if (file == null) {
 						return;
 					}
@@ -234,7 +233,6 @@ public class GenerateOldLanguagePlugin extends Plugin implements ApplicationLeve
 
 		private JPanel panel;
 		private SelectLanguagePanel selectLangPanel;
-		private GhidraFileChooser chooser;
 
 		private Language oldLang;
 		private File oldLangFile;
@@ -269,17 +267,18 @@ public class GenerateOldLanguagePlugin extends Plugin implements ApplicationLeve
 
 					File transFile;
 					if (GenerateTranslatorDialog.this.oldLangFile == null) {
-						if (chooser == null) {
-							chooser = new GhidraFileChooser(panel);
-							chooser.setTitle("Specify Old Language Output File");
-							chooser.setFileFilter(TRANSLATOR_FILTER);
-							chooser.setApproveButtonText("Create");
-							// there's no single directory; you need to pick it yourself now
+
+						GhidraFileChooser chooser = new GhidraFileChooser(panel);
+						chooser.setTitle("Specify Old Language Output File");
+						chooser.setFileFilter(TRANSLATOR_FILTER);
+						chooser.setApproveButtonText("Create");
+						// there's no single directory; you need to pick it yourself now
 //							chooser.setCurrentDirectory(LANGUAGE_DIR);
-							chooser.setCurrentDirectory(
-								Application.getApplicationRootDirectory().getFile(false));
-						}
+						chooser.setCurrentDirectory(
+							Application.getApplicationRootDirectory().getFile(false));
+
 						transFile = chooser.getSelectedFile(true);
+						chooser.dispose();
 						if (transFile == null) {
 							return;
 						}
@@ -533,7 +532,7 @@ public class GenerateOldLanguagePlugin extends Plugin implements ApplicationLeve
 		public List<LanguageDescription> getLanguageDescriptions(
 				boolean includeDeprecatedLanguages) {
 			// Include deprecated languages
-			List<LanguageDescription> list = new ArrayList<LanguageDescription>();
+			List<LanguageDescription> list = new ArrayList<>();
 			list.addAll(langService.getLanguageDescriptions(true));
 			if (includeOldLanguages) {
 				list.addAll(Arrays.asList(oldLangFactory.getLatestOldLanaguageDescriptions()));
@@ -546,7 +545,7 @@ public class GenerateOldLanguagePlugin extends Plugin implements ApplicationLeve
 		 */
 		@Override
 		public List<LanguageDescription> getLanguageDescriptions(Processor processor,
-				Endian endianess, Integer size, String variant) {
+				Endian endianness, Integer size, String variant) {
 			throw new UnsupportedOperationException();
 		}
 

@@ -263,6 +263,20 @@ public class FileHeader implements StructConverter {
 	}
 
 	/**
+	 * Get the first section header defined with the specified name
+	 * @param name section name
+	 * @return first section header defined with the specified name or null if not found
+	 */
+	public SectionHeader getSectionHeader(String name) {
+		for (SectionHeader element : sectionHeaders) {
+			if (element.getName().equals(name)) {
+				return element;
+			}
+		}
+		return null;
+	}
+
+	/**
 	 * Returns the time stamp of the image.
 	 * @return the time stamp of the image
 	 */
@@ -318,7 +332,7 @@ public class FileHeader implements StructConverter {
 		return ptrToSections;
 	}
 
-	void processSections(OptionalHeader optHeader) throws IOException {
+	void processSections(OptionalHeader optHeader, boolean symbolsProcessed) throws IOException {
 		long oldIndex = reader.getPointerIndex();
 
 		int tmpIndex = getPointerToSections();
@@ -329,7 +343,7 @@ public class FileHeader implements StructConverter {
 			Msg.error(this, "File alignment == 0: section processing skipped");
 		}
 		else {
-			long stringTableOffset = getStringTableOffset();
+			long stringTableOffset = symbolsProcessed ? getStringTableOffset() : -1;
 			sectionHeaders = new SectionHeader[numberOfSections];
 			for (int i = 0; i < numberOfSections; ++i) {
 				SectionHeader section =

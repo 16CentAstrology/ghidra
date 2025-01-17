@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,24 +15,22 @@
  */
 package ghidra.trace.database.breakpoint;
 
-import java.util.Collection;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
-import ghidra.dbg.target.*;
-import ghidra.dbg.target.schema.TargetObjectSchema;
-import ghidra.dbg.util.PathMatcher;
+import ghidra.pcode.exec.SleighUtils;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressRange;
 import ghidra.trace.database.target.*;
 import ghidra.trace.model.Lifespan;
 import ghidra.trace.model.Trace;
-import ghidra.trace.model.Trace.TraceBreakpointChangeType;
 import ghidra.trace.model.breakpoint.*;
 import ghidra.trace.model.target.TraceObject;
-import ghidra.trace.model.target.annot.TraceObjectInterfaceUtils;
-import ghidra.trace.model.thread.TraceObjectThread;
-import ghidra.trace.model.thread.TraceThread;
+import ghidra.trace.model.target.iface.TraceObjectTogglable;
+import ghidra.trace.model.target.info.TraceObjectInterfaceUtils;
+import ghidra.trace.model.target.path.PathFilter;
+import ghidra.trace.model.target.schema.TraceObjectSchema;
+import ghidra.trace.model.thread.*;
 import ghidra.trace.util.*;
 import ghidra.util.LockHold;
 import ghidra.util.exception.DuplicateNameException;
@@ -40,37 +38,47 @@ import ghidra.util.exception.DuplicateNameException;
 public class DBTraceObjectBreakpointLocation
 		implements TraceObjectBreakpointLocation, DBTraceObjectInterface {
 
-	protected class BreakpointChangeTranslator extends Translator<TraceBreakpoint> {
+	protected static class BreakpointChangeTranslator extends Translator<TraceBreakpoint> {
+		private static final Map<TraceObjectSchema, Set<String>> KEYS_BY_SCHEMA =
+			new WeakHashMap<>();
+
+		private final Set<String> keys;
+
 		protected BreakpointChangeTranslator(DBTraceObject object, TraceBreakpoint iface) {
-			super(TargetBreakpointLocation.RANGE_ATTRIBUTE_NAME, object, iface);
+			super(KEY_RANGE, object, iface);
+			TraceObjectSchema schema = object.getSchema();
+			synchronized (KEYS_BY_SCHEMA) {
+				keys = KEYS_BY_SCHEMA.computeIfAbsent(schema, s -> Set.of(
+					schema.checkAliasedAttribute(KEY_RANGE),
+					schema.checkAliasedAttribute(KEY_DISPLAY),
+					schema.checkAliasedAttribute(TraceObjectTogglable.KEY_ENABLED),
+					schema.checkAliasedAttribute(KEY_COMMENT)));
+			}
 		}
 
 		@Override
-		protected TraceChangeType<TraceBreakpoint, Void> getAddedType() {
-			return TraceBreakpointChangeType.ADDED;
+		protected TraceEvent<TraceBreakpoint, Void> getAddedType() {
+			return TraceEvents.BREAKPOINT_ADDED;
 		}
 
 		@Override
-		protected TraceChangeType<TraceBreakpoint, Lifespan> getLifespanChangedType() {
-			return TraceBreakpointChangeType.LIFESPAN_CHANGED;
+		protected TraceEvent<TraceBreakpoint, Lifespan> getLifespanChangedType() {
+			return TraceEvents.BREAKPOINT_LIFESPAN_CHANGED;
 		}
 
 		@Override
-		protected TraceChangeType<TraceBreakpoint, Void> getChangedType() {
-			return TraceBreakpointChangeType.CHANGED;
+		protected TraceEvent<TraceBreakpoint, Void> getChangedType() {
+			return TraceEvents.BREAKPOINT_CHANGED;
 		}
 
 		@Override
 		protected boolean appliesToKey(String key) {
-			return TargetBreakpointLocation.RANGE_ATTRIBUTE_NAME.equals(key) ||
-				TargetObject.DISPLAY_ATTRIBUTE_NAME.equals(key) ||
-				TargetBreakpointSpec.ENABLED_ATTRIBUTE_NAME.equals(key) ||
-				KEY_COMMENT.equals(key);
+			return keys.contains(key);
 		}
 
 		@Override
-		protected TraceChangeType<TraceBreakpoint, Void> getDeletedType() {
-			return TraceBreakpointChangeType.DELETED;
+		protected TraceEvent<TraceBreakpoint, Void> getDeletedType() {
+			return TraceEvents.BREAKPOINT_DELETED;
 		}
 	}
 
@@ -99,7 +107,7 @@ public class DBTraceObjectBreakpointLocation
 
 	@Override
 	public void setName(Lifespan lifespan, String name) {
-		object.setValue(lifespan, TargetObject.DISPLAY_ATTRIBUTE_NAME, name);
+		object.setValue(lifespan, KEY_DISPLAY, name);
 	}
 
 	@Override
@@ -112,15 +120,29 @@ public class DBTraceObjectBreakpointLocation
 	@Override
 	public String getName() {
 		try (LockHold hold = object.getTrace().lockRead()) {
-			return TraceObjectInterfaceUtils.getValue(object, getPlacedSnap(),
-				TargetObject.DISPLAY_ATTRIBUTE_NAME, String.class, "");
+			String display = TraceObjectInterfaceUtils.getValue(object, getPlacedSnap(),
+				KEY_DISPLAY, String.class, null);
+			if (display != null) {
+				return display;
+			}
+			TraceObject spec =
+				object.findCanonicalAncestorsInterface(TraceObjectBreakpointSpec.class)
+						.findFirst()
+						.orElse(null);
+			if (spec == null) {
+				return ""; // Should be impossible, but maybe not a sane schema
+			}
+			return spec.getCanonicalPath()
+					.parent()
+					.relativize(object.getCanonicalPath())
+					.toString();
 		}
 	}
 
 	@Override
 	public void setRange(Lifespan lifespan, AddressRange range) {
 		try (LockHold hold = object.getTrace().lockWrite()) {
-			object.setValue(lifespan, TargetBreakpointLocation.RANGE_ATTRIBUTE_NAME, range);
+			object.setValue(lifespan, KEY_RANGE, range);
 			this.range = range;
 		}
 	}
@@ -132,7 +154,7 @@ public class DBTraceObjectBreakpointLocation
 				return range;
 			}
 			return range = TraceObjectInterfaceUtils.getValue(object, getPlacedSnap(),
-				TargetBreakpointLocation.RANGE_ATTRIBUTE_NAME, AddressRange.class, range);
+				KEY_RANGE, AddressRange.class, range);
 		}
 	}
 
@@ -175,6 +197,13 @@ public class DBTraceObjectBreakpointLocation
 	}
 
 	@Override
+	public boolean isAlive(long snap) {
+		try (LockHold hold = object.getTrace().lockRead()) {
+			return object.isAlive(snap);
+		}
+	}
+
+	@Override
 	public Lifespan computeSpan() {
 		Lifespan span = TraceObjectBreakpointLocation.super.computeSpan();
 		if (span != null) {
@@ -206,7 +235,12 @@ public class DBTraceObjectBreakpointLocation
 		try (LockHold hold = object.getTrace().lockWrite()) {
 			if (enabled != isEnabled(snap)) {
 				object.setValue(Lifespan.span(snap, getClearedSnap()),
-					TargetBreakpointSpec.ENABLED_ATTRIBUTE_NAME, enabled);
+					TraceObjectTogglable.KEY_ENABLED, enabled);
+			}
+			Set<TraceBreakpointKind> asSet =
+				kinds instanceof Set<TraceBreakpointKind> yes ? yes : Set.copyOf(kinds);
+			if (!Objects.equals(asSet, getKinds())) {
+				this.setKinds(Lifespan.span(snap, getClearedSnap()), asSet);
 			}
 			return this;
 		}
@@ -214,7 +248,7 @@ public class DBTraceObjectBreakpointLocation
 
 	@Override
 	public void setEnabled(Lifespan lifespan, boolean enabled) {
-		object.setValue(lifespan, TargetBreakpointSpec.ENABLED_ATTRIBUTE_NAME, enabled);
+		object.setValue(lifespan, TraceObjectTogglable.KEY_ENABLED, enabled);
 	}
 
 	@Override
@@ -228,9 +262,9 @@ public class DBTraceObjectBreakpointLocation
 	public boolean isEnabled(long snap) {
 		try (LockHold hold = object.getTrace().lockRead()) {
 			Boolean locEn = TraceObjectInterfaceUtils.getValue(object, snap,
-				TargetBreakpointSpec.ENABLED_ATTRIBUTE_NAME, Boolean.class, null);
+				TraceObjectTogglable.KEY_ENABLED, Boolean.class, null);
 			if (locEn != null) {
-				return locEn;
+				return locEn && getSpecification().isEnabled(snap);
 			}
 			return getSpecification().isEnabled(snap);
 		}
@@ -265,7 +299,7 @@ public class DBTraceObjectBreakpointLocation
 	public Set<TraceThread> getThreads() {
 		// TODO: Delete this? It's sort of deprecated out the gate anyway....
 		DBTraceObjectManager manager = object.getManager();
-		TargetObjectSchema schema = manager.getRootSchema();
+		TraceObjectSchema schema = manager.getRootSchema();
 		try (LockHold hold = object.getTrace().lockRead()) {
 			Set<TraceThread> threads =
 				object.queryAncestorsInterface(getLifespan(), TraceObjectThread.class)
@@ -274,11 +308,11 @@ public class DBTraceObjectBreakpointLocation
 				return threads;
 			}
 
-			PathMatcher procMatcher = schema.searchFor(TargetProcess.class, false);
-			return object.getAncestorsRoot(getLifespan(), procMatcher)
+			PathFilter procFilter = schema.searchFor(TraceObjectProcess.class, false);
+			return object.getAncestorsRoot(getLifespan(), procFilter)
 					.flatMap(proc -> proc.getSource(object)
 							.querySuccessorsInterface(getLifespan(),
-								TraceObjectThread.class))
+								TraceObjectThread.class, true))
 					.collect(Collectors.toSet());
 		}
 	}
@@ -297,8 +331,63 @@ public class DBTraceObjectBreakpointLocation
 
 	@Override
 	public String getComment() {
-		return TraceObjectInterfaceUtils.getValue(object, getPlacedSnap(), KEY_COMMENT,
-			String.class, "");
+		try (LockHold hold = object.getTrace().lockRead()) {
+			String comment = TraceObjectInterfaceUtils.getValue(object, getPlacedSnap(),
+				KEY_COMMENT, String.class, "");
+			if (!comment.isBlank()) {
+				return comment;
+			}
+			TraceObjectBreakpointSpec spec = getSpecification();
+			if (spec == null) {
+				return "";
+			}
+			return spec.getExpression();
+		}
+	}
+
+	@Override
+	public void setEmuEnabled(Lifespan lifespan, boolean emuEnabled) {
+		object.setValue(lifespan, KEY_EMU_ENABLED, emuEnabled ? null : false);
+	}
+
+	@Override
+	public void setEmuEnabled(boolean emuEnabled) {
+		try (LockHold hold = object.getTrace().lockWrite()) {
+			setEmuEnabled(getLifespan(), emuEnabled);
+		}
+	}
+
+	@Override
+	public boolean isEmuEnabled(long snap) {
+		try (LockHold hold = object.getTrace().lockRead()) {
+			return TraceObjectInterfaceUtils.getValue(object, getPlacedSnap(), KEY_EMU_ENABLED,
+				Boolean.class, true);
+		}
+	}
+
+	@Override
+	public void setEmuSleigh(Lifespan lifespan, String sleigh) {
+		if (sleigh == null || SleighUtils.UNCONDITIONAL_BREAK.equals(sleigh)) {
+			object.setValue(lifespan, KEY_EMU_SLEIGH, null);
+		}
+		else {
+			object.setValue(lifespan, KEY_EMU_SLEIGH, sleigh.trim());
+		}
+	}
+
+	@Override
+	public void setEmuSleigh(String sleigh) {
+		try (LockHold hold = object.getTrace().lockWrite()) {
+			setEmuSleigh(getLifespan(), sleigh);
+		}
+	}
+
+	@Override
+	public String getEmuSleigh() {
+		try (LockHold hold = object.getTrace().lockRead()) {
+			return TraceObjectInterfaceUtils.getValue(object, getPlacedSnap(), KEY_EMU_SLEIGH,
+				String.class, SleighUtils.UNCONDITIONAL_BREAK);
+		}
 	}
 
 	@Override
@@ -309,8 +398,17 @@ public class DBTraceObjectBreakpointLocation
 	}
 
 	@Override
+	public boolean isValid(long snap) {
+		return object.getCanonicalParent(snap) != null;
+	}
+
+	@Override
 	public TraceObject getObject() {
 		return object;
+	}
+
+	public TraceObjectBreakpointSpec getOrCreateSpecification() {
+		return object.queryOrCreateCanonicalAncestorInterface(TraceObjectBreakpointSpec.class);
 	}
 
 	@Override
@@ -323,7 +421,7 @@ public class DBTraceObjectBreakpointLocation
 	}
 
 	public TraceAddressSpace getTraceAddressSpace() {
-		return spaceForValue(computeMinSnap(), TargetBreakpointLocation.RANGE_ATTRIBUTE_NAME);
+		return spaceForValue(computeMinSnap(), KEY_RANGE);
 	}
 
 	@Override

@@ -28,7 +28,7 @@ import javax.swing.table.*;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 
-import docking.DialogComponentProvider;
+import docking.ReusableDialogComponentProvider;
 import docking.widgets.button.GRadioButton;
 import docking.widgets.table.*;
 import generic.theme.GThemeDefaults.Colors;
@@ -48,7 +48,7 @@ import ghidra.util.table.GhidraTableFilterPanel;
  *
  *
  */
-public class CreateStructureDialog extends DialogComponentProvider {
+public class CreateStructureDialog extends ReusableDialogComponentProvider {
 	private static final String NEW_STRUCTURE_STATUS_PREFIX = "Creating new structure: ";
 	private static final String EXISITING_STRUCTURE_STATUS_PREFIX = "Using existing structure: ";
 
@@ -273,8 +273,8 @@ public class CreateStructureDialog extends DialogComponentProvider {
 		return matchingStylePanel;
 	}
 
-	// toggles whether the structure being created is new, based upon the name field, or a current 
-	// structure, based upon a structure in the table.  This method updates the GUI to reflect the 
+	// toggles whether the structure being created is new, based upon the name field, or a current
+	// structure, based upon a structure in the table.  This method updates the GUI to reflect the
 	// current creation state.
 	private void setCreateStructureByName(boolean createStructureByName) {
 		if (createStructureByName) {
@@ -572,7 +572,7 @@ public class CreateStructureDialog extends DialogComponentProvider {
 			message = EXISITING_STRUCTURE_STATUS_PREFIX;
 		}
 
-		setStatusText("<HTML>" + message + "<BR>\"" + HTMLUtilities.escapeHTML(name) + "\"");
+		setStatusText("<html>" + message + "<BR>\"" + HTMLUtilities.escapeHTML(name) + "\"");
 	}
 
 	// this class is used instead of a cell renderer so that sorting will

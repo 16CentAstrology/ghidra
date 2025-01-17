@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -36,7 +36,6 @@ public class FunctionPrototype {
 
 	private LocalSymbolMap localsyms; // Prototype backed by symbol map
 	private String modelname; // Name of prototype model
-	private GenericCallingConvention gconv; // Generic name for the model
 	private String injectname; // Name of pcode inject associated with this prototype
 	private DataType returntype; // Output parameter
 	private VariableStorage returnstorage;	// Where the output value is stored
@@ -64,7 +63,6 @@ public class FunctionPrototype {
 	public FunctionPrototype(LocalSymbolMap ls, Function func) {
 		localsyms = ls;
 		modelname = null;
-		gconv = null;
 		injectname = null;
 		returntype = null;
 		returnstorage = null;
@@ -90,10 +88,9 @@ public class FunctionPrototype {
 	 */
 	public FunctionPrototype(FunctionSignature proto, CompilerSpec cspec,
 			boolean voidimpliesdotdotdot) {
-		modelname = proto.getGenericCallingConvention().getDeclarationName();
-		PrototypeModel model = cspec.matchConvention(proto.getGenericCallingConvention());
+		modelname = proto.getCallingConventionName();
+		PrototypeModel model = cspec.matchConvention(modelname);
 		localsyms = null;
-		gconv = proto.getGenericCallingConvention();
 		injectname = null;
 		returntype = proto.getReturnType();
 		returnstorage = null;
@@ -103,7 +100,7 @@ public class FunctionPrototype {
 		outputlock = true;
 		dotdotdot = proto.hasVarArgs();
 		isinline = false;
-		noreturn = false;
+		noreturn = proto.hasNoReturn();
 		custom = false;
 		extrapop = model.getExtrapop();
 		hasThis = model.hasThisPointer();
@@ -136,7 +133,7 @@ public class FunctionPrototype {
 		}
 		hasThis = protoModel.hasThisPointer();
 		modellock =
-			((modelname != null) && (modelname != Function.UNKNOWN_CALLING_CONVENTION_STRING));
+			((modelname != null) && !Function.UNKNOWN_CALLING_CONVENTION_STRING.equals(modelname));
 		injectname = f.getCallFixup();
 		voidinputlock = false;
 		Parameter returnparam = f.getReturn();
@@ -311,19 +308,14 @@ public class FunctionPrototype {
 	}
 
 	/**
-	 * @return generic calling convention
-	 */
-	public GenericCallingConvention getGenericCallingConvention() {
-		return gconv;
-	}
-
-	/**
 	 * Encode this function prototype to a stream.
 	 * @param encoder is the stream encoder
 	 * @param dtmanage is the DataTypeManager for building type reference tags
+	 * @param firstVarArg is index of first variable argument or -1
 	 * @throws IOException for errors in the underlying stream
 	 */
-	public void encodePrototype(Encoder encoder, PcodeDataTypeManager dtmanage) throws IOException {
+	public void encodePrototype(Encoder encoder, PcodeDataTypeManager dtmanage, int firstVarArg)
+			throws IOException {
 		encoder.openElement(ELEM_PROTOTYPE);
 		if (extrapop == PrototypeModel.UNKNOWN_EXTRAPOP) {
 			encoder.writeString(ATTRIB_EXTRAPOP, "unknown");
@@ -388,6 +380,10 @@ public class FunctionPrototype {
 		}
 		if (params != null) {
 			encoder.openElement(ELEM_INTERNALLIST);
+			if (firstVarArg >= 0) {
+				// Encoding detail because we are not sending the storage address
+				encoder.writeSignedInteger(ATTRIB_FIRST, firstVarArg);
+			}
 			for (ParameterDefinition param : params) {
 				encoder.openElement(ELEM_PARAM);
 				String name = param.getName();
@@ -427,12 +423,8 @@ public class FunctionPrototype {
 		PrototypeModel protoModel =
 			dtmanage.getProgram().getCompilerSpec().getCallingConvention(modelname);
 		hasThis = (protoModel == null) ? false : protoModel.hasThisPointer();
-		try {
-			extrapop = (int) decoder.readSignedInteger(ATTRIB_EXTRAPOP);
-		}
-		catch (DecoderException e) {
-			extrapop = PrototypeModel.UNKNOWN_EXTRAPOP;
-		}
+		extrapop = (int) decoder.readSignedIntegerExpectString(ATTRIB_EXTRAPOP, "unknown",
+			PrototypeModel.UNKNOWN_EXTRAPOP);
 		modellock = false;
 		dotdotdot = false;
 		voidinputlock = false;

@@ -26,19 +26,17 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import javax.swing.*;
-import javax.swing.table.*;
+import javax.swing.table.TableColumn;
+import javax.swing.table.TableColumnModel;
 
-import org.apache.commons.lang3.StringUtils;
-
+import db.Transaction;
 import docking.action.DockingAction;
 import docking.widgets.table.*;
 import docking.widgets.table.DefaultEnumeratedColumnTableModel.EnumeratedTableColumn;
 import generic.theme.GColor;
-import ghidra.app.plugin.core.debug.DebuggerCoordinates;
 import ghidra.app.plugin.core.debug.DebuggerPluginPackage;
 import ghidra.app.plugin.core.debug.gui.DebuggerResources;
 import ghidra.app.plugin.core.debug.gui.pcode.UniqueRow.RefType;
-import ghidra.app.plugin.core.debug.service.emulation.DebuggerPcodeMachine;
 import ghidra.app.plugin.processors.sleigh.template.OpTpl;
 import ghidra.app.services.DebuggerEmulationService;
 import ghidra.app.services.DebuggerTraceManagerService;
@@ -46,6 +44,8 @@ import ghidra.app.util.pcode.AbstractAppender;
 import ghidra.app.util.pcode.AbstractPcodeFormatter;
 import ghidra.async.SwingExecutorService;
 import ghidra.base.widgets.table.DataTypeTableCellEditor;
+import ghidra.debug.api.emulation.DebuggerPcodeMachine;
+import ghidra.debug.api.tracemgr.DebuggerCoordinates;
 import ghidra.docking.settings.Settings;
 import ghidra.framework.plugintool.*;
 import ghidra.framework.plugintool.annotation.AutoServiceConsumed;
@@ -60,9 +60,7 @@ import ghidra.program.model.pcode.PcodeOp;
 import ghidra.program.model.pcode.Varnode;
 import ghidra.trace.model.Trace;
 import ghidra.trace.model.time.schedule.TraceSchedule;
-import ghidra.util.ColorUtils;
-import ghidra.util.HTMLUtilities;
-import ghidra.util.database.UndoableTransaction;
+import ghidra.util.*;
 import ghidra.util.table.GhidraTable;
 import ghidra.util.table.GhidraTableFilterPanel;
 import ghidra.util.table.column.AbstractGColumnRenderer;
@@ -71,17 +69,27 @@ public class DebuggerPcodeStepperProvider extends ComponentProviderAdapter {
 	private static final FontRenderContext METRIC_FRC =
 		new FontRenderContext(new AffineTransform(), false, false);
 
-	private static final String SPAN_ADDRESS = "addr";
-	private static final String SPAN_REGISTER = "reg";
-	private static final String SPAN_SCALAR = "scalar";
-	private static final String SPAN_LOCAL = "loc";
-	private static final String SPAN_MNEMONIC = "op";
-	private static final String SPAN_UNIMPL = "unimpl";
-	private static final String SPAN_SEPARATOR = "sep";
-	private static final String SPAN_LINE_LABEL = "lab";
-	private static final String SPAN_SPACE = "space";
-	private static final String SPAN_RAW = "raw";
-	private static final String SPAN_USEROP = "usr";
+	private static final Color COLOR_BACKGROUND = new GColor("color.bg.listing");
+	private static final Color COLOR_BACKGROUND_CURSOR = new GColor("color.bg.currentline.listing");
+	private static final Color COLOR_BACKGROUND_COUNTER =
+		new GColor("color.debugger.plugin.resources.pcode.counter");
+
+	private static final Color COLOR_FOREGROUND_ADDRESS = new GColor("color.fg.listing.address");
+	private static final Color COLOR_FOREGROUND_REGISTER = new GColor("color.fg.listing.register");
+	private static final Color COLOR_FOREGROUND_SCALAR = new GColor("color.fg.listing.constant");
+	private static final Color COLOR_FOREGROUND_LOCAL = new GColor("color.fg.listing.label.local");
+	private static final Color COLOR_FOREGROUND_MNEMONIC = new GColor("color.fg.listing.mnemonic");
+	private static final Color COLOR_FOREGROUND_UNIMPL =
+		new GColor("color.fg.listing.mnemonic.unimplemented");
+	private static final Color COLOR_FOREGROUND_SEPARATOR =
+		new GColor("color.fg.listing.separator");
+	private static final Color COLOR_FOREGROUND_LINE_LABEL =
+		new GColor("color.fg.listing.pcode.label");
+	private static final Color COLOR_FOREGROUND_SPACE =
+		new GColor("color.fg.listing.pcode.address.space");
+	private static final Color COLOR_FOREGROUND_RAW = new GColor("color.fg.listing.pcode.varnode");
+	private static final Color COLOR_FOREGROUND_USEROP =
+		new GColor("color.fg.listing.pcode.userop");
 
 	protected static final Comparator<Varnode> UNIQUE_COMPARATOR = (u1, u2) -> {
 		assert u1.isUnique() && u2.isUnique();
@@ -211,8 +219,7 @@ public class DebuggerPcodeStepperProvider extends ComponentProviderAdapter {
 			if (dataType == null) {
 				return null;
 			}
-			try (UndoableTransaction tid =
-				UndoableTransaction.start(current.getTrace(), "Resolve DataType")) {
+			try (Transaction tid = current.getTrace().openTransaction("Resolve DataType")) {
 				return current.getTrace().getDataTypeManager().resolve(dataType, null);
 			}
 		}
@@ -228,7 +235,8 @@ public class DebuggerPcodeStepperProvider extends ComponentProviderAdapter {
 			PcodeRow row = (PcodeRow) data.getRowObject();
 			if (data.isSelected()) {
 				if (row.isNext()) {
-					Color blend = ColorUtils.blend(counterColor, cursorColor, 0.5f);
+					Color blend =
+						ColorUtils.blend(COLOR_BACKGROUND_COUNTER, COLOR_BACKGROUND_CURSOR, 0.5f);
 					if (blend != null) {
 						setBackground(blend);
 					}
@@ -236,7 +244,7 @@ public class DebuggerPcodeStepperProvider extends ComponentProviderAdapter {
 				// else background is already set. Leave it alone
 			}
 			else if (row.isNext()) {
-				setBackground(counterColor);
+				setBackground(COLOR_BACKGROUND_COUNTER);
 			}
 			else {
 				setBackground(pcodeTable.getBackground());
@@ -258,23 +266,17 @@ public class DebuggerPcodeStepperProvider extends ComponentProviderAdapter {
 		}
 
 		@Override
-		protected void configureFont(JTable table, TableModel model, int column) {
-			setFont(fixedWidthFont);
+		protected Font getDefaultFont() {
+			return fixedWidthFont;
 		}
 
 		@Override
 		public Component getTableCellRendererComponent(GTableCellRenderingData data) {
 			super.getTableCellRendererComponent(data);
-			setText(injectStyle(getText()));
+			Object value = data.getValue();
+			String text = getText(value);
+			setText(text);
 			return this;
-		}
-
-		String injectStyle(String html) {
-			if (StringUtils.startsWithIgnoreCase(html, "<html>")) {
-				String style = computeStyle();
-				return style + html.substring("<html>".length());
-			}
-			return html;
 		}
 	}
 
@@ -308,8 +310,8 @@ public class DebuggerPcodeStepperProvider extends ComponentProviderAdapter {
 		}
 	}
 
-	protected static String htmlSpan(String cls, String display) {
-		return String.format("<span class=\"%s\">%s</span>", cls,
+	protected static String htmlColor(Color color, String display) {
+		return String.format("<font color=\"%s\">%s</font>", WebColors.toString(color, false),
 			HTMLUtilities.escapeHTML(display));
 	}
 
@@ -360,83 +362,87 @@ public class DebuggerPcodeStepperProvider extends ComponentProviderAdapter {
 
 		@Override
 		public void appendAddressWordOffcut(long wordOffset, long offcut) {
-			codeHtml.append(htmlSpan(SPAN_ADDRESS, stringifyWordOffcut(wordOffset, offcut)));
+			codeHtml.append(
+				htmlColor(COLOR_FOREGROUND_ADDRESS, stringifyWordOffcut(wordOffset, offcut)));
 		}
 
 		@Override
 		public void appendCharacter(char c) {
 			if (c == '=') {
 				codeHtml.append("&nbsp;");
-				codeHtml.append(htmlSpan(SPAN_SEPARATOR, "="));
+				codeHtml.append(htmlColor(COLOR_FOREGROUND_SEPARATOR, "="));
 				codeHtml.append("&nbsp;");
 			}
 			else if (c == ' ') {
 				codeHtml.append("&nbsp;");
 			}
 			else {
-				codeHtml.append(htmlSpan(SPAN_SEPARATOR, Character.toString(c)));
+				codeHtml.append(htmlColor(COLOR_FOREGROUND_SEPARATOR, Character.toString(c)));
 			}
 		}
 
 		@Override
 		public void appendIndent() {
+			// stub
 		}
 
 		@Override
 		public void appendLabel(String label) {
-			codeHtml.append(htmlSpan(SPAN_LOCAL, label));
+			codeHtml.append(htmlColor(COLOR_FOREGROUND_LOCAL, label));
 		}
 
 		@Override
 		public void appendLineLabel(long label) {
 			hasLabel = true;
-			labelHtml.append(htmlSpan(SPAN_LINE_LABEL, stringifyLineLabel(label)));
+			labelHtml.append(htmlColor(COLOR_FOREGROUND_LINE_LABEL, stringifyLineLabel(label)));
 		}
 
 		@Override
 		public void appendLineLabelRef(long label) {
-			codeHtml.append(htmlSpan(SPAN_LINE_LABEL, stringifyLineLabel(label)));
+			codeHtml.append(htmlColor(COLOR_FOREGROUND_LINE_LABEL, stringifyLineLabel(label)));
 		}
 
 		@Override
 		public void appendMnemonic(int opcode) {
-			String style = opcode == PcodeOp.UNIMPLEMENTED ? SPAN_UNIMPL : SPAN_MNEMONIC;
-			codeHtml.append(htmlSpan(style, stringifyOpMnemonic(opcode)));
+			Color style = opcode == PcodeOp.UNIMPLEMENTED ? COLOR_FOREGROUND_UNIMPL
+					: COLOR_FOREGROUND_MNEMONIC;
+			codeHtml.append(htmlColor(style, stringifyOpMnemonic(opcode)));
 		}
 
 		@Override
 		public void appendRawVarnode(AddressSpace space, long offset, long size) {
-			codeHtml.append(htmlSpan(SPAN_RAW, stringifyRawVarnode(space, offset, size)));
+			codeHtml.append(
+				htmlColor(COLOR_FOREGROUND_RAW, stringifyRawVarnode(space, offset, size)));
 		}
 
 		@Override
 		public void appendRegister(Register register) {
-			codeHtml.append(htmlSpan(SPAN_REGISTER, stringifyRegister(register)));
+			codeHtml.append(htmlColor(COLOR_FOREGROUND_REGISTER, stringifyRegister(register)));
 		}
 
 		@Override
 		public void appendScalar(long value) {
-			codeHtml.append(htmlSpan(SPAN_SCALAR, stringifyScalarValue(value)));
+			codeHtml.append(htmlColor(COLOR_FOREGROUND_SCALAR, stringifyScalarValue(value)));
 		}
 
 		@Override
 		public void appendSpace(AddressSpace space) {
-			codeHtml.append(htmlSpan(SPAN_SPACE, stringifySpace(space)));
+			codeHtml.append(htmlColor(COLOR_FOREGROUND_SPACE, stringifySpace(space)));
 		}
 
 		@Override
 		public void appendUnique(long offset) {
-			codeHtml.append(htmlSpan(SPAN_LOCAL, stringifyUnique(offset)));
+			codeHtml.append(htmlColor(COLOR_FOREGROUND_LOCAL, stringifyUnique(offset)));
 		}
 
 		@Override
 		public void appendUserop(int id) {
-			codeHtml.append(htmlSpan(SPAN_USEROP, stringifyUserop(language, id)));
+			codeHtml.append(htmlColor(COLOR_FOREGROUND_USEROP, stringifyUserop(language, id)));
 		}
 
 		@Override
-		protected String stringifyUseropUnchecked(Language language, int id) {
-			String name = super.stringifyUseropUnchecked(language, id);
+		protected String stringifyUseropUnchecked(Language lang, int id) {
+			String name = super.stringifyUseropUnchecked(lang, id);
 			if (name != null) {
 				return name;
 			}
@@ -476,8 +482,8 @@ public class DebuggerPcodeStepperProvider extends ComponentProviderAdapter {
 		}
 
 		@Override
-		protected ToPcodeRowsAppender createAppender(Language language, boolean indent) {
-			return new ToPcodeRowsAppender(language, frame);
+		protected ToPcodeRowsAppender createAppender(Language lang, boolean indent) {
+			return new ToPcodeRowsAppender(lang, frame);
 		}
 
 		@Override
@@ -531,23 +537,6 @@ public class DebuggerPcodeStepperProvider extends ComponentProviderAdapter {
 	@SuppressWarnings("unused")
 	private AutoService.Wiring autoServiceWiring;
 
-	private Color counterColor = DebuggerResources.DEFAULT_COLOR_PCODE_COUNTER;
-
-	private Color backgroundColor = new GColor("color.bg.listing");
-	private Color cursorColor = new GColor("color.bg.currentline.listing");
-
-	private Color addressColor = new GColor("color.fg.listing.address");
-	private Color registerColor = new GColor("color.fg.listing.register");
-	private Color scalarColor = new GColor("color.fg.listing.constant");
-	private Color localColor = new GColor("color.fg.listing.label.local");
-	private Color mnemonicColor = new GColor("color.fg.listing.mnemonic");
-	private Color unimplColor = new GColor("color.fg.listing.mnemonic.unimplemented");
-	private Color separatorColor = new GColor("color.fg.listing.separator");
-	private Color lineLabelColor = new GColor("color.fg.listing.pcode.label");
-	private Color spaceColor = new GColor("color.fg.listing.pcode.space");
-	private Color rawColor = new GColor("color.fg.listing.pcode.varnode");
-	private Color useropColor = new GColor("color.fg.listing.pcode.userop");
-
 	JSplitPane mainPanel = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
 
 	final UniqueTableModel uniqueTableModel;
@@ -584,23 +573,6 @@ public class DebuggerPcodeStepperProvider extends ComponentProviderAdapter {
 		contextChanged();
 	}
 
-	protected String computeStyle() {
-		StringBuilder sb = new StringBuilder("<html><head><style>");
-		sb.append(createColoredStyle(SPAN_ADDRESS, addressColor));
-		sb.append(createColoredStyle(SPAN_REGISTER, registerColor));
-		sb.append(createColoredStyle(SPAN_SCALAR, scalarColor));
-		sb.append(createColoredStyle(SPAN_LOCAL, localColor));
-		sb.append(createColoredStyle(SPAN_MNEMONIC, mnemonicColor));
-		sb.append(createColoredStyle(SPAN_UNIMPL, unimplColor));
-		sb.append(createColoredStyle(SPAN_SEPARATOR, separatorColor));
-		sb.append(createColoredStyle(SPAN_LINE_LABEL, lineLabelColor));
-		sb.append(createColoredStyle(SPAN_SPACE, spaceColor));
-		sb.append(createColoredStyle(SPAN_RAW, rawColor));
-		sb.append(createColoredStyle(SPAN_USEROP, useropColor));
-		sb.append("</style></head>"); // NB. </html> should already be at end
-		return sb.toString();
-	}
-
 	protected int measureColWidth(JLabel renderer, String sample) {
 		Font font = renderer.getFont();
 		Insets insets = renderer.getBorder().getBorderInsets(renderer);
@@ -619,12 +591,12 @@ public class DebuggerPcodeStepperProvider extends ComponentProviderAdapter {
 		JPanel pcodeTablePanel = new JPanel(new BorderLayout());
 		pcodeTable = new GhidraTable(pcodeTableModel);
 		pcodeTablePanel.add(pcodeTable, BorderLayout.CENTER);
-		pcodeTable.setBackground(backgroundColor);
-		pcodeTable.setSelectionBackground(cursorColor);
+		pcodeTable.setBackground(COLOR_BACKGROUND);
+		pcodeTable.setSelectionBackground(COLOR_BACKGROUND_CURSOR);
 
-		JScrollPane pcodeScrollPane = new JScrollPane(pcodeTablePanel,
-			ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
-			ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+		JScrollPane pcodeScrollPane =
+			new JScrollPane(pcodeTablePanel, ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+				ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
 
 		JPanel pcodePanel = new JPanel(new BorderLayout());
 		pcodePanel.add(pcodeScrollPane, BorderLayout.CENTER);
@@ -640,9 +612,9 @@ public class DebuggerPcodeStepperProvider extends ComponentProviderAdapter {
 		mainPanel.setRightComponent(uniquePanel);
 
 		pcodeTable.setTableHeader(null);
-		pcodeTable.setBackground(backgroundColor);
-		pcodeTable.setSelectionBackground(cursorColor);
-		pcodeTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+		pcodeTable.setBackground(COLOR_BACKGROUND);
+		pcodeTable.setSelectionBackground(COLOR_BACKGROUND_CURSOR);
+		pcodeTable.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
 		pcodeTable.getSelectionModel().addListSelectionListener(evt -> {
 			if (evt.getValueIsAdjusting()) {
 				return;
@@ -692,8 +664,7 @@ public class DebuggerPcodeStepperProvider extends ComponentProviderAdapter {
 				.onAction(c -> stepBackwardActivated())
 				.buildAndInstallLocal(this);
 		actionStepForward = DebuggerResources.EmulatePcodeForwardAction.builder(plugin)
-				.enabledWhen(
-					c -> current.getThread() != null)
+				.enabledWhen(c -> current.getThread() != null)
 				.onAction(c -> stepForwardActivated())
 				.buildAndInstallLocal(this);
 	}
@@ -800,10 +771,9 @@ public class DebuggerPcodeStepperProvider extends ComponentProviderAdapter {
 		// TODO: Highlight uniques that the selected op(s) reference
 		//       (including overlaps)
 		// TODO: Permit modification of unique variables
-		List<UniqueRow> toAdd =
-			uniques.stream()
-					.map(u -> new UniqueRow(this, language, state, arithmetic, u))
-					.collect(Collectors.toList());
+		List<UniqueRow> toAdd = uniques.stream()
+				.map(u -> new UniqueRow(this, language, state, arithmetic, u))
+				.collect(Collectors.toList());
 		uniqueTableModel.addAll(toAdd);
 	}
 

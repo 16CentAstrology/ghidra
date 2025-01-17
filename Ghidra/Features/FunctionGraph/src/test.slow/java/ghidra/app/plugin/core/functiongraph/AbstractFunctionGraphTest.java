@@ -79,6 +79,8 @@ public abstract class AbstractFunctionGraphTest extends AbstractGhidraHeadedInte
 
 	protected static final Transferable DUMMY_TRANSFERABLE = new DummyTransferable();
 
+	protected static final String SATELLITE_NAME = "Function Graph Satellite";
+
 	protected PluginTool tool;
 	protected FunctionGraphPlugin graphPlugin;
 	protected ProgramDB program;
@@ -453,7 +455,7 @@ public abstract class AbstractFunctionGraphTest extends AbstractGhidraHeadedInte
 		Object actionManager = getInstanceField("actionManager", graphProvider);
 		final MultiStateDockingAction<?> action =
 			(MultiStateDockingAction<?>) getInstanceField("layoutAction", actionManager);
-		runSwing(() -> action.actionPerformed(new ActionContext()));
+		runSwing(() -> action.actionPerformed(new DefaultActionContext()));
 
 		// wait for the threaded graph layout code
 		FGController controller = getFunctionGraphController();
@@ -2120,12 +2122,12 @@ public abstract class AbstractFunctionGraphTest extends AbstractGhidraHeadedInte
 	}
 
 	protected void assertNoUndockedProvider() {
-		ComponentProvider provider = tool.getComponentProvider(FGSatelliteUndockedProvider.NAME);
+		ComponentProvider provider = tool.getComponentProvider(SATELLITE_NAME);
 		assertNull("Undocked satellite provider is installed when it should not be", provider);
 	}
 
 	protected void assertUndockedProviderNotShowing() {
-		ComponentProvider provider = tool.getComponentProvider(FGSatelliteUndockedProvider.NAME);
+		ComponentProvider provider = tool.getComponentProvider(SATELLITE_NAME);
 		if (provider == null) {
 			return; // no provider; not showing
 		}
@@ -2133,7 +2135,7 @@ public abstract class AbstractFunctionGraphTest extends AbstractGhidraHeadedInte
 	}
 
 	protected void assertUndockedProviderShowing() {
-		ComponentProvider provider = tool.getComponentProvider(FGSatelliteUndockedProvider.NAME);
+		ComponentProvider provider = tool.getComponentProvider(SATELLITE_NAME);
 		assertUndockedProviderShowing(provider);
 	}
 
@@ -2173,7 +2175,7 @@ public abstract class AbstractFunctionGraphTest extends AbstractGhidraHeadedInte
 	}
 
 	protected void closeUndockedProvider() {
-		ComponentProvider provider = tool.getComponentProvider(FGSatelliteUndockedProvider.NAME);
+		ComponentProvider provider = tool.getComponentProvider(SATELLITE_NAME);
 		assertNotNull("Undocked provider is not installed when it should be", provider);
 		tool.showComponentProvider(provider, false);
 		waitForSwing();
@@ -2295,7 +2297,7 @@ public abstract class AbstractFunctionGraphTest extends AbstractGhidraHeadedInte
 
 		DockingActionIf action = getAction(tool, "FunctionGraphPlugin", name);
 		ToggleDockingAction displayAction = (ToggleDockingAction) action;
-		setToggleActionSelected(displayAction, new ActionContext(), expectedVisible);
+		setToggleActionSelected(displayAction, new DefaultActionContext(), expectedVisible);
 //
 //		// make sure the action is not already in the state we expect
 //		assertEquals(name + " action is not selected as expected", !expectedVisible,

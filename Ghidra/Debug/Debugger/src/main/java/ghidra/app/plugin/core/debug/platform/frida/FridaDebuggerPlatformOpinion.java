@@ -18,6 +18,7 @@ package ghidra.app.plugin.core.debug.platform.frida;
 import java.util.Set;
 
 import ghidra.app.plugin.core.debug.mapping.*;
+import ghidra.debug.api.platform.DebuggerPlatformMapper;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.program.model.lang.*;
 import ghidra.trace.model.Trace;
@@ -95,7 +96,7 @@ public class FridaDebuggerPlatformOpinion extends AbstractDebuggerPlatformOpinio
 		}
 		String lcOS = os.toLowerCase();
 		boolean isLinux = lcOS.contains("linux");
-		boolean isMacOS = lcOS.contains("darwin") || lcOS.contains("macos");
+		boolean isMacOS = lcOS.contains("darwin") || lcOS.contains("macos") || lcOS.contains("ios");
 		boolean isWindows = lcOS.contains("windows");
 		String lcArch = arch.toLowerCase();
 		// "arm" subsumes "arm64"

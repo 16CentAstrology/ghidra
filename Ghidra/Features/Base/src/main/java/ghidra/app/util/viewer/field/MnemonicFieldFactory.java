@@ -23,11 +23,10 @@ import javax.swing.event.ChangeListener;
 import docking.widgets.fieldpanel.field.*;
 import docking.widgets.fieldpanel.support.FieldLocation;
 import generic.theme.GThemeDefaults.Colors.Messages;
-import generic.theme.GThemeDefaults.Colors.Palette;
 import ghidra.GhidraOptions;
-import ghidra.app.util.HighlightProvider;
+import ghidra.app.util.ListingHighlightProvider;
+import ghidra.app.util.viewer.field.ListingColors.MnemonicColors;
 import ghidra.app.util.viewer.format.FieldFormatModel;
-import ghidra.app.util.viewer.options.OptionsGui;
 import ghidra.app.util.viewer.proxy.ProxyObj;
 import ghidra.framework.options.Options;
 import ghidra.framework.options.ToolOptions;
@@ -45,14 +44,11 @@ import ghidra.util.HelpLocation;
   */
 public class MnemonicFieldFactory extends FieldFactory {
 	public static final String FIELD_NAME = "Mnemonic";
-	public static final Color OVERRIDE_COLOR = Palette.PURPLE;
 
 	private final static Color BAD_PROTOTYPE_COLOR = Messages.ERROR;
 	private final static String SHOW_UNDERLINE_FOR_REFERENCES =
 		GhidraOptions.MNEMONIC_GROUP_TITLE + Options.DELIMITER + "Underline Fields With References";
 
-	private static final String OVERRIDE_COLOR_OPTION = "Mnemonic, Override Color";
-	private Color overrideColor;
 	private boolean underliningEnabled = true;
 
 	protected BrowserCodeUnitFormat codeUnitFormat;
@@ -72,11 +68,9 @@ public class MnemonicFieldFactory extends FieldFactory {
 	 * @param displayOptions the Options for display properties.
 	 * @param fieldOptions the Options for field specific properties.
 	 */
-	private MnemonicFieldFactory(FieldFormatModel model, HighlightProvider hsProvider,
+	private MnemonicFieldFactory(FieldFormatModel model, ListingHighlightProvider hsProvider,
 			Options displayOptions, ToolOptions fieldOptions) {
 		super(FIELD_NAME, model, hsProvider, displayOptions, fieldOptions);
-
-		overrideColor = displayOptions.getColor(OVERRIDE_COLOR_OPTION, OVERRIDE_COLOR);
 
 		HelpLocation hl = new HelpLocation("CodeBrowserPlugin", "Mnemonic_Field");
 		fieldOptions.getOptions("Mnemonic Fields").setOptionsHelpLocation(hl);
@@ -88,15 +82,6 @@ public class MnemonicFieldFactory extends FieldFactory {
 		// Create code unit format and associated options - listen for changes
 		codeUnitFormat = new BrowserCodeUnitFormat(fieldOptions, true);
 		codeUnitFormat.addChangeListener(codeUnitFormatListener);
-	}
-
-	@Override
-	public void displayOptionsChanged(Options options, String optionName, Object oldValue,
-			Object newValue) {
-		if (optionName.equals(OVERRIDE_COLOR_OPTION)) {
-			overrideColor = (Color) newValue;
-		}
-		super.displayOptionsChanged(options, optionName, oldValue, newValue);
 	}
 
 	@Override
@@ -129,14 +114,15 @@ public class MnemonicFieldFactory extends FieldFactory {
 
 		boolean underline = underliningEnabled && (cu.getMnemonicReferences().length > 0);
 		String mnemonic = codeUnitFormat.getMnemonicRepresentation(cu);
-		Color c = color;
+		Color c = MnemonicColors.NORMAL;
 		if (invalidInstrProto) {
 			c = BAD_PROTOTYPE_COLOR;
 		}
 		else if (cu instanceof Instruction) {
 			Instruction instr = (Instruction) cu;
-			if (instr.getFlowOverride() != FlowOverride.NONE || instr.isFallThroughOverridden()) {
-				c = overrideColor;
+			if (instr.getFlowOverride() != FlowOverride.NONE || instr.isFallThroughOverridden() ||
+				instr.isLengthOverridden()) {
+				c = MnemonicColors.OVERRIDE;
 			}
 		}
 		else {
@@ -146,7 +132,7 @@ public class MnemonicFieldFactory extends FieldFactory {
 			}
 		}
 		AttributedString as =
-			new AttributedString(mnemonic, c, getMetrics(), underline, underlineColor);
+			new AttributedString(mnemonic, c, getMetrics(), underline, ListingColors.UNDERLINE);
 		FieldElement text = new TextFieldElement(as, 0, 0);
 		return ListingTextField.createSingleLineTextField(this, proxy, text, startX + varWidth,
 			width, hlProvider);
@@ -217,13 +203,9 @@ public class MnemonicFieldFactory extends FieldFactory {
 	}
 
 	@Override
-	public FieldFactory newInstance(FieldFormatModel formatModel, HighlightProvider hsProvider,
+	public FieldFactory newInstance(FieldFormatModel formatModel, ListingHighlightProvider hsProvider,
 			ToolOptions displayOptions, ToolOptions fieldOptions) {
 		return new MnemonicFieldFactory(formatModel, hsProvider, displayOptions, fieldOptions);
 	}
 
-	@Override
-	public Color getDefaultColor() {
-		return OptionsGui.MNEMONIC.getDefaultColor();
-	}
 }

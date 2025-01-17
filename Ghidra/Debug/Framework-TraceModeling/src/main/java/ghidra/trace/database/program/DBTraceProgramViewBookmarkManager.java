@@ -23,8 +23,6 @@ import javax.swing.Icon;
 
 import org.apache.commons.collections4.IteratorUtils;
 
-import com.google.common.collect.Iterators;
-
 import generic.NestedIterator;
 import ghidra.program.model.address.*;
 import ghidra.program.model.listing.Bookmark;
@@ -155,7 +153,7 @@ public class DBTraceProgramViewBookmarkManager implements TraceProgramViewBookma
 			Collection<DBTraceBookmark> bookmarks = bookmarkManager.getBookmarksByType(type);
 			monitor.initialize(bookmarks.size());
 			for (DBTraceBookmark bm : bookmarks) {
-				monitor.checkCanceled();
+				monitor.checkCancelled();
 				monitor.incrementProgress(1);
 				if (!bm.getLifespan().contains(program.snap)) {
 					continue;
@@ -173,7 +171,7 @@ public class DBTraceProgramViewBookmarkManager implements TraceProgramViewBookma
 		try (LockHold hold = program.trace.lockWrite()) {
 			monitor.initialize(set.getNumAddresses());
 			for (AddressRange rng : set) {
-				monitor.checkCanceled();
+				monitor.checkCancelled();
 				monitor.incrementProgress(rng.getLength());
 				DBTraceBookmarkSpace space =
 					bookmarkManager.getBookmarkSpace(rng.getAddressSpace(), false);
@@ -182,7 +180,7 @@ public class DBTraceProgramViewBookmarkManager implements TraceProgramViewBookma
 				}
 				for (TraceBookmark bm : space.getBookmarksIntersecting(Lifespan.at(program.snap),
 					rng)) {
-					monitor.checkCanceled();
+					monitor.checkCancelled();
 					if (!bm.getLifespan().contains(program.snap)) {
 						continue;
 					}
@@ -283,6 +281,7 @@ public class DBTraceProgramViewBookmarkManager implements TraceProgramViewBookma
 	 * A less restrictive casting of
 	 * {@link IteratorUtils#filteredIterator(Iterator, org.apache.commons.collections4.Predicate)}.
 	 * 
+	 * <p>
 	 * This one understands that the predicate will be testing things of the (possibly
 	 * more-specific) type of elements in the original iterator, not that of the returned iterator.
 	 * 
@@ -293,7 +292,7 @@ public class DBTraceProgramViewBookmarkManager implements TraceProgramViewBookma
 	@SuppressWarnings("unchecked")
 	protected static <T, U extends T> Iterator<T> filteredIterator(Iterator<U> it,
 			Predicate<? super U> predicate) {
-		return (Iterator<T>) Iterators.filter(it, e -> predicate.test(e));
+		return (Iterator<T>) IteratorUtils.filteredIterator(it, e -> predicate.test(e));
 	}
 
 	@Override

@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,8 +16,7 @@
 package docking.theme.gui;
 
 import java.awt.Component;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 import java.util.function.Supplier;
 
 import javax.swing.*;
@@ -39,19 +38,48 @@ public class ThemeIconTableModel extends GDynamicColumnTableModel<IconValue, Obj
 	private GThemeValueMap currentValues;
 	private GThemeValueMap themeValues;
 	private GThemeValueMap defaultValues;
-	private ThemeManager themeManager;
+	private GThemeValuesCache valuesProvider;
+	private boolean showSystemValues;
 
-	public ThemeIconTableModel(ThemeManager themeManager) {
+	public ThemeIconTableModel(GThemeValuesCache valuesProvider) {
 		super(new ServiceProviderStub());
-		this.themeManager = themeManager;
+		this.valuesProvider = valuesProvider;
 		load();
+	}
+
+	public void setShowSystemValues(boolean show) {
+		this.showSystemValues = show;
+	}
+
+	public boolean isShowingSystemValues() {
+		return showSystemValues;
+	}
+
+	protected void filter() {
+
+		List<IconValue> filtered = new ArrayList<>();
+
+		for (IconValue iconValue : icons) {
+			String id = iconValue.getId();
+			if (showSystemValues) {
+				filtered.add(iconValue);
+				continue;
+			}
+
+			if (!Gui.isSystemId(id)) {
+				filtered.add(iconValue);
+			}
+
+		}
+
+		icons = filtered;
 	}
 
 	/**
 	 * Reloads the just the current values shown in the table. Called whenever an icon changes.
 	 */
 	public void reloadCurrent() {
-		currentValues = themeManager.getCurrentValues();
+		currentValues = valuesProvider.getCurrentValues();
 		icons = currentValues.getIcons();
 		fireTableDataChanged();
 	}
@@ -66,10 +94,12 @@ public class ThemeIconTableModel extends GDynamicColumnTableModel<IconValue, Obj
 	}
 
 	private void load() {
-		currentValues = themeManager.getCurrentValues();
+		currentValues = valuesProvider.getCurrentValues();
 		icons = currentValues.getIcons();
-		themeValues = themeManager.getThemeValues();
-		defaultValues = themeManager.getDefaults();
+		themeValues = valuesProvider.getThemeValues();
+		defaultValues = valuesProvider.getDefaultValues();
+
+		filter();
 	}
 
 	@Override
@@ -97,7 +127,16 @@ public class ThemeIconTableModel extends GDynamicColumnTableModel<IconValue, Obj
 		return null;
 	}
 
-	class IdColumn extends AbstractDynamicTableColumn<IconValue, String, Object> {
+	/**
+	 * Returns the original value for the id as defined by the current theme
+	 * @param id the resource id to get a font value for
+	 * @return  the original value for the id as defined by the current theme
+	 */
+	public IconValue getThemeValue(String id) {
+		return themeValues.getIcon(id);
+	}
+
+	private class IdColumn extends AbstractDynamicTableColumn<IconValue, String, Object> {
 
 		@Override
 		public String getColumnName() {
@@ -116,7 +155,8 @@ public class ThemeIconTableModel extends GDynamicColumnTableModel<IconValue, Obj
 		}
 	}
 
-	class IconValueColumn extends AbstractDynamicTableColumn<IconValue, ResolvedIcon, Object> {
+	private class IconValueColumn
+			extends AbstractDynamicTableColumn<IconValue, ResolvedIcon, Object> {
 		private ThemeIconRenderer renderer;
 		private String name;
 		private Supplier<GThemeValueMap> valueSupplier;
@@ -176,7 +216,7 @@ public class ThemeIconTableModel extends GDynamicColumnTableModel<IconValue, Obj
 	private class ThemeIconRenderer extends AbstractGColumnRenderer<ResolvedIcon> {
 
 		public ThemeIconRenderer() {
-			setFont(Gui.getFont("font.monospaced"));
+			setFont(getFixedWidthFont());
 		}
 
 		@Override
@@ -232,14 +272,6 @@ public class ThemeIconTableModel extends GDynamicColumnTableModel<IconValue, Obj
 		}
 	}
 
-	record ResolvedIcon(String id, String refId, Icon icon) {/**/}
-
-	/**
-	 * Returns the original value for the id as defined by the current theme
-	 * @param id the resource id to get a font value for
-	 * @return  the original value for the id as defined by the current theme
-	 */
-	public IconValue getThemeValue(String id) {
-		return themeValues.getIcon(id);
+	private record ResolvedIcon(String id, String refId, Icon icon) {
 	}
 }

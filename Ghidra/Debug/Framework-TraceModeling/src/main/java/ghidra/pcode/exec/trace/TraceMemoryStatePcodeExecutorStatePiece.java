@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,6 +15,8 @@
  */
 package ghidra.pcode.exec.trace;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 
 import generic.ULongSpan;
@@ -23,8 +25,8 @@ import ghidra.pcode.exec.*;
 import ghidra.pcode.exec.PcodeArithmetic.Purpose;
 import ghidra.pcode.exec.trace.data.PcodeTraceDataAccess;
 import ghidra.program.model.address.*;
+import ghidra.program.model.lang.Register;
 import ghidra.program.model.mem.MemBuffer;
-import ghidra.trace.model.memory.TraceMemorySpace;
 import ghidra.trace.model.memory.TraceMemoryState;
 
 /**
@@ -36,13 +38,14 @@ import ghidra.trace.model.memory.TraceMemoryState;
  * {@link TraceMemoryStatePcodeArithmetic} as a means of computing the "state" of a Sleigh
  * expression's value. It essentially works like a rudimentary taint analyzer: If any part of any
  * input to the expression in tainted, i.e., not {@link TraceMemoryState#KNOWN}, then the result is
- * {@link TraceMemoryState#UNKNOWN}. This is best exemplified in {@link #getUnique(long, int)},
- * though it's also exemplified in {@link #getFromSpace(TraceMemorySpace, long, int)}.
+ * {@link TraceMemoryState#UNKNOWN}. This is best exemplified in
+ * {@link #getUnique(long, int, Reason)}, though it's also exemplified in
+ * {@link #getFromSpace(AddressSpace, long, int, Reason)}.
  */
 public class TraceMemoryStatePcodeExecutorStatePiece extends
 		AbstractLongOffsetPcodeExecutorStatePiece<byte[], TraceMemoryState, AddressSpace> {
 
-	protected final MutableULongSpanMap<TraceMemoryState> unique = new DefaultULongSpanMap<>();
+	protected final MutableULongSpanMap<TraceMemoryState> unique;
 	protected final PcodeTraceDataAccess data;
 
 	/**
@@ -55,6 +58,22 @@ public class TraceMemoryStatePcodeExecutorStatePiece extends
 			BytesPcodeArithmetic.forLanguage(data.getLanguage()),
 			TraceMemoryStatePcodeArithmetic.INSTANCE);
 		this.data = data;
+		this.unique = new DefaultULongSpanMap<>();
+	}
+
+	protected TraceMemoryStatePcodeExecutorStatePiece(PcodeTraceDataAccess data,
+			MutableULongSpanMap<TraceMemoryState> unique) {
+		super(data.getLanguage(), BytesPcodeArithmetic.forLanguage(data.getLanguage()),
+			TraceMemoryStatePcodeArithmetic.INSTANCE);
+		this.data = data;
+		this.unique = unique;
+	}
+
+	@Override
+	public TraceMemoryStatePcodeExecutorStatePiece fork() {
+		MutableULongSpanMap<TraceMemoryState> copyUnique = new DefaultULongSpanMap<>();
+		copyUnique.putAll(unique);
+		return new TraceMemoryStatePcodeExecutorStatePiece(data, copyUnique);
 	}
 
 	protected AddressRange range(AddressSpace space, long offset, int size) {
@@ -105,6 +124,17 @@ public class TraceMemoryStatePcodeExecutorStatePiece extends
 	@Override
 	protected TraceMemoryState getFromNullSpace(int size, Reason reason) {
 		return TraceMemoryState.UNKNOWN;
+	}
+
+	@Override
+	protected Map<Register, TraceMemoryState> getRegisterValuesFromSpace(AddressSpace s,
+			List<Register> registers) {
+		return Map.of();
+	}
+
+	@Override
+	public Map<Register, TraceMemoryState> getRegisterValues() {
+		return Map.of();
 	}
 
 	@Override

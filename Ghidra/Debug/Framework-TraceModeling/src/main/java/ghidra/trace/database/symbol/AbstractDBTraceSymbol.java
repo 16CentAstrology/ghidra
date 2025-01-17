@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -22,14 +22,12 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 
-import com.google.common.collect.Collections2;
-
 import db.DBRecord;
-import generic.CatenatedCollection;
 import ghidra.program.model.address.*;
 import ghidra.program.model.listing.CircularDependencyException;
 import ghidra.program.model.listing.Program;
-import ghidra.program.model.symbol.*;
+import ghidra.program.model.symbol.Namespace;
+import ghidra.program.model.symbol.SourceType;
 import ghidra.program.util.ProgramLocation;
 import ghidra.trace.database.DBTrace;
 import ghidra.trace.database.address.DBTraceOverlaySpaceAdapter;
@@ -38,12 +36,10 @@ import ghidra.trace.database.program.DBTraceProgramView;
 import ghidra.trace.database.symbol.DBTraceSymbolManager.DBTraceSymbolIDEntry;
 import ghidra.trace.database.symbol.DBTraceSymbolManager.MySymbolTypes;
 import ghidra.trace.model.Lifespan;
-import ghidra.trace.model.Trace.TraceSymbolChangeType;
 import ghidra.trace.model.TraceAddressSnapRange;
 import ghidra.trace.model.symbol.TraceSymbol;
 import ghidra.trace.model.thread.TraceThread;
-import ghidra.trace.util.TraceAddressSpace;
-import ghidra.trace.util.TraceChangeRecord;
+import ghidra.trace.util.*;
 import ghidra.util.LockHold;
 import ghidra.util.database.*;
 import ghidra.util.database.annot.DBAnnotatedColumn;
@@ -94,9 +90,10 @@ public abstract class AbstractDBTraceSymbol extends DBAnnotatedObject
 	/**
 	 * {@inheritDoc}
 	 * 
+	 * <p>
 	 * NOTE: If the IDs match, then the symbols are considered equal, regardless of their other
-	 * attributes. This mechanic seems required to support the whole "placeholder" idea. See
-	 * {@link SymbolTable#createSymbolPlaceholder(Address, long)}.
+	 * attributes. This mechanic seems required to support the whole "placeholder" idea. TODO: The
+	 * "placeholder" thing may no longer be applicable.
 	 */
 	@Override
 	public boolean equals(Object obj) {
@@ -197,11 +194,14 @@ public abstract class AbstractDBTraceSymbol extends DBAnnotatedObject
 		return SpecialAddress.NO_ADDRESS;
 	}
 
-	protected Collection<? extends TraceAddressSnapRange> getRanges() {
-		return new CatenatedCollection<>(Collections2.transform(manager.idMap.getActiveSpaces(),
-			space -> Collections2.transform(
-				space.getUserIndex(long.class, DBTraceSymbolIDEntry.ID_COLUMN).get(getID()),
-				ent -> ent.getShape())));
+	protected Iterable<? extends TraceAddressSnapRange> getRanges() {
+		return () -> manager.idMap.getActiveSpaces()
+				.stream()
+				.flatMap(space -> space.getUserIndex(long.class, DBTraceSymbolIDEntry.ID_COLUMN)
+						.get(getID())
+						.stream())
+				.map(ent -> ent.getShape())
+				.iterator();
 	}
 
 	// Internal
@@ -340,7 +340,7 @@ public abstract class AbstractDBTraceSymbol extends DBAnnotatedObject
 			return null;
 		}
 		this.name = newName;
-		return new TraceChangeRecord<>(TraceSymbolChangeType.RENAMED, getSpace(), this, oldName,
+		return new TraceChangeRecord<>(TraceEvents.SYMBOL_RENAMED, getSpace(), this, oldName,
 			newName);
 	}
 
@@ -365,7 +365,7 @@ public abstract class AbstractDBTraceSymbol extends DBAnnotatedObject
 		DBTraceNamespaceSymbol checkedParent = checkCircular(newParent);
 		this.parent = checkedParent;
 		this.parentID = parent.getID();
-		return new TraceChangeRecord<>(TraceSymbolChangeType.PARENT_CHANGED, getSpace(), this,
+		return new TraceChangeRecord<>(TraceEvents.SYMBOL_PARENT_CHANGED, getSpace(), this,
 			oldParent, checkedParent);
 	}
 
@@ -389,7 +389,7 @@ public abstract class AbstractDBTraceSymbol extends DBAnnotatedObject
 			return null;
 		}
 		doSetSource(newSource);
-		return new TraceChangeRecord<>(TraceSymbolChangeType.SOURCE_CHANGED, getSpace(), this,
+		return new TraceChangeRecord<>(TraceEvents.SYMBOL_SOURCE_CHANGED, getSpace(), this,
 			oldSource, newSource);
 	}
 
@@ -399,7 +399,7 @@ public abstract class AbstractDBTraceSymbol extends DBAnnotatedObject
 		if (dbns == null) {
 			return false;
 		}
-		return MySymbolTypes.values()[this.getSymbolType().getID()].isValidParent(dbns);
+		return MySymbolTypes.VALUES.get(this.getSymbolType().getID()).isValidParent(dbns);
 	}
 
 	protected DBTraceNamespaceSymbol checkCircular(DBTraceNamespaceSymbol newParent)

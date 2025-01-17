@@ -15,62 +15,103 @@
  */
 package generic.theme;
 
+import static generic.theme.SystemThemeIds.*;
+
 import java.awt.Color;
 
-/** TODO doc how clients should use this in their code, with
- * 
- *  
- *  Colors.BACKGROUND
- *  Colors.Java.BORDER
+import javax.swing.JPanel;
+import javax.swing.JViewport;
+
+/**
+ * This class contains many suitable default values for commonly used concepts.  See each static
+ * class below.
+ * <P>
+ * The values in this class can be used where standard colors are desired.   For example, where
+ * clients used to hard-code black for the font color:
+ * <PRE>
+ * <CODE>
+ * JLabel label = new JLabel():
+ * label.setColor(Color.BLACK);
+ * </CODE>
+ * </PRE>
+ * Can instead be programmed to use the system's current theme font color instead:
+ * <PRE>
+ * <CODE>
+ * import generic.theme.GThemeDefaults.Colors;
+ *
+ * ...
+ *
+ * JLabel label = new JLabel():
+ * label.setColor(Colors.FOREGROUND);
+ * </CODE>
+ * </PRE>
+ * Note that in the second example, you can use the shorthand version of the values in this class
+ * as long as you import them correctly.  This means you do not have to use this form:
+ * <PRE>
+ * <CODE>
+ * component.setColor(GThemeDefaults.Colors.FOREGROUND);
+ * </CODE>
+ * </PRE>
+ *
+ *
+ *
  */
 public class GThemeDefaults {
-	public static final String STANDARD_DEFAULTS = "Standard Defaults";  // core defaults map name
-	public static final String DARK = "Dark";          // defaults map name for dark based themes
 
 	public static class Ids {
-
-		public static class Java {
-			public static final String BORDER = "system.color.border"; // TODO
-		}
-
 		public static class Fonts {
-			public static final String STANDARD = "font.standard";
-			public static final String BOLD = "font.bold";
-			public static final String ITALIC = "font.italic";
-			public static final String BOLD_ITALIC = "font.bold.italic";
 			public static final String MONOSPACED = "font.monospaced";
 		}
 	}
 
 	/**
-	 * Colors mapped to system values
+	 * Colors mapped to common system widget concepts, such as foreground, background, border, etc.
 	 */
 	public static class Colors {
+		//@formatter:off
 
 		// generic color concepts
-		//@formatter:off
 		public static final GColor BACKGROUND = new GColor("color.bg");
-		public static final GColor BACKGROUND_TOOLTIP = new GColor("color.bg.tooltip");
-		public static final GColor CURSOR = new GColor("color.cursor.focused");
-		public static final GColor DISABLED = new GColor("color.palette.disabled");
-		public static final GColor ERROR = new GColor("color.fg.error"); // TODO replace most uses of this with Messages.ERROR
 		public static final GColor FOREGROUND = new GColor("color.fg");
 		public static final GColor FOREGROUND_DISABLED = new GColor("color.fg.disabled");
+		public static final GColor CURSOR = new GColor("color.cursor.focused");
+		public static final GColor ERROR = new GColor("color.fg.error");
+		public static final GColor BORDER = new GColor(BG_BORDER_ID);
 		//@formatter:on
 
-		public static class Java {
-			public static final GColor BORDER = new GColor(Ids.Java.BORDER);
-		}
-
+		/**
+		 * Color values to use for tables
+		 */
 		public static class Tables {
 			//@formatter:off
-			public static final GColor FG_ERROR_SELECTED = new GColor("color.fg.error.table.selected");
-			public static final GColor FG_ERROR_UNSELECTED = new GColor("color.fg.error.table.unselected");
-			public static final GColor FG_UNEDITABLE_SELECTED = new GColor("color.fg.table.uneditable.selected");
-			public static final GColor FG_UNEDITABLE_UNSELECTED = new GColor("color.fg.table.uneditable.unselected");
-			public static final GColor FG_UNSELECTED = new GColor("color.fg.table");
-			public static final GColor FG_SELECTED = new GColor("color.fg.table.unselected");
+			public static final GColor ERROR_SELECTED = new GColor("color.fg.error.table.selected");
+			public static final GColor ERROR_UNSELECTED = new GColor("color.fg.error.table.unselected");
+			public static final GColor UNEDITABLE_SELECTED = new GColor("color.fg.table.uneditable.selected");
+			public static final GColor UNEDITABLE_UNSELECTED = new GColor("color.fg.table.uneditable.unselected");
 			//@formatter:on
+		}
+
+		public static class Viewport {
+			//@formatter:off
+			/**
+			 * By default the system {@link JViewport}s use BACKGROUND for their background, which
+			 * is the primary background color (typically white on light themes).  Some clients
+			 * would like the background color to match the uneditable background color used by
+			 * {@link JPanel}.   This color allows the empty space in the viewport to  match the
+			 * parent panel color.
+			 */
+			public static final GColor UNEDITABLE_BACKGROUND = new GColor("laf.color.Panel.background");
+			//@formatter:on
+		}
+
+		/**
+		 * Color values to use with tooltips
+		 */
+		public static class Tooltips {
+			@SuppressWarnings("hiding") // we know there is another 'BACKGROUND' field in this file
+			public static final GColor BACKGROUND = new GColor(BG_TOOLTIP_ID);
+			@SuppressWarnings("hiding") // we know there is another 'FOREGROUND' field in this file
+			public static final GColor FOREGROUND = new GColor(FG_TOOLTIP_ID);
 		}
 
 		/**
@@ -80,15 +121,17 @@ public class GThemeDefaults {
 		public static class Messages {
 			//@formatter:off
 			public static final GColor NORMAL = new GColor("color.fg.messages.normal");
+			@SuppressWarnings("hiding") // we know there is another 'ERROR' field in this file
 			public static final GColor ERROR = new GColor("color.fg.messages.error");
 			public static final GColor HINT = new GColor("color.fg.messages.hint");
-			public static final GColor WARNING = new GColor("color.fg.messages.warning");			
+			public static final GColor WARNING = new GColor("color.fg.messages.warning");
 			//@formatter:on
 
 		}
 
 		/**
-		 * Generic palette colors, using color names, that may be changed along with the theme
+		 * Generic palette colors, using color names, that may be changed along with the theme.
+		 * These are not all defined palette colors, but some of the more commonly used colors.
 		 */
 		public static class Palette {
 
@@ -112,19 +155,20 @@ public class GThemeDefaults {
 			public static final GColor PURPLE = getColor("purple");
 			public static final GColor RED = getColor("red");
 			public static final GColor SILVER = getColor("silver");
+			public static final GColor TEAL = getColor("teal");
 			public static final GColor WHITE = getColor("white");
 			public static final GColor YELLOW = getColor("yellow");
 
 			/**
 			 * Returns a new {@link GColor} for the given palette name.
 			 * <p>
-			 * For a list of supported palette IDs, see {@code docking.palette.theme.properties}.
+			 * For a list of supported palette IDs, see {@code gui.palette.theme.properties}.
 			 * <p>
 			 * It is preferred to use the static colors defined in {@link Palette} when possible, as
 			 * it prevents excess object creation.  This method should be used when the desired
 			 * palette color is not in that list.  Further, this method should only be called once
 			 * per use, such as when initializing a constant value.
-			 * 
+			 *
 			 * @param name the palette entry name
 			 * @return the GColor
 			 */

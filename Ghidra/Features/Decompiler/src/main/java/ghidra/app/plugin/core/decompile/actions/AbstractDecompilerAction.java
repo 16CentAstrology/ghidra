@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -46,11 +46,11 @@ import ghidra.util.data.DataTypeParser.AllowedDataTypes;
  */
 public abstract class AbstractDecompilerAction extends DockingAction {
 
-	AbstractDecompilerAction(String name) {
+	protected AbstractDecompilerAction(String name) {
 		super(name, DecompilePlugin.class.getSimpleName());
 	}
 
-	AbstractDecompilerAction(String name, KeyBindingType kbType) {
+	protected AbstractDecompilerAction(String name, KeyBindingType kbType) {
 		super(name, DecompilePlugin.class.getSimpleName(), kbType);
 	}
 
@@ -73,77 +73,6 @@ public abstract class AbstractDecompilerAction extends DockingAction {
 		decompilerContext.performAction(() -> {
 			decompilerActionPerformed(decompilerContext);
 		});
-	}
-
-	/**
-	 * Find the HighSymbol the decompiler associates with a specific address.
-	 * @param addr is the specific address
-	 * @param highFunction is the decompiler results in which to search for the symbol
-	 * @return the matching symbol or null if no symbol exists
-	 */
-	private static HighSymbol findHighSymbol(Address addr, HighFunction highFunction) {
-		HighSymbol highSymbol = null;
-		if (addr.isStackAddress()) {
-			LocalSymbolMap lsym = highFunction.getLocalSymbolMap();
-			highSymbol = lsym.findLocal(addr, null);
-		}
-		else {
-			GlobalSymbolMap gsym = highFunction.getGlobalSymbolMap();
-			highSymbol = gsym.getSymbol(addr);
-		}
-		return highSymbol;
-	}
-
-	/**
-	 * Track down the HighSymbol associated with a particular token.  The token may be directly attached to
-	 * the symbol, or it may be a reference that needs to be looked up.
-	 * @param token is the given token
-	 * @param highFunction is the decompiler model of the function
-	 * @return the associated HighSymbol or null if one can't be found
-	 */
-	public static HighSymbol findHighSymbolFromToken(ClangToken token, HighFunction highFunction) {
-		if (highFunction == null) {
-			return null;
-		}
-		HighVariable variable = token.getHighVariable();
-		HighSymbol highSymbol = null;
-		if (variable == null) {
-			// Token may be from a variable reference, in which case we have to dig to find the actual symbol
-			Function function = highFunction.getFunction();
-			if (function == null) {
-				return null;
-			}
-			Address storageAddress = getStorageAddress(token, function.getProgram());
-			if (storageAddress == null) {
-				return null;
-			}
-			highSymbol = findHighSymbol(storageAddress, highFunction);
-		}
-		else {
-			highSymbol = variable.getSymbol();
-		}
-		return highSymbol;
-	}
-
-	/**
-	 * Get the storage address of the variable attached to the given token, if any.
-	 * The variable may be directly referenced by the token, or indirectly referenced as a point.
-	 * @param tokenAtCursor is the given token
-	 * @param program is the Program
-	 * @return the storage Address or null if there is no variable attached
-	 */
-	private static Address getStorageAddress(ClangToken tokenAtCursor, Program program) {
-		Varnode vnode = tokenAtCursor.getVarnode();
-		Address storageAddress = null;
-		if (vnode != null) {
-			storageAddress = vnode.getAddress();
-		}
-		// op could be a PTRSUB, need to dig it out...
-		else if (tokenAtCursor instanceof ClangVariableToken) {
-			PcodeOp op = ((ClangVariableToken) tokenAtCursor).getPcodeOp();
-			storageAddress = HighFunctionDBUtil.getSpacebaseReferenceAddress(program, op);
-		}
-		return storageAddress;
 	}
 
 	/**
@@ -230,7 +159,7 @@ public abstract class AbstractDecompilerAction extends DockingAction {
 	}
 
 	/**
-	 * Get the function corresponding to the specified decompiler context.
+	 * Get the function corresponding to the specified decompiler context token.
 	 * 
 	 * @param context decompiler action context
 	 * @return the function associated with the current context token or null if none identified.
@@ -243,7 +172,7 @@ public abstract class AbstractDecompilerAction extends DockingAction {
 			f = DecompilerUtils.getFunction(context.getProgram(), (ClangFuncNameToken) token);
 		}
 		else {
-			HighSymbol highSymbol = findHighSymbolFromToken(token, context.getHighFunction());
+			HighSymbol highSymbol = token.getHighSymbol(context.getHighFunction());
 			if (highSymbol instanceof HighFunctionShellSymbol) {
 				f = (Function) highSymbol.getSymbol().getObject();
 			}

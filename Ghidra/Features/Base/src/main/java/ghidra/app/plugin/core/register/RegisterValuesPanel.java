@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -28,10 +28,10 @@ import docking.widgets.OptionDialog;
 import docking.widgets.table.*;
 import generic.theme.GColor;
 import generic.theme.GThemeDefaults.Colors.Palette;
-import generic.theme.Gui;
 import ghidra.app.cmd.register.SetRegisterCmd;
 import ghidra.app.events.ProgramSelectionPluginEvent;
-import ghidra.app.services.*;
+import ghidra.app.services.MarkerService;
+import ghidra.app.services.MarkerSet;
 import ghidra.framework.cmd.Command;
 import ghidra.framework.cmd.CompoundCmd;
 import ghidra.framework.plugintool.PluginTool;
@@ -89,7 +89,7 @@ class RegisterValuesPanel extends JPanel {
 		Address end = range.getEndAddress();
 		BigInteger value = range.getValue();
 		EditRegisterValueDialog dialog = new EditRegisterValueDialog(selectedRegister, start, end,
-			value, currentProgram.getAddressFactory());
+			value, currentProgram);
 		tool.showDialog(dialog, this);
 
 		if (!dialog.wasCancelled()) {
@@ -119,8 +119,7 @@ class RegisterValuesPanel extends JPanel {
 		table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
 		table.setRowSelectionAllowed(true);
 		table.setColumnSelectionAllowed(false);
-		GoToService goToService = tool.getService(GoToService.class);
-		table.installNavigation(goToService, goToService.getDefaultNavigatable());
+		table.installNavigation(tool);
 		table.setNavigateOnSelectionEnabled(true);
 		return table;
 	}
@@ -498,7 +497,11 @@ class RegisterValueRenderer extends GTableCellRenderer {
 
 	RegisterValueRenderer(JTable table) {
 		setBorder(BorderFactory.createEmptyBorder(0, 5, 0, 0));
-		Gui.registerFont(this, "font.monospaced");
+	}
+
+	@Override
+	protected Font getDefaultFont() {
+		return fixedWidthFont;
 	}
 
 	@Override

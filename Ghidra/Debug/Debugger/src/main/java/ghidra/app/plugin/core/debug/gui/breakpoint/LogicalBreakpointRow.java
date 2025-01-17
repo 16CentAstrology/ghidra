@@ -17,11 +17,12 @@ package ghidra.app.plugin.core.debug.gui.breakpoint;
 
 import java.util.concurrent.CompletableFuture;
 
-import ghidra.app.services.LogicalBreakpoint;
-import ghidra.app.services.LogicalBreakpoint.Mode;
-import ghidra.app.services.LogicalBreakpoint.State;
+import ghidra.debug.api.breakpoint.LogicalBreakpoint;
+import ghidra.debug.api.breakpoint.LogicalBreakpoint.Mode;
+import ghidra.debug.api.breakpoint.LogicalBreakpoint.State;
 import ghidra.framework.model.DomainFile;
 import ghidra.framework.model.DomainObject;
+import ghidra.pcode.exec.SleighUtils;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.listing.Program;
 import ghidra.trace.model.breakpoint.TraceBreakpointKind.TraceBreakpointKindSet;
@@ -137,6 +138,11 @@ public class LogicalBreakpointRow {
 			return lb.getTraceBreakpoints(provider.currentTrace).size();
 		}
 		return lb.getTraceBreakpoints().size();
+	}
+
+	public boolean hasSleigh() {
+		String sleigh = lb.getEmuSleigh();
+		return sleigh != null && !SleighUtils.UNCONDITIONAL_BREAK.equals(sleigh);
 	}
 
 	/**

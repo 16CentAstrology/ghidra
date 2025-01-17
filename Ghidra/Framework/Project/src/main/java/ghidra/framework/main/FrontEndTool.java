@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -42,8 +42,9 @@ import docking.util.AnimationUtils;
 import docking.util.image.ToolIconURL;
 import docking.widgets.OptionDialog;
 import generic.jar.ResourceFile;
+import generic.theme.Gui;
 import generic.util.WindowUtilities;
-import ghidra.app.plugin.GenericPluginCategoryNames;
+import ghidra.app.plugin.PluginCategoryNames;
 import ghidra.app.util.GenericHelpTopics;
 import ghidra.framework.Application;
 import ghidra.framework.LoggingInitialization;
@@ -59,12 +60,12 @@ import ghidra.framework.main.logviewer.ui.FileViewer;
 import ghidra.framework.main.logviewer.ui.FileWatcher;
 import ghidra.framework.model.*;
 import ghidra.framework.options.*;
-import ghidra.framework.plugintool.Plugin;
-import ghidra.framework.plugintool.PluginTool;
+import ghidra.framework.plugintool.*;
 import ghidra.framework.plugintool.util.*;
 import ghidra.framework.preferences.Preferences;
 import ghidra.framework.project.tool.GhidraTool;
 import ghidra.framework.project.tool.GhidraToolTemplate;
+import ghidra.framework.protocol.ghidra.GhidraURL;
 import ghidra.util.*;
 import ghidra.util.bean.GGlassPane;
 import ghidra.util.classfinder.ClassSearcher;
@@ -79,7 +80,7 @@ import help.Help;
 import help.HelpService;
 
 /**
- * Tool that serves as the the Ghidra Project Window. Only those plugins that
+ * Tool that serves as the Ghidra Project Window. Only those plugins that
  * implement the FrontEndable interface may be <i>directly</i> added to this
  * tool by the user. Other plugins that are not marked as FrontEndable may get
  * pulled in because the FrontEndable plugins depend on them. These plugins are
@@ -87,8 +88,11 @@ import help.HelpService;
  * manner.
  */
 public class FrontEndTool extends PluginTool implements OptionsChangeListener {
+	public static final String DEFAULT_TOOL_LAUNCH_MODE = "Default Tool Launch Mode";
 	public static final String AUTOMATICALLY_SAVE_TOOLS = "Automatically Save Tools";
 	private static final String USE_ALERT_ANIMATION_OPTION_NAME = "Use Notification Animation";
+	private static final String SHOW_TOOLTIPS_OPTION_NAME = "Show Tooltips";
+	private static final String BLINKING_CURSORS_OPTION_NAME = "Allow Blinking Cursors";
 
 	// TODO: Experimental Option !!
 	private static final String ENABLE_COMPRESSED_DATABUFFER_OUTPUT =
@@ -122,12 +126,13 @@ public class FrontEndTool extends PluginTool implements OptionsChangeListener {
 	private WeakSet<ProjectListener> listeners;
 	private FrontEndPlugin plugin;
 
+	private DefaultLaunchMode defaultLaunchMode = DefaultLaunchMode.DEFAULT;
+
 	private ComponentProvider compProvider;
 	private LogComponentProvider logProvider;
 
 	private WindowListener windowListener;
 	private DockingAction configureToolAction;
-	private PluginClassManager pluginClassManager;
 
 	/**
 	 * Construct a new Ghidra Project Window.
@@ -156,9 +161,31 @@ public class FrontEndTool extends PluginTool implements OptionsChangeListener {
 		toolFrame.addWindowListener(windowListener);
 
 		AppInfo.setFrontEndTool(this);
-		AppInfo.setActiveProject(getProject());
 
 		initFrontEndOptions();
+	}
+
+	@Override
+	public void dispose() {
+		super.dispose();
+
+		if (logProvider != null) {
+			logProvider.dispose();
+		}
+		shutdown();
+	}
+
+	protected void shutdown() {
+		System.exit(0);
+	}
+
+	@Override
+	public boolean accept(URL url) {
+		if (!GhidraURL.isLocalProjectURL(url) && !GhidraURL.isServerRepositoryURL(url)) {
+			return false;
+		}
+		Swing.runLater(() -> execute(new AcceptUrlContentTask(url, plugin)));
+		return true;
 	}
 
 	private void ensureSize() {
@@ -172,11 +199,8 @@ public class FrontEndTool extends PluginTool implements OptionsChangeListener {
 	}
 
 	@Override
-	public PluginClassManager getPluginClassManager() {
-		if (pluginClassManager == null) {
-			pluginClassManager = new PluginClassManager(ApplicationLevelPlugin.class, null);
-		}
-		return pluginClassManager;
+	protected PluginsConfiguration createPluginsConfigurations() {
+		return new ApplicationLevelPluginsConfiguration();
 	}
 
 	public void selectFiles(Set<DomainFile> files) {
@@ -210,6 +234,17 @@ public class FrontEndTool extends PluginTool implements OptionsChangeListener {
 			Msg.showError(this, null, "Error", "Error reading front end configuration", e);
 		}
 		return null;
+	}
+
+	@Override
+	protected boolean doSaveTool() {
+		// This method is overridden to allow the FrontEndTool to perform custom saving.
+		// The super.doSaveTool is designed to save tools to the user's tool chest directory. The
+		// FrontEndTool saves its state directly in the user's settings directory and includes
+		// the entire project's state such as what tools were running and data states for each
+		// running tool.
+		saveToolConfigurationToDisk();
+		return true;
 	}
 
 	void saveToolConfigurationToDisk() {
@@ -255,7 +290,7 @@ public class FrontEndTool extends PluginTool implements OptionsChangeListener {
 
 	/**
 	 * Add those plugins that implement the ApplicationLevelPlugin interface and have a
-	 * RELEASED status and not (example || testing) category.
+	 * RELEASED status and not example category.
 	 */
 	private void installDefaultApplicationLevelPlugins() {
 		List<String> classNames = new ArrayList<>();
@@ -264,8 +299,7 @@ public class FrontEndTool extends PluginTool implements OptionsChangeListener {
 
 			PluginDescription pd = PluginDescription.getPluginDescription(pluginClass);
 			String category = pd.getCategory();
-			boolean isBadCategory = category.equals(GenericPluginCategoryNames.EXAMPLES) ||
-				category.equals(GenericPluginCategoryNames.TESTING);
+			boolean isBadCategory = category.equals(PluginCategoryNames.EXAMPLES);
 			if (pd.getStatus() == PluginStatus.RELEASED && !isBadCategory) {
 				classNames.add(pluginClass.getName());
 			}
@@ -295,22 +329,39 @@ public class FrontEndTool extends PluginTool implements OptionsChangeListener {
 		showComponentHeader(compProvider, false);
 	}
 
+	/**
+	 * Get the preferred default tool launch mode
+	 * @return default tool launch mode
+	 */
+	public DefaultLaunchMode getDefaultLaunchMode() {
+		return defaultLaunchMode;
+	}
+
 	private void initFrontEndOptions() {
 		ToolOptions options = getOptions(ToolConstants.TOOL_OPTIONS);
 		HelpLocation help =
 			new HelpLocation(ToolConstants.TOOL_HELP_TOPIC, "Front_End_Tool_Options");
 
+		options.registerOption(DEFAULT_TOOL_LAUNCH_MODE, DefaultLaunchMode.DEFAULT, help,
+			"Indicates if a new or already running tool should be used during default launch.");
 		options.registerOption(AUTOMATICALLY_SAVE_TOOLS, true, help,
 			"When enabled tools will be saved when they are closed");
 		options.registerOption(USE_ALERT_ANIMATION_OPTION_NAME, true, help,
 			"Signals that user notifications should be animated.  This makes notifications more " +
 				"distinguishable.");
-		options.registerOption(ENABLE_COMPRESSED_DATABUFFER_OUTPUT, Boolean.FALSE, help,
+		options.registerOption(SHOW_TOOLTIPS_OPTION_NAME, true, help,
+			"Controls the display of tooltip popup windows.");
+		options.registerOption(ENABLE_COMPRESSED_DATABUFFER_OUTPUT, false, help,
 			"When enabled data buffers sent to Ghidra Server are compressed (see server " +
 				"configuration for other direction)");
 
-		options.registerOption(RESTORE_PREVIOUS_PROJECT_NAME, Boolean.TRUE, help,
+		options.registerOption(BLINKING_CURSORS_OPTION_NAME, true, help, "This controls whether" +
+			" text cursors blink when focused");
+
+		options.registerOption(RESTORE_PREVIOUS_PROJECT_NAME, true, help,
 			"Restore the previous project when Ghidra starts.");
+
+		defaultLaunchMode = options.getEnum(DEFAULT_TOOL_LAUNCH_MODE, defaultLaunchMode);
 
 		boolean autoSave = options.getBoolean(AUTOMATICALLY_SAVE_TOOLS, true);
 		GhidraTool.autoSave = autoSave;
@@ -318,11 +369,17 @@ public class FrontEndTool extends PluginTool implements OptionsChangeListener {
 		boolean animationEnabled = options.getBoolean(USE_ALERT_ANIMATION_OPTION_NAME, true);
 		AnimationUtils.setAnimationEnabled(animationEnabled);
 
+		boolean showToolTips = options.getBoolean(SHOW_TOOLTIPS_OPTION_NAME, true);
+		DockingUtils.setTipWindowEnabled(showToolTips);
+
 		boolean compressDataBuffers =
 			options.getBoolean(ENABLE_COMPRESSED_DATABUFFER_OUTPUT, false);
 		DataBuffer.enableCompressedSerializationOutput(compressDataBuffers);
 
 		shouldRestorePreviousProject = options.getBoolean(RESTORE_PREVIOUS_PROJECT_NAME, true);
+
+		boolean blink = options.getBoolean(BLINKING_CURSORS_OPTION_NAME, true);
+		Gui.setBlinkingCursors(blink);
 
 		options.addOptionsChangeListener(this);
 	}
@@ -330,11 +387,17 @@ public class FrontEndTool extends PluginTool implements OptionsChangeListener {
 	@Override
 	public void optionsChanged(ToolOptions options, String optionName, Object oldValue,
 			Object newValue) {
+		if (DEFAULT_TOOL_LAUNCH_MODE.equals(optionName)) {
+			defaultLaunchMode = (DefaultLaunchMode) newValue;
+		}
 		if (AUTOMATICALLY_SAVE_TOOLS.equals(optionName)) {
 			GhidraTool.autoSave = (Boolean) newValue;
 		}
 		else if (USE_ALERT_ANIMATION_OPTION_NAME.equals(optionName)) {
 			AnimationUtils.setAnimationEnabled((Boolean) newValue);
+		}
+		else if (SHOW_TOOLTIPS_OPTION_NAME.equals(optionName)) {
+			DockingUtils.setTipWindowEnabled((Boolean) newValue);
 		}
 		else if (ENABLE_COMPRESSED_DATABUFFER_OUTPUT.equals(optionName)) {
 			DataBuffer.enableCompressedSerializationOutput((Boolean) newValue);
@@ -342,17 +405,14 @@ public class FrontEndTool extends PluginTool implements OptionsChangeListener {
 		else if (RESTORE_PREVIOUS_PROJECT_NAME.equals(optionName)) {
 			shouldRestorePreviousProject = (Boolean) newValue;
 		}
+		else if (BLINKING_CURSORS_OPTION_NAME.equals(optionName)) {
+			Gui.setBlinkingCursors((Boolean) newValue);
+		}
 	}
 
 	@Override
-	public void exit() {
-		saveToolConfigurationToDisk();
-		plugin.exitGhidra();
-	}
-
-	@Override
-	public void close() {
-		close(true);
+	protected boolean canClose() {
+		return super.canClose() && plugin.closeActiveProject();
 	}
 
 	/**
@@ -368,8 +428,8 @@ public class FrontEndTool extends PluginTool implements OptionsChangeListener {
 
 		configureToolAction.setEnabled(true);
 		setProject(project);
-		AppInfo.setActiveProject(project);
 		plugin.setActiveProject(project);
+		firePluginEvent(new ProjectPluginEvent(getClass().getSimpleName(), project));
 	}
 
 	/**
@@ -575,7 +635,6 @@ public class FrontEndTool extends PluginTool implements OptionsChangeListener {
 
 			// Treat setVisible(false) as a dispose, as this is the only time we should be hidden
 			AppInfo.setFrontEndTool(null);
-			AppInfo.setActiveProject(null);
 			dispose();
 		}
 	}
@@ -597,8 +656,6 @@ public class FrontEndTool extends PluginTool implements OptionsChangeListener {
 			@Override
 			public void actionPerformed(ActionContext context) {
 				showExtensions();
-				extensionTableProvider.setHelpLocation(
-					new HelpLocation(GenericHelpTopics.FRONT_END, "Extensions"));
 			}
 
 			@Override
@@ -606,9 +663,8 @@ public class FrontEndTool extends PluginTool implements OptionsChangeListener {
 				return isConfigurable();
 			}
 		};
-		MenuData menuData =
-			new MenuData(new String[] { ToolConstants.MENU_FILE, "Install Extensions..." }, null,
-				CONFIGURE_GROUP);
+		MenuData menuData = new MenuData(
+			new String[] { ToolConstants.MENU_FILE, "Install Extensions" }, null, CONFIGURE_GROUP);
 		menuData.setMenuSubGroup(CONFIGURE_GROUP + 2);
 		installExtensionsAction.setMenuBarData(menuData);
 
@@ -634,7 +690,7 @@ public class FrontEndTool extends PluginTool implements OptionsChangeListener {
 			}
 		};
 
-		MenuData menuData = new MenuData(new String[] { ToolConstants.MENU_FILE, "Configure..." },
+		MenuData menuData = new MenuData(new String[] { ToolConstants.MENU_FILE, "Configure" },
 			null, CONFIGURE_GROUP);
 		menuData.setMenuSubGroup(CONFIGURE_GROUP + 1);
 		configureToolAction.setMenuBarData(menuData);
@@ -824,7 +880,7 @@ public class FrontEndTool extends PluginTool implements OptionsChangeListener {
 // Inner Classes
 //==================================================================================================
 
-	private static class LogComponentProvider extends DialogComponentProvider {
+	private static class LogComponentProvider extends ReusableDialogComponentProvider {
 
 		private final File logFile;
 		private Dimension defaultSize = new Dimension(600, 400);

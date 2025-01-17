@@ -19,11 +19,13 @@ import java.util.Set;
 
 import org.junit.*;
 
+import db.Transaction;
 import ghidra.app.plugin.assembler.Assembler;
 import ghidra.app.plugin.assembler.Assemblers;
 import ghidra.app.plugin.core.debug.gui.action.DebuggerGoToDialog;
 import ghidra.app.plugin.core.debug.service.tracemgr.DebuggerTraceManagerServicePlugin;
 import ghidra.app.services.DebuggerTraceManagerService;
+import ghidra.framework.model.DomainFolder;
 import ghidra.program.model.lang.RegisterValue;
 import ghidra.program.model.symbol.SourceType;
 import ghidra.test.ToyProgramBuilder;
@@ -33,7 +35,7 @@ import ghidra.trace.model.memory.TraceMemoryFlag;
 import ghidra.trace.model.memory.TraceMemorySpace;
 import ghidra.trace.model.symbol.*;
 import ghidra.trace.model.thread.TraceThread;
-import ghidra.util.database.UndoableTransaction;
+import ghidra.util.task.TaskMonitor;
 import help.screenshot.GhidraScreenShotGenerator;
 
 public class DebuggerListingPluginScreenShots extends GhidraScreenShotGenerator {
@@ -59,7 +61,7 @@ public class DebuggerListingPluginScreenShots extends GhidraScreenShotGenerator 
 
 	@Test
 	public void testCaptureDebuggerListingPlugin() throws Throwable {
-		try (UndoableTransaction tid = tb.startTransaction()) {
+		try (Transaction tx = tb.startTransaction()) {
 			long snap = tb.trace.getTimeManager().createSnapshot("First").getKey();
 			tb.trace.getMemoryManager()
 					.addRegion(".text", Lifespan.nowOn(0), tb.range(0x00400000, 0x0040ffff),
@@ -115,6 +117,9 @@ public class DebuggerListingPluginScreenShots extends GhidraScreenShotGenerator 
 				childLabel.getAddress().getOffsetAsBigInteger()));
 		}
 
+		DomainFolder root = tool.getProject().getProjectData().getRootFolder();
+		root.createFile("echo", tb.trace, TaskMonitor.DUMMY);
+
 		traceManager.openTrace(tb.trace);
 		traceManager.activateTrace(tb.trace);
 
@@ -123,7 +128,7 @@ public class DebuggerListingPluginScreenShots extends GhidraScreenShotGenerator 
 
 	@Test
 	public void testCaptureDebuggerGoToDialog() throws Throwable {
-		try (UndoableTransaction tid = tb.startTransaction()) {
+		try (Transaction tx = tb.startTransaction()) {
 			tb.trace.getTimeManager().createSnapshot("First").getKey();
 			tb.trace.getMemoryManager()
 					.addRegion("bash:.text", Lifespan.nowOn(0), tb.range(0x00400000, 0x0040ffff),
@@ -135,7 +140,7 @@ public class DebuggerListingPluginScreenShots extends GhidraScreenShotGenerator 
 
 		performAction(listingProvider.actionGoTo, false);
 		DebuggerGoToDialog dialog = waitForDialogComponent(DebuggerGoToDialog.class);
-		dialog.setExpression("RAX");
+		dialog.setOffset("RAX");
 
 		captureDialog(dialog);
 	}

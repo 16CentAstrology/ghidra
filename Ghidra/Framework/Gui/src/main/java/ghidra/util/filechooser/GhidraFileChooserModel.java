@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,10 +15,9 @@
  */
 package ghidra.util.filechooser;
 
-import java.util.List;
-
 import java.io.File;
 import java.io.FileFilter;
+import java.util.List;
 
 import javax.swing.Icon;
 
@@ -55,6 +54,15 @@ public interface GhidraFileChooserModel {
 	public File getDesktopDirectory();
 
 	/**
+	 * Returns the user's downloads directory, as defined by their operating system and/or their windowing environment, or
+	 * null if there is no downloads directory.<p>
+	 * Example: "/home/the_user/Downloads" or "c:/Users/the_user/Downloads"
+	 * 
+	 * @return downloads directory
+	 */
+	public File getDownloadsDirectory();
+
+	/**
 	 * Returns a list of the root drives/directories.
 	 * <p>
 	 * On windows, "C:\", "D:\", etc.
@@ -71,6 +79,7 @@ public interface GhidraFileChooserModel {
 	 * exist in the specified directory.
 	 * 
 	 * @param directory the directory
+	 * @param filter the file filter; may be null
 	 * @return list of files
 	 */
 	public List<File> getListing(File directory, FileFilter filter);
@@ -100,8 +109,8 @@ public interface GhidraFileChooserModel {
 	public boolean createDirectory(File directory, String name);
 
 	/**
-	 * Tests whether the file denoted by this abstract pathname is a
-	 * directory.
+	 * Tests whether the file denoted by this abstract pathname is a directory.
+	 * @param file the file
 	 * @return <code>true</code> if and only if the file denoted by this
 	 *          abstract pathname exists <em>and</em> is a directory;
 	 *          <code>false</code> otherwise
@@ -114,13 +123,14 @@ public interface GhidraFileChooserModel {
 	 * absolute if its prefix is <code>"/"</code>.  On Microsoft Windows systems, a
 	 * pathname is absolute if its prefix is a drive specifier followed by
 	 * <code>"\\"</code>, or if its prefix is <code>"\\"</code>.
+	 * @param file the file
 	 * @return  <code>true</code> if this abstract pathname is absolute,
 	 *          <code>false</code> otherwise
 	 */
 	public boolean isAbsolute(File file);
 
 	/**
-	 * Renames the src file to the dest file.
+	 * Renames the src file to the destination file.
 	 * @param src   the file to be renamed
 	 * @param dest  the new file
 	 * @return true if the file was renamed

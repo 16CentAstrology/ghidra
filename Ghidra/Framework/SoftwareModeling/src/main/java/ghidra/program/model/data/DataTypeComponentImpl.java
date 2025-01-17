@@ -17,6 +17,8 @@ package ghidra.program.model.data;
 
 import java.io.Serializable;
 
+import org.apache.commons.lang3.StringUtils;
+
 import ghidra.docking.settings.Settings;
 import ghidra.docking.settings.SettingsImpl;
 import ghidra.program.database.data.DataTypeUtilities;
@@ -57,8 +59,8 @@ public class DataTypeComponentImpl implements InternalDataTypeComponent, Seriali
 		this.offset = offset;
 		this.length = length;
 		this.fieldName = fieldName;
-		this.comment = comment;
 		setDataType(dataType);
+		setComment(comment);
 	}
 
 	/**
@@ -115,13 +117,13 @@ public class DataTypeComponentImpl implements InternalDataTypeComponent, Seriali
 
 	@Override
 	public void setComment(String comment) {
-		this.comment = comment;
+		this.comment = StringUtils.isBlank(comment) ? null : comment;
 	}
 
 	@Override
 	public String getFieldName() {
 		if (isZeroBitFieldComponent()) {
-			return "";
+			return null;
 		}
 		return fieldName;
 	}
@@ -198,7 +200,7 @@ public class DataTypeComponentImpl implements InternalDataTypeComponent, Seriali
 		// this.fieldName =  = checkFieldName(name);
 		this.fieldName = name;
 		this.dataType = dt;
-		this.comment = cmt;
+		this.comment = StringUtils.isBlank(cmt) ? null : cmt;
 	}
 
 	@Override
@@ -343,6 +345,35 @@ public class DataTypeComponentImpl implements InternalDataTypeComponent, Seriali
 	@Override
 	public String toString() {
 		return InternalDataTypeComponent.toString(this);
+	}
+
+	/**
+	 * Get the preferred length for a new component. The length returned will be no
+	 * larger than the specified length.
+	 * 
+	 * @param dataType new component datatype
+	 * @param length   constrained length or -1 to force use of dataType size.
+	 *                 Dynamic types such as string must have a positive length
+	 *                 specified.
+	 * @return preferred component length
+	 * @throws IllegalArgumentException if length not specified for a {@link Dynamic} dataType.
+	 */
+	public static int getPreferredComponentLength(DataType dataType, int length) {
+		if (DataTypeComponent.usesZeroLengthComponent(dataType)) {
+			return 0;
+		}
+		int dtLength = dataType.getLength();
+		if (length <= 0) {
+			length = dtLength;
+		}
+		else if (dtLength >= 0 && dtLength < length) { // constrain fixed-length type
+			length = dtLength;
+		}
+		if (length <= 0) {
+			throw new IllegalArgumentException("Positive length must be specified for " +
+				dataType.getDisplayName() + " component");
+		}
+		return length;
 	}
 
 }

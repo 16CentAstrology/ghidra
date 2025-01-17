@@ -17,15 +17,17 @@ package ghidra.framework.main;
 
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
-import java.awt.event.*;
+import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 
 import javax.swing.*;
-import javax.swing.event.*;
+import javax.swing.event.ChangeListener;
+import javax.swing.event.MouseInputAdapter;
 
-import docking.DialogComponentProvider;
+import docking.ReusableDialogComponentProvider;
+import docking.widgets.button.GButton;
 import docking.widgets.button.GRadioButton;
 import docking.widgets.label.GDLabel;
 import docking.widgets.label.GLabel;
@@ -40,7 +42,7 @@ import ghidra.util.layout.MiddleLayout;
 import ghidra.util.layout.PairLayout;
 import resources.Icons;
 
-class RepositoryChooser extends DialogComponentProvider {
+class RepositoryChooser extends ReusableDialogComponentProvider {
 
 	static final Icon REFRESH_ICON = Icons.REFRESH_ICON;
 
@@ -78,7 +80,7 @@ class RepositoryChooser extends DialogComponentProvider {
 		serverInfoComponent.setChangeListener(e -> serverInfoChanged());
 		topPanel.add(serverInfoComponent, BorderLayout.CENTER);
 
-		queryButton = new JButton(REFRESH_ICON);
+		queryButton = new GButton(REFRESH_ICON);
 		queryButton.setToolTipText("Refresh Repository Names List");
 		setDefaultButton(queryButton);
 		queryButton.addActionListener(e -> queryServer());
