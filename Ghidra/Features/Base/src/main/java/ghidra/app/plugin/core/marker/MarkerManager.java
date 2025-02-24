@@ -28,17 +28,18 @@ import org.apache.commons.collections4.IterableUtils;
 import org.apache.commons.collections4.map.LazyMap;
 
 import docking.widgets.PopupWindow;
+import generic.theme.*;
 import ghidra.app.nav.Navigatable;
 import ghidra.app.services.*;
 import ghidra.app.util.viewer.listingpanel.*;
 import ghidra.app.util.viewer.util.AddressIndexMap;
-import ghidra.framework.model.DomainObjectClosedListener;
 import ghidra.framework.plugintool.Plugin;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.listing.Program;
 import ghidra.program.util.ProgramLocation;
+import ghidra.util.ColorUtils.ColorBlender;
 import ghidra.util.datastruct.*;
 import ghidra.util.exception.AssertException;
 import ghidra.util.task.SwingUpdateManager;
@@ -84,6 +85,7 @@ public class MarkerManager implements MarkerService {
 
 	private List<ChangeListener> listeners = new ArrayList<>();
 	private MarkerClickedListener markerClickedListener = null;
+	private ThemeListener themeListener = e -> themeChanged(e);
 
 	public MarkerManager(Plugin plugin) {
 		this(plugin.getName(), plugin.getTool());
@@ -102,6 +104,18 @@ public class MarkerManager implements MarkerService {
 		primaryMarginProvider = createMarginProvider();
 		primaryOverviewProvider = createOverviewProvider();
 
+		Gui.addThemeListener(themeListener);
+	}
+
+	public void clearAll() {
+		programMarkersByGroup.clear();
+		markerSetCache.clear();
+	}
+
+	private void themeChanged(ThemeEvent e) {
+		if (e instanceof ColorChangedThemeEvent) {
+			markerSetCache.clearColors();
+		}
 	}
 
 	private void programClosed(Program program) {
@@ -229,6 +243,7 @@ public class MarkerManager implements MarkerService {
 	}
 
 	public void dispose() {
+		Gui.removeThemeListener(themeListener);
 		updater.dispose();
 		markerSetCache.clear();
 		overviewProviders.forEach(provider -> provider.dispose());
@@ -237,6 +252,9 @@ public class MarkerManager implements MarkerService {
 	void navigateTo(Navigatable navigatable, Program program, int x, int y, int viewHeight,
 			AddressIndexMap addrMap) {
 		MarkerSetCacheEntry entry = markerSetCache.get(program);
+		if (entry == null) {
+			return; // this can happen when no program is open
+		}
 
 		ProgramLocation loc = entry.getProgramLocation(y, viewHeight, addrMap, x);
 		getGoToService();
@@ -290,7 +308,7 @@ public class MarkerManager implements MarkerService {
 	List<String> getMarkerTooltipLines(Program program, int y, int x, Address minAddr,
 			Address maxAddr) {
 		MarkerSetCacheEntry entry = markerSetCache.get(program);
-		return entry.getTooltipLines(y, x, minAddr, maxAddr);
+		return entry == null ? List.of() : entry.getTooltipLines(y, x, minAddr, maxAddr);
 	}
 
 	static String getMarkerToolTip(MarkerSetImpl marker, Address a, int x, int y) {
@@ -416,7 +434,7 @@ public class MarkerManager implements MarkerService {
 	}
 
 	private Color getBackgroundColor(Program program, MarkerSetCacheEntry entry, Address address) {
-		return entry.getBackgroundColor(address);
+		return entry == null ? null : entry.getBackgroundColor(address);
 	}
 
 	public GoToService getGoToService() {
@@ -474,6 +492,12 @@ public class MarkerManager implements MarkerService {
 			return entry;
 		}
 
+		void clearColors() {
+			for (MarkerSetCacheEntry entry : map.values()) {
+				entry.clearColors();
+			}
+		}
+
 		public void clear() {
 			map.clear();
 		}
@@ -491,25 +515,19 @@ public class MarkerManager implements MarkerService {
 	private static class MarkerSetCacheEntry {
 		private final List<MarkerSetImpl> markerSets = new ArrayList<>();
 		private final AddressColorCache colorCache = new AddressColorCache();
-
-		private final MarkerSetCache cache;
-		private final Program program;
-		private final DomainObjectClosedListener closeListener = this::programClosed;
+		private final ColorBlender blender = new ColorBlender();
 
 		public MarkerSetCacheEntry(MarkerSetCache cache, Program program) {
-			this.cache = cache;
-			this.program = program;
 			/**
 			 * Use this close listener approach instead of plugin events, since we don't get a
 			 * ProgramClosedPluginEvent when a trace view is closed, but we can listen for its
 			 * domain object closing, which works for plain programs, too.
 			 */
-			program.addCloseListener(closeListener);
+			program.addCloseListener(dobj -> cache.programClosed(program));
 		}
 
-		private void programClosed() {
-			program.removeCloseListener(closeListener);
-			cache.programClosed(program);
+		void clearColors() {
+			colorCache.clear();
 		}
 
 		MarkerSetImpl getByName(String name) {
@@ -582,15 +600,16 @@ public class MarkerManager implements MarkerService {
 			if (colorCache.containsKey(address)) {
 				return colorCache.get(address);
 			}
-			for (MarkerSetImpl markers : IterableUtils.reversedIterable(markerSets)) {
+			blender.clear();
+			for (MarkerSetImpl markers : markerSets) {
 				if (markers.isActive() && markers.isColoringBackground() &&
 					markers.contains(address)) {
-					Color color = markers.getMarkerColor();
-					colorCache.put(address, color);
-					return color;
+					blender.add(markers.getMarkerColor());
 				}
 			}
-			return null;
+			Color color = blender.getColor(null);
+			colorCache.put(address, color);
+			return color;
 		}
 
 		List<String> getTooltipLines(int y, int x, Address minAddr, Address maxAddr) {

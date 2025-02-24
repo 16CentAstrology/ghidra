@@ -57,7 +57,7 @@ public class GIcon implements Icon {
 	/**
 	 * Construct a GIcon with an id that will be used to look up the current icon associated with
 	 * that id, which can be changed at runtime.
-	 * @param id the id used to lookup the current value for this color
+	 * @param id the id used to lookup the current value for this icon
 	 */
 	public GIcon(String id) {
 		this.id = id;
@@ -95,6 +95,10 @@ public class GIcon implements Icon {
 		else if (icon instanceof RotateIcon rotateIcon) {
 			return getUrl(rotateIcon.getSourceIcon());
 		}
+		else if (icon instanceof GIcon) {
+			return getUrl(((GIcon) icon).delegate);
+		}
+		// else if (icon instanceof MultiIcon) {
 		return null;
 
 	}

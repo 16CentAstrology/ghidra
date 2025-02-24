@@ -15,15 +15,15 @@
  */
 package ghidra.app.plugin.core.debug.service.emulation.data;
 
-import java.util.Collection;
-import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
+import ghidra.app.plugin.core.debug.utils.AbstractMappedMemoryBytesVisitor;
 import ghidra.app.services.DebuggerStaticMappingService;
 import ghidra.app.services.DebuggerStaticMappingService.MappedAddressRange;
-import ghidra.app.services.TraceRecorder;
-import ghidra.framework.plugintool.PluginTool;
+import ghidra.debug.api.emulation.PcodeDebuggerMemoryAccess;
+import ghidra.debug.api.target.Target;
+import ghidra.framework.plugintool.ServiceProvider;
 import ghidra.generic.util.datastruct.SemisparseByteArray;
 import ghidra.pcode.exec.trace.data.DefaultPcodeTraceMemoryAccess;
 import ghidra.pcode.exec.trace.data.PcodeTracePropertyAccess;
@@ -31,10 +31,8 @@ import ghidra.program.model.address.*;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.mem.Memory;
 import ghidra.program.model.mem.MemoryAccessException;
-import ghidra.trace.model.Trace;
 import ghidra.trace.model.TraceTimeViewport;
 import ghidra.trace.model.guest.TracePlatform;
-import ghidra.util.MathUtilities;
 import ghidra.util.Msg;
 import ghidra.util.task.TaskMonitor;
 
@@ -44,23 +42,23 @@ import ghidra.util.task.TaskMonitor;
 public class DefaultPcodeDebuggerMemoryAccess extends DefaultPcodeTraceMemoryAccess
 		implements PcodeDebuggerMemoryAccess, InternalPcodeDebuggerDataAccess {
 
-	protected final PluginTool tool;
-	protected final TraceRecorder recorder;
+	protected final ServiceProvider provider;
+	protected final Target target;
 
 	/**
 	 * Construct a shim
 	 * 
-	 * @param tool the tool controlling the session
-	 * @param recorder the target's recorder
+	 * @param provider the service provider (usually the tool)
+	 * @param target the target
 	 * @param platform the associated platform, having the same trace as the recorder
 	 * @param snap the associated snap
 	 * @param viewport the viewport, set to the same snapshot
 	 */
-	protected DefaultPcodeDebuggerMemoryAccess(PluginTool tool, TraceRecorder recorder,
+	protected DefaultPcodeDebuggerMemoryAccess(ServiceProvider provider, Target target,
 			TracePlatform platform, long snap, TraceTimeViewport viewport) {
 		super(platform, snap, viewport);
-		this.tool = Objects.requireNonNull(tool);
-		this.recorder = recorder;
+		this.provider = Objects.requireNonNull(provider);
+		this.target = target;
 	}
 
 	@Override
@@ -69,13 +67,13 @@ public class DefaultPcodeDebuggerMemoryAccess extends DefaultPcodeTraceMemoryAcc
 	}
 
 	@Override
-	public PluginTool getTool() {
-		return tool;
+	public ServiceProvider getServiceProvider() {
+		return provider;
 	}
 
 	@Override
-	public TraceRecorder getRecorder() {
-		return recorder;
+	public Target getTarget() {
+		return target;
 	}
 
 	@Override
@@ -84,11 +82,7 @@ public class DefaultPcodeDebuggerMemoryAccess extends DefaultPcodeTraceMemoryAcc
 			return CompletableFuture.completedFuture(false);
 		}
 		AddressSetView hostView = platform.mapGuestToHost(guestView);
-		return recorder.readMemoryBlocks(hostView, TaskMonitor.DUMMY)
-				.thenCompose(__ -> recorder.getTarget().getModel().flushEvents())
-				.thenCompose(__ -> recorder.flushTransactions())
-				.thenAccept(__ -> platform.getTrace().flushEvents())
-				.thenApply(__ -> true);
+		return target.readMemoryAsync(hostView, TaskMonitor.DUMMY).thenApply(__ -> true);
 	}
 
 	@Override
@@ -96,70 +90,51 @@ public class DefaultPcodeDebuggerMemoryAccess extends DefaultPcodeTraceMemoryAcc
 		if (!isLive()) {
 			return CompletableFuture.completedFuture(false);
 		}
-		return recorder.writeMemory(address, data)
-				.thenCompose(__ -> recorder.getTarget().getModel().flushEvents())
-				.thenCompose(__ -> recorder.flushTransactions())
-				.thenAccept(__ -> platform.getTrace().flushEvents())
-				.thenApply(__ -> true);
+		return target.writeMemoryAsync(address, data).thenApply(__ -> true);
 	}
 
 	@Override
 	public boolean readFromStaticImages(SemisparseByteArray bytes, AddressSetView guestView) {
-		boolean result = false;
 		// TODO: Expand to block? DON'T OVERWRITE KNOWN!
 		DebuggerStaticMappingService mappingService =
-			tool.getService(DebuggerStaticMappingService.class);
+			provider.getService(DebuggerStaticMappingService.class);
 		if (mappingService == null) {
 			return false;
 		}
-		byte[] data = new byte[4096];
 
-		Trace trace = platform.getTrace();
-		AddressSetView hostView = platform.mapGuestToHost(guestView);
-		for (Entry<Program, Collection<MappedAddressRange>> ent : mappingService
-				.getOpenMappedViews(trace, hostView, snap)
-				.entrySet()) {
-			Program program = ent.getKey();
-			Memory memory = program.getMemory();
-			AddressSetView initialized = memory.getLoadedAndInitializedAddressSet();
+		try {
+			return new AbstractMappedMemoryBytesVisitor(mappingService, new byte[4096]) {
+				@Override
+				protected int read(Memory memory, Address addr, byte[] dest, int size)
+						throws MemoryAccessException {
+					int read = super.read(memory, addr, dest, size);
+					if (read < size) {
+						Msg.warn(this,
+							String.format("  Partial read of %s. Wanted %d bytes. Got %d.",
+								addr, size, read));
+					}
+					return read;
+				}
 
-			Collection<MappedAddressRange> mappedSet = ent.getValue();
-			for (MappedAddressRange mappedRng : mappedSet) {
-				AddressRange progRng = mappedRng.getDestinationAddressRange();
-				AddressSpace progSpace = progRng.getAddressSpace();
-				for (AddressRange subProgRng : initialized.intersectRange(progRng.getMinAddress(),
-					progRng.getMaxAddress())) {
+				@Override
+				protected boolean visitRange(Program program, AddressRange progRng,
+						MappedAddressRange mappedRng) throws MemoryAccessException {
 					Msg.debug(this,
 						"Filling in unknown trace memory in emulator using mapped image: " +
-							program + ": " + subProgRng);
-					long lower = subProgRng.getMinAddress().getOffset();
-					long fullLen = subProgRng.getLength();
-					while (fullLen > 0) {
-						int len = MathUtilities.unsignedMin(data.length, fullLen);
-						try {
-							Address progAddr = progSpace.getAddress(lower);
-							int read = memory.getBytes(progAddr, data, 0, len);
-							if (read < len) {
-								Msg.warn(this,
-									"  Partial read of " + subProgRng + ". Got " + read +
-										" bytes");
-							}
-							Address hostAddr = mappedRng.mapDestinationToSource(progAddr);
-							Address guestAddr = platform.mapHostToGuest(hostAddr);
-							// write(lower - shift, data, 0 ,read);
-							bytes.putData(guestAddr.getOffset(), data, 0, read);
-						}
-						catch (MemoryAccessException | AddressOutOfBoundsException e) {
-							throw new AssertionError(e);
-						}
-						lower += len;
-						fullLen -= len;
-					}
-					result = true;
+							program + ": " + progRng);
+					return super.visitRange(program, progRng, mappedRng);
 				}
-			}
+
+				@Override
+				protected void visitData(Address hostAddr, byte[] data, int size) {
+					Address guestAddr = platform.mapHostToGuest(hostAddr);
+					bytes.putData(guestAddr.getOffset(), data, 0, size);
+				}
+			}.visit(platform.getTrace(), snap, platform.mapGuestToHost(guestView));
 		}
-		return result;
+		catch (MemoryAccessException e) {
+			throw new AssertionError(e);
+		}
 	}
 
 	@Override

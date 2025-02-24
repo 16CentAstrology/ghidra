@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 #include "translate.hh"
+
+namespace ghidra {
 
 AttributeId ATTRIB_CODE = AttributeId("code",43);
 AttributeId ATTRIB_CONTAIN = AttributeId("contain",44);
@@ -54,7 +56,7 @@ void TruncationTag::decode(Decoder &decoder)
 /// \param isFormal is the formal stack space indicator
 SpacebaseSpace::SpacebaseSpace(AddrSpaceManager *m,const Translate *t,const string &nm,int4 ind,int4 sz,
 			       AddrSpace *base,int4 dl,bool isFormal)
-  : AddrSpace(m,t,IPTR_SPACEBASE,nm,sz,base->getWordSize(),ind,0,dl)
+  : AddrSpace(m,t,IPTR_SPACEBASE,nm,t->isBigEndian(),sz,base->getWordSize(),ind,0,dl,dl)
 {
   contain = base;
   hasbaseregister = false;	// No base register assigned yet
@@ -121,15 +123,6 @@ const VarnodeData &SpacebaseSpace::getSpacebaseFull(int4 i) const
   return baseOrig;
 }
 
-void SpacebaseSpace::saveXml(ostream &s) const
-
-{
-  s << "<space_base";
-  saveBasicAttributes(s);
-  a_v(s,"contain",contain->getName());
-  s << "/>\n";
-}
-
 void SpacebaseSpace::decode(Decoder &decoder)
 
 {
@@ -193,6 +186,49 @@ bool JoinRecord::operator<(const JoinRecord &op2) const
       return (pieces[i] < op2.pieces[i]);
     i += 1;
   }
+}
+
+/// Assuming the given list of VarnodeData go from most significant to least significant,
+/// merge any contiguous elements in the list.  Varnodes that are not in the \e stack address space
+/// are only merged if the resulting byte range has a formal register name.
+/// \param seq is the given list of VarnodeData
+/// \param trans is the language to use for register names
+void JoinRecord::mergeSequence(vector<VarnodeData> &seq,const Translate *trans)
+
+{
+  int4 i=1;
+  while(i<seq.size()) {
+    VarnodeData &hi(seq[i-1]);
+    VarnodeData &lo(seq[i]);
+    if (hi.isContiguous(lo))
+      break;
+    i += 1;
+  }
+  if (i >= seq.size()) return;
+  vector<VarnodeData> res;
+  i = 1;
+  res.push_back(seq.front());
+  bool lastIsInformal = false;
+  while(i<seq.size()) {
+    VarnodeData &hi(res.back());
+    VarnodeData &lo(seq[i]);
+    if (hi.isContiguous(lo)) {
+      hi.offset = hi.space->isBigEndian() ? hi.offset : lo.offset;
+      hi.size += lo.size;
+      if (hi.space->getType() != IPTR_SPACEBASE) {
+	lastIsInformal = trans->getExactRegisterName(hi.space, hi.offset, hi.size).size() == 0;
+      }
+    }
+    else {
+      if (lastIsInformal)
+	break;
+      res.push_back(lo);
+    }
+    i += 1;
+  }
+  if (lastIsInformal)	// If the merge contains an informal register
+    return;		// throw it out and keep the original sequence
+  seq = res;
 }
 
 /// Initialize manager containing no address spaces. All the cached space slots are set to null
@@ -627,7 +663,8 @@ AddrSpace *AddrSpaceManager::getNextSpaceInOrder(AddrSpace *spc) const
 }
 
 /// Given a list of memory locations, the \e pieces, either find a pre-existing JoinRecord or
-/// create a JoinRecord that represents the logical joining of the pieces.
+/// create a JoinRecord that represents the logical joining of the pieces.  The pieces must
+/// be in order from most significant to least significant.
 /// \param pieces if the list memory locations to be joined
 /// \param logicalsize of a \e single \e piece join, or zero
 /// \return a pointer to the JoinRecord
@@ -849,18 +886,32 @@ void AddrSpaceManager::renormalizeJoinAddress(Address &addr,int4 size)
     return;
   }
   vector<VarnodeData> newPieces;
-  newPieces.push_back(joinRecord->pieces[pos1]);
   int4 sizeTrunc1 = (int4)(addr1.getOffset() - joinRecord->pieces[pos1].offset);
-  pos1 += 1;
-  while(pos1 <= pos2) {
+  int4 sizeTrunc2 = joinRecord->pieces[pos2].size - (int4)(addr2.getOffset() - joinRecord->pieces[pos2].offset) - 1;
+
+  if (pos2 < pos1) {		// Little endian
+    newPieces.push_back(joinRecord->pieces[pos2]);
+    pos2 += 1;
+    while(pos2 <= pos1) {
+      newPieces.push_back(joinRecord->pieces[pos2]);
+      pos2 += 1;
+    }
+    newPieces.back().offset = addr1.getOffset();
+    newPieces.back().size -= sizeTrunc1;
+    newPieces.front().size -= sizeTrunc2;
+  }
+  else {
     newPieces.push_back(joinRecord->pieces[pos1]);
     pos1 += 1;
+    while(pos1 <= pos2) {
+      newPieces.push_back(joinRecord->pieces[pos1]);
+      pos1 += 1;
+    }
+    newPieces.front().offset = addr1.getOffset();
+    newPieces.front().size -= sizeTrunc1;
+    newPieces.back().size -= sizeTrunc2;
   }
-  int4 sizeTrunc2 = joinRecord->pieces[pos2].size - (int4)(addr2.getOffset() - joinRecord->pieces[pos2].offset) - 1;
-  newPieces.front().offset = addr1.getOffset();
-  newPieces.front().size -= sizeTrunc1;
-  newPieces.back().size -= sizeTrunc2;
-  JoinRecord *newJoinRecord = findAddJoin(newPieces, size);
+  JoinRecord *newJoinRecord = findAddJoin(newPieces, 0);
   addr = Address(newJoinRecord->unified.space,newJoinRecord->unified.offset);
 }
 
@@ -963,3 +1014,5 @@ void PcodeEmit::decodeOp(const Address &addr,Decoder &decoder)
   decoder.closeElement(elemId);
   dump(addr,(OpCode)opcode,outptr,invar,isize);
 }
+
+} // End namespace ghidra

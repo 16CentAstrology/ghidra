@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -28,21 +28,25 @@ import ghidra.util.exception.VersionException;
  * Version 0 implementation for accessing the Typedef database table. 
  */
 class TypedefDBAdapterV0 extends TypedefDBAdapter implements RecordTranslator {
+
 	static final int VERSION = 0;
+
 	private static final int V0_TYPEDEF_DT_ID_COL = 0;
 	private static final int V0_TYPEDEF_NAME_COL = 1;
 	private static final int V0_TYPEDEF_CAT_COL = 2;
+
 //  DO NOT REMOVE WHAT'S BELOW - this documents the schema used in version 0.
 //	static final Schema V0_SCHEMA = new Schema(VERSION, "Typedef ID",
 //								new Class[] {LongField.class, StringField.class,
 //											 LongField.class},
 //								new String[] {"Data Type ID", "Name", "Category ID"});
+
 	private Table table;
 
 	/**
 	 * Gets a version 0 adapter for the Typedef database table.
 	 * @param handle handle to the database containing the table.
-	 * @throws VersionException if the the table's version does not match the expected version
+	 * @throws VersionException if the table's version does not match the expected version
 	 * for this adapter.
 	 */
 	public TypedefDBAdapterV0(DBHandle handle) throws VersionException {
@@ -51,14 +55,8 @@ class TypedefDBAdapterV0 extends TypedefDBAdapter implements RecordTranslator {
 		if (table == null) {
 			throw new VersionException("Missing Table: " + TYPEDEF_TABLE_NAME);
 		}
-		int version = table.getSchema().getVersion();
-		if (version != VERSION) {
-			String msg = "Expected version " + VERSION + " for table " + TYPEDEF_TABLE_NAME +
-				" but got " + table.getSchema().getVersion();
-			if (version < VERSION) {
-				throw new VersionException(msg, VersionException.OLDER_VERSION, true);
-			}
-			throw new VersionException(msg, VersionException.NEWER_VERSION, false);
+		if (table.getSchema().getVersion() != VERSION) {
+			throw new VersionException(false);
 		}
 	}
 
@@ -125,4 +123,8 @@ class TypedefDBAdapterV0 extends TypedefDBAdapter implements RecordTranslator {
 		return null;
 	}
 
+	@Override
+	public int getRecordCount() {
+		return table.getRecordCount();
+	}
 }

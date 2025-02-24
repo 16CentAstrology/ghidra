@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -23,9 +23,6 @@ import java.util.Map.Entry;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.function.Predicate;
 
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.RemovalNotification;
-
 import db.DBHandle;
 import ghidra.program.model.address.*;
 import ghidra.program.model.mem.MemBuffer;
@@ -39,14 +36,15 @@ import ghidra.trace.database.map.DBTraceAddressSnapRangePropertyMapTree.TraceAdd
 import ghidra.trace.database.space.AbstractDBTraceSpaceBasedManager.DBTraceSpaceEntry;
 import ghidra.trace.database.space.DBTraceSpaceBased;
 import ghidra.trace.model.*;
-import ghidra.trace.model.Trace.*;
 import ghidra.trace.model.memory.*;
 import ghidra.trace.model.thread.TraceThread;
 import ghidra.trace.util.TraceChangeRecord;
+import ghidra.trace.util.TraceEvents;
 import ghidra.util.*;
 import ghidra.util.AddressIteratorAdapter;
 import ghidra.util.database.*;
 import ghidra.util.database.spatial.rect.Rectangle2DDirection;
+import ghidra.util.datastruct.FixedSizeHashMap;
 import ghidra.util.exception.DuplicateNameException;
 import ghidra.util.exception.VersionException;
 import ghidra.util.task.TaskMonitor;
@@ -74,24 +72,16 @@ public class DBTraceMemorySpace
 	protected final DBTraceAddressSnapRangePropertyMapSpace<DBTraceMemoryRegion, DBTraceMemoryRegion> regionMapSpace;
 	protected final DBCachedObjectIndex<String, DBTraceMemoryRegion> regionsByPath;
 	protected final Collection<TraceMemoryRegion> regionView;
-	protected final Map<DBTraceMemoryRegion, DBTraceMemoryRegion> regionCache = CacheBuilder
-			.newBuilder()
-			.removalListener(this::regionCacheEntryRemoved)
-			.maximumSize(10)
-			.build()
-			.asMap();
+	protected final Map<DBTraceMemoryRegion, DBTraceMemoryRegion> regionCache =
+		new FixedSizeHashMap<>(10);
 
 	protected final DBTraceAddressSnapRangePropertyMapSpace<TraceMemoryState, DBTraceMemoryStateEntry> stateMapSpace;
 
 	protected final DBCachedObjectStore<DBTraceMemoryBufferEntry> bufferStore;
 	protected final DBCachedObjectStore<DBTraceMemoryBlockEntry> blockStore;
 	protected final DBCachedObjectIndex<OffsetSnap, DBTraceMemoryBlockEntry> blocksByOffset;
-	protected final Map<OffsetSnap, DBTraceMemoryBlockEntry> blockCacheMostRecent = CacheBuilder
-			.newBuilder()
-			.removalListener(this::blockCacheEntryRemoved)
-			.maximumSize(10)
-			.build()
-			.asMap();
+	protected final Map<OffsetSnap, DBTraceMemoryBlockEntry> blockCacheMostRecent =
+		new FixedSizeHashMap<>(10);
 
 	protected final DBTraceTimeViewport viewport;
 
@@ -146,16 +136,6 @@ public class DBTraceMemorySpace
 		return lock;
 	}
 
-	private void regionCacheEntryRemoved(
-			RemovalNotification<DBTraceMemoryRegion, DBTraceMemoryRegion> rn) {
-		// Nothing
-	}
-
-	private void blockCacheEntryRemoved(
-			RemovalNotification<OffsetSnap, DBTraceMemoryBlockEntry> rn) {
-		// Nothing
-	}
-
 	@Override
 	public Trace getTrace() {
 		return trace;
@@ -180,8 +160,7 @@ public class DBTraceMemorySpace
 				regionMapSpace.put(new ImmutableTraceAddressSnapRange(range, lifespan), null);
 			region.set(path, path, flags);
 			trace.updateViewsAddRegionBlock(region);
-			trace.setChanged(
-				new TraceChangeRecord<>(TraceMemoryRegionChangeType.ADDED, this, region));
+			trace.setChanged(new TraceChangeRecord<>(TraceEvents.REGION_ADDED, this, region));
 			return region;
 		}
 	}
@@ -264,7 +243,7 @@ public class DBTraceMemorySpace
 			regionCache.remove(region);
 			trace.updateViewsDeleteRegionBlock(region);
 			trace.setChanged(
-				new TraceChangeRecord<>(TraceMemoryRegionChangeType.DELETED, this, region));
+				new TraceChangeRecord<>(TraceEvents.REGION_DELETED, this, region));
 		}
 	}
 
@@ -336,7 +315,7 @@ public class DBTraceMemorySpace
 		}.set(start, end, state);
 
 		if (l.changed) {
-			trace.setChanged(new TraceChangeRecord<>(TraceMemoryStateChangeType.CHANGED, this,
+			trace.setChanged(new TraceChangeRecord<>(TraceEvents.BYTES_STATE_CHANGED, this,
 				new ImmutableTraceAddressSnapRange(start, end, snap, snap), state));
 		}
 	}
@@ -427,11 +406,17 @@ public class DBTraceMemorySpace
 	@Override
 	public Entry<TraceAddressSnapRange, TraceMemoryState> getViewMostRecentStateEntry(long snap,
 			Address address) {
+		return getViewMostRecentStateEntry(snap, new AddressRangeImpl(address, address), s -> true);
+	}
+
+	@Override
+	public Entry<TraceAddressSnapRange, TraceMemoryState> getViewMostRecentStateEntry(long snap,
+			AddressRange range, Predicate<TraceMemoryState> predicate) {
+		assertInSpace(range);
 		for (Lifespan span : viewport.getOrderedSpans(snap)) {
-			Entry<TraceAddressSnapRange, TraceMemoryState> entry =
-				stateMapSpace.reduce(TraceAddressSnapRangeQuery.mostRecent(address, span))
-						.firstEntry();
-			if (entry != null) {
+			var entry = stateMapSpace.reduce(TraceAddressSnapRangeQuery.mostRecent(range, span))
+					.firstEntry();
+			if (entry != null && predicate.test(entry.getValue())) {
 				return entry;
 			}
 		}
@@ -454,7 +439,7 @@ public class DBTraceMemorySpace
 	}
 
 	@Override
-	public AddressSetView getAddressesWithState(long snap, AddressSetView set,
+	public AddressSetView getAddressesWithState(Lifespan span, AddressSetView set,
 			Predicate<TraceMemoryState> predicate) {
 		try (LockHold hold = LockHold.lock(lock.readLock())) {
 			AddressSet remains = new AddressSet(set);
@@ -462,7 +447,7 @@ public class DBTraceMemorySpace
 			while (!remains.isEmpty()) {
 				AddressRange range = remains.getFirstRange();
 				remains.delete(range);
-				for (Entry<TraceAddressSnapRange, TraceMemoryState> entry : doGetStates(snap,
+				for (Entry<TraceAddressSnapRange, TraceMemoryState> entry : doGetStates(span,
 					range)) {
 					AddressRange foundRange = entry.getKey().getRange();
 					remains.delete(foundRange);
@@ -475,21 +460,20 @@ public class DBTraceMemorySpace
 		}
 	}
 
-	protected Collection<Entry<TraceAddressSnapRange, TraceMemoryState>> doGetStates(long snap,
+	protected Collection<Entry<TraceAddressSnapRange, TraceMemoryState>> doGetStates(Lifespan span,
 			AddressRange range) {
 		// TODO: A better way to handle memory-mapped registers?
 		if (getAddressSpace().isRegisterSpace() && !range.getAddressSpace().isRegisterSpace()) {
-			return trace.getMemoryManager().getStates(snap, range);
+			return trace.getMemoryManager().doGetStates(span, range);
 		}
-		return stateMapSpace.reduce(TraceAddressSnapRangeQuery.intersecting(range.getMinAddress(),
-			range.getMaxAddress(), snap, snap)).entries();
+		return stateMapSpace.reduce(TraceAddressSnapRangeQuery.intersecting(range, span)).entries();
 	}
 
 	@Override
 	public Collection<Entry<TraceAddressSnapRange, TraceMemoryState>> getStates(long snap,
 			AddressRange range) {
 		assertInSpace(range);
-		return doGetStates(snap, range);
+		return doGetStates(Lifespan.at(snap), range);
 	}
 
 	@Override
@@ -634,7 +618,8 @@ public class DBTraceMemorySpace
 		if (!remaining.isEmpty()) {
 			lastSnap.snap = Long.MAX_VALUE;
 			for (AddressRange rng : remaining) {
-				changed.add(new ImmutableTraceAddressSnapRange(rng, Lifespan.nowOn(loc.snap)));
+				changed.add(
+					new ImmutableTraceAddressSnapRange(rng, Lifespan.nowOnMaybeScratch(loc.snap)));
 			}
 		}
 		buf.position(pos);
@@ -665,11 +650,11 @@ public class DBTraceMemorySpace
 	@Override
 	public int putBytes(long snap, Address start, ByteBuffer buf) {
 		assertInSpace(start);
-		int arrOff = buf.arrayOffset() + buf.position();
+		int pos = buf.position();
 		try (LockHold hold = LockHold.lock(lock.writeLock())) {
 
-			ByteBuffer oldBytes = ByteBuffer.allocate(buf.remaining());
-			getBytes(snap, start, oldBytes);
+			ByteBuffer oldBuf = ByteBuffer.allocate(buf.remaining());
+			getBytes(snap, start, oldBuf);
 
 			OutSnap lastSnap = new OutSnap(snap);
 			Set<TraceAddressSnapRange> changed = new HashSet<>();
@@ -679,16 +664,19 @@ public class DBTraceMemorySpace
 				doSetState(snap, start, end, TraceMemoryState.KNOWN);
 
 				// Read back the written bytes and fire event
-				byte[] bytes = Arrays.copyOfRange(buf.array(), arrOff, arrOff + result);
+				byte[] bytes = new byte[result];
+				byte[] oldBytes = new byte[result];
+				buf.get(pos, bytes);
+				oldBuf.get(0, oldBytes);
 				ImmutableTraceAddressSnapRange tasr = new ImmutableTraceAddressSnapRange(start,
 					start.add(result - 1), snap, lastSnap.snap);
-				trace.setChanged(new TraceChangeRecord<>(TraceMemoryBytesChangeType.CHANGED,
-					this, tasr, oldBytes.array(), bytes));
+				trace.setChanged(new TraceChangeRecord<>(TraceEvents.BYTES_CHANGED, this, tasr,
+					oldBytes, bytes));
 
 				// Fixup affected code units
 				DBTraceCodeSpace codeSpace = trace.getCodeManager().get(this, false);
 				if (codeSpace != null) {
-					codeSpace.bytesChanged(changed, snap, start, oldBytes.array(), bytes);
+					codeSpace.bytesChanged(changed, snap, start, oldBytes, bytes);
 				}
 				// Clear program view caches
 				trace.updateViewsBytesChanged(tasr.getRange());
@@ -1012,8 +1000,8 @@ public class DBTraceMemorySpace
 			doSetState(snap, start, end, TraceMemoryState.UNKNOWN);
 
 			// Fire event
-			trace.setChanged(new TraceChangeRecord<>(TraceMemoryBytesChangeType.CHANGED,
-				this, new ImmutableTraceAddressSnapRange(start,
+			trace.setChanged(new TraceChangeRecord<>(
+				TraceEvents.BYTES_CHANGED, this, new ImmutableTraceAddressSnapRange(start,
 					start.add(newBytes.position() - 1), snap, lastSnap.snap),
 				oldBytes.array(), newBytes.array()));
 

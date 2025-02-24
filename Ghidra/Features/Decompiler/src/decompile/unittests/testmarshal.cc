@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,6 +15,8 @@
  */
 #include "translate.hh"
 #include "test.hh"
+
+namespace ghidra {
 
 class TestAddrSpaceManager : public AddrSpaceManager {
 public:
@@ -26,6 +28,7 @@ public:
   virtual void initialize(DocumentStorage &store) {}
   virtual const VarnodeData &getRegister(const string &nm) const { throw LowlevelError("Cannot add register to DummyTranslate"); }
   virtual string getRegisterName(AddrSpace *base,uintb off,int4 size) const { return ""; }
+  virtual string getExactRegisterName(AddrSpace *base,uintb off,int4 size) const { return ""; }
   virtual void getAllRegisters(map<VarnodeData,string> &reglist) const {}
   virtual void getUserOpNames(vector<string> &res) const {}
   virtual int4 instructionLength(const Address &baseaddr) const { return -1; }
@@ -47,7 +50,7 @@ static MarshalTestEnvironment theEnviron;
 TestAddrSpaceManager::TestAddrSpaceManager(Translate *t)
   : AddrSpaceManager()
 {
-  insertSpace(new AddrSpace(this,t,IPTR_PROCESSOR,"ram",8,1,3,AddrSpace::hasphysical,1));
+  insertSpace(new AddrSpace(this,t,IPTR_PROCESSOR,"ram",t->isBigEndian(),8,1,3,AddrSpace::hasphysical,1,1));
 }
 
 MarshalTestEnvironment::MarshalTestEnvironment(void)
@@ -209,6 +212,50 @@ TEST(marshal_unsigned_xml) {
   XmlDecode decoder(spcManager);
   test_unsigned_attributes(outStream, encoder, decoder);
 }
+
+void test_mixed_attributes(ostringstream &outStream,Encoder &encoder,Decoder &decoder)
+
+{
+  encoder.openElement(ELEM_ADDR);
+  encoder.writeSignedInteger(ATTRIB_ALIGN, 456);
+  encoder.writeString(ATTRIB_EXTRAPOP, "unknown");
+  encoder.closeElement(ELEM_ADDR);
+  istringstream inStream(outStream.str());
+  decoder.ingestStream(inStream);
+  int4 alignVal = -1;
+  int4 extrapopVal = -1;
+  uint4 el = decoder.openElement(ELEM_ADDR);
+  for(;;) {
+    uint4 attribId = decoder.getNextAttributeId();
+    if (attribId == 0) break;
+    if (attribId == ATTRIB_ALIGN)
+      alignVal = decoder.readSignedIntegerExpectString("00blah", 700);
+    else if (attribId == ATTRIB_EXTRAPOP)
+      extrapopVal = decoder.readSignedIntegerExpectString("unknown", 800);
+  }
+  decoder.closeElement(el);
+  ASSERT_EQUALS(alignVal, 456);
+  ASSERT_EQUALS(extrapopVal, 800);
+}
+
+TEST(marshal_mixed_packed) {
+  ostringstream outStream;
+
+  theEnviron.build();
+  PackedEncode encoder(outStream);
+  PackedDecode decoder(spcManager);
+  test_mixed_attributes(outStream, encoder, decoder);
+}
+
+TEST(marshal_mixed_xml) {
+  ostringstream outStream;
+
+  theEnviron.build();
+  XmlEncode encoder(outStream);
+  XmlDecode decoder(spcManager);
+  test_mixed_attributes(outStream, encoder, decoder);
+}
+
 
 void test_attributes(ostringstream &outStream,Encoder &encoder,Decoder &decoder)
 
@@ -506,3 +553,5 @@ TEST(marshal_bufferpad) {
   ASSERT_EQUALS(nextel,0);
   decoder.closeElement(el);
 }
+
+} // End namespace ghidra

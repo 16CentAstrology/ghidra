@@ -17,12 +17,13 @@ package ghidra.app.util.viewer.field;
 
 import java.awt.Color;
 import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.List;
 
 import docking.widgets.fieldpanel.field.*;
 import docking.widgets.fieldpanel.support.FieldLocation;
-import generic.theme.GThemeDefaults.Colors;
-import generic.theme.GThemeDefaults.Colors.Palette;
-import ghidra.app.util.HighlightProvider;
+import ghidra.app.util.ListingHighlightProvider;
+import ghidra.app.util.viewer.field.ListingColors.MaskColors;
 import ghidra.app.util.viewer.format.FieldFormatModel;
 import ghidra.app.util.viewer.proxy.ProxyObj;
 import ghidra.framework.options.Options;
@@ -38,9 +39,6 @@ import ghidra.util.StringUtilities;
 public class InstructionMaskValueFieldFactory extends FieldFactory {
 
 	public static final String FIELD_NAME = "Instr Mask/Value";
-	public static final Color MASK_COLOR = Palette.getColor("navy");
-	public static final Color VALUE_COLOR = Palette.GREEN;
-	public static final Color LABEL_COLOR = Colors.FOREGROUND;
 
 	/**
 	 * Default constructor.
@@ -56,15 +54,10 @@ public class InstructionMaskValueFieldFactory extends FieldFactory {
 	 * @param displayOptions the Options for display properties.
 	 * @param fieldOptions the Options for field specific properties.
 	 */
-	private InstructionMaskValueFieldFactory(FieldFormatModel model, HighlightProvider hsProvider,
+	private InstructionMaskValueFieldFactory(FieldFormatModel model,
+			ListingHighlightProvider hsProvider,
 			Options displayOptions, Options fieldOptions) {
 		super(FIELD_NAME, model, hsProvider, displayOptions, fieldOptions);
-	}
-
-	@Override
-	public void fieldOptionsChanged(Options options, String optionName, Object oldValue,
-			Object newValue) {
-		// stub
 	}
 
 	/**
@@ -98,20 +91,21 @@ public class InstructionMaskValueFieldFactory extends FieldFactory {
 		}
 
 		try {
-			FieldElement[] fieldElements = new FieldElement[2 * (operandCount + 1)];
-			fieldElements[0] =
-				getLine("M[m]: ", instructionMask.getBytes(), MASK_COLOR, proxy, varWidth);
-			fieldElements[1] =
-				getLine("V[m]: ", instructionMask.applyMask(instr), VALUE_COLOR, proxy, varWidth);
+			List<FieldElement> elements = new ArrayList<>();
+			elements.add(
+				getLine("M[m]: ", instructionMask.getBytes(), MaskColors.BITS, proxy, varWidth));
+			elements.add(getLine("V[m]: ", instructionMask.applyMask(instr), MaskColors.VALUE,
+				proxy, varWidth));
+
 			for (int i = 0; i < operandCount; i++) {
-				fieldElements[2 * (i + 1)] = getLine("M[" + i + "]: ", operandMasks[i].getBytes(),
-					MASK_COLOR, proxy, varWidth);
-				fieldElements[2 * (i + 1) + 1] = getLine("V[" + i + "]: ",
-					operandMasks[i].applyMask(instr), VALUE_COLOR, proxy, varWidth);
+				elements.add(getLine("M[" + i + "]: ", operandMasks[i].getBytes(), MaskColors.BITS,
+					proxy, varWidth));
+				elements.add(getLine("V[" + i + "]: ", operandMasks[i].applyMask(instr),
+					MaskColors.VALUE, proxy, varWidth));
 			}
 
-			return ListingTextField.createMultilineTextField(this, proxy, fieldElements,
-				startX + varWidth, width, fieldElements.length, hlProvider);
+			return ListingTextField.createMultilineTextField(this, proxy, elements,
+				startX + varWidth, width, hlProvider);
 		}
 		catch (MemoryAccessException e) {
 			return null;
@@ -123,10 +117,11 @@ public class InstructionMaskValueFieldFactory extends FieldFactory {
 
 		FieldElement[] fieldElements = new FieldElement[2];
 		AttributedString as =
-			new AttributedString(label, LABEL_COLOR, getMetrics(), false, underlineColor);
+			new AttributedString(label, MaskColors.LABEL, getMetrics(), false,
+				ListingColors.UNDERLINE);
 		fieldElements[0] = new TextFieldElement(as, 0, 0);
 		as = new AttributedString(getFormattedBytes(value), valueColor, getMetrics(), false,
-			underlineColor);
+			ListingColors.UNDERLINE);
 		fieldElements[1] = new TextFieldElement(as, 0, 0);
 		return new CompositeFieldElement(fieldElements);
 	}
@@ -173,14 +168,10 @@ public class InstructionMaskValueFieldFactory extends FieldFactory {
 	}
 
 	@Override
-	public FieldFactory newInstance(FieldFormatModel formatModel, HighlightProvider hsProvider,
+	public FieldFactory newInstance(FieldFormatModel formatModel,
+			ListingHighlightProvider hsProvider,
 			ToolOptions toolOptions, ToolOptions fieldOptions) {
 		return new InstructionMaskValueFieldFactory(formatModel, hsProvider, toolOptions,
 			fieldOptions);
-	}
-
-	@Override
-	public Color getDefaultColor() {
-		return Colors.FOREGROUND;
 	}
 }

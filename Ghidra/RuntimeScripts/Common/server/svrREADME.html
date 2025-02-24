@@ -43,7 +43,7 @@ typewriter {
     <LI><a href="#windows_install">Install as Automatic Service</a></LI>
 	<LI><a href="#windows_uninstall">Uninstall Service</a></LI>
   </UL>
-  <LI><a href="#running_linux_mac">Running Ghidra Server on Linux or Mac OS</a></LI>
+  <LI><a href="#running_linux_mac">Running Ghidra Server on Linux or macOS</a></LI>
   <UL>
 	<LI><a href="#linux_mac_scripts">Server Scripts</a></LI>
   	<LI><a href="#linux_mac_console">Running Server in Console Window</a></LI>
@@ -60,12 +60,13 @@ typewriter {
   <UL>
    	<LI><a href="#checkinFailures">Failures Creating Repository Folders / Checking in Files</a></LI>
    	<LI><a href="#connectErrors">Client/Server connection errors</a></LI>
+   	<LI><a href="#windowsWatchService">MS Windows - ERROR Incorrect function (WindowsWatchService)</a></LI>
 	<LI><a href="#windowsMissingTempDirectory">MS Windows - ERROR Missing Temp Directory</a></LI>
 	<LI><a href="#windows7and8_scriptErrors">MS Windows 7 and 8 - ghidraSvr.bat, svrInstall.bat, 
 	or svrUninstall.bat Error</a></LI>
 	<LI><a href="#selinuxDisabled">Linux - SELinux must be disabled</a></LI>
 	<LI><a href="#randomHang">Linux - Potential hang from /dev/random depletion</a></LI>
-	<LI><a href="#macDiskAccess">Mac OS - Service fails to start (macOS 10.14 Mojave and later)</a></LI>
+	<LI><a href="#macDiskAccess">macOS - Service fails to start</a></LI>
   </UL>
 </UL>
 
@@ -95,13 +96,7 @@ run a second concurrent instance may lead to difficulties and is not supported.
 <b>NOTE</b>: It is highly recommended that the installation files for Ghidra reside on a local drive 
 and that the intended Ghidra Server process owner is granted full access to the Ghidra installation 
 directory (this is frequently not the case for NFS/SMB mounted home directories). 
-</P>
-
-<P>
-<b>NOTE</b>: It is highly recommended that you establish a repositories directory outside of your 
-Ghidra installation directory so that it may be re-used more easily with future upgraded 
-installations of Ghidra.
-</P>  
+</P> 
 
 <P>
 You may also refer to the <typewriter>InstallationGuide.html</typewriter> file within the 
@@ -137,8 +132,20 @@ location and other associated options.
 </P>
 
 <P>
-You should generally avoid using the default repositories location and specify a location outside 
-your installation directory using an absolute path specification.
+It is highly recommended that you specify a repositories directory outside of your 
+Ghidra installation directory with an absolute path so that it may be re-used more easily with 
+future upgraded installations of Ghidra.  Due to the use of a filesystem 
+watcher service the use of a locally attached storage device is preferred and will also ensure
+the best performance.
+</P>
+
+<P>
+<b>NOTE:</b> The server may fail to start if the repository native filesystem does 
+not support the use of a filesystem watcher service.  This could occur if attempting to use a
+remotely-mounted filesystem which may lack the required event support.  The watcher service is used 
+in conjunction with command processing associated with the <b>svrAdmin</b> command.  If a running
+server fails to process queued <b>svrAdmin</b> command requests, the repository native filesystem 
+may be the cause.
 </P>
   
 <P>
@@ -401,7 +408,7 @@ are not currently supported.
 			<LI><typewriter>-autoProvision</typewriter><br>Enable the auto-creation of new Ghidra Server
 			users when they successfully authenticate to the server (-a1 and -a4 modes only).
 			Users removed from the authentication provider (e.g., Active Directory) will need to be
-			deleted manually from the Ghidra Server using svrAdmin command.</LI>
+			deleted manually from the Ghidra Server using <b>svrAdmin</b> command.</LI>
 			<br>
 			<LI><typewriter>-anonymous</typewriter><br>Enable anonymous access support for Ghidra Server 
 			and its repositories.  Only those repositories which specifically enable anonymous access will be 
@@ -502,10 +509,9 @@ are not currently supported.
 
 (<a href="#top">Back to Top</a>)
 <div style="border-top: 4px double; margin-top: 1em; padding-top: 1em;"> </div>
-<h2><a name="running_linux_mac">Running Ghidra Server on Linux or Mac OS</a></h2>
+<h2><a name="running_linux_mac">Running Ghidra Server on Linux or macOS</a></h2>
 
-<B>NOTE:</B> Mac OS has limited support.  The latest supported version is macOS 10.13.x High Sierra 
-(see <a href="#macDiskAccess">Mac OS - Service fails to start</a>).</u>
+<B>NOTE:</B> macOS has limited support (see <a href="#macDiskAccess">macOS - Service fails to start</a>).</u>
 
 <a name="linux_mac_scripts"><h3><u>Server Scripts (located within the server subdirectory)</u></h3></a>
 
@@ -556,8 +562,26 @@ are not currently supported.
 <P>
 	The Ghidra Server may be installed as an automatic service by executing the 
 	<typewriter>svrInstall</typewriter> script.  Once installed, the server will start automatically 
-	when the system is booted.
+	when the system is booted.  If performing an upgrade to an existing Ghidra Server installation
+	you must uninstall the existing Ghidra Server first (see 
+	<a href="#linux_mac_uninstall">Uninstall Service</a>).
 </P>
+<P>
+	In order for the installed service script to survive Java system updates, which may change
+	the installed Java version, it is highly recommended that the GHIDRA_JAVA_HOME variable be set
+	properly at the top of the <typewriter>ghidraSvr</typewriter> script prior to the server install.  
+	GHIDRA_JAVA_HOME should refer to a non-changing path where Java is installed.  For a system-installed 
+	Java the major-version symblic-link path should be specified in favor of a 
+	full-version path which stipulates minor-version information.  In addition, it is important 
+	that the Ghidra Server service be restarted anytime the installed Java version is updated where 
+	this symbolic link has been modified to reference a newly installed Java version.  Failure to 
+	use this approach may result in the Ghidra Server service script referring to an invalid Java 
+	path following an update.
+</P>
+<P>Example setting of GHIDRA_JAVA_HOME within <typewriter>ghidraSvr</typewriter> script:
+<PRE>
+    GHIDRA_JAVA_HOME=/usr/lib/jvm/java-21-openjdk
+</PRE>
 <P>
 	If it is preferred to run the service with a dedicated local user account, the following 
 	entry may be added to the <i>server.conf</i> file with the appropriate account specified in
@@ -568,7 +592,7 @@ are not currently supported.
 	installation of the Ghidra Server service. 
 </P>
 <PRE>
-	wrapper.app.account=&lt;uid&gt;
+    wrapper.app.account=&lt;uid&gt;
 </PRE>
 <P>
 It is also important that the repositories directory and Ghidra installation files 
@@ -583,13 +607,19 @@ to run as <i>root</i> and monitor/manage the Java process.
 	<typewriter>svrUninstall</typewriter> script.
 </P>
 <P>
-	<b>NOTE</b>: It is very important that you uninstall the service prior to doing any of the following 
-	activities:
-
+	<b>IMPORTANT</b>: It is very important that you uninstall the Ghidra Server service using the 
+	original Ghidra software installation.  Use of a newer Ghidra software install may not properly
+	uninstall a different service version.  This is particularly true if uninstalling 
+	a Ghidra Server version prior to 11.2.  Such an uninstall will be required when:
 	<UL>
 		<LI>deleting or upgrading the Ghidra installation</LI>
 		<LI>moving/renaming the Ghidra installation directory</LI>
 	</UL>
+</P>
+<P>
+	<b>NOTE</b>: The service control mechanism for Linux changed with the Ghidra 11.2 release.  
+	The <typewriter>init.d</typewriter> mechanism was previously used in all cases, whereas the
+	<typewriter>systemd</typewriter> service mechanism may now used based upon YAJSW preference.  
 </P>
 
 (<a href="#top">Back to Top</a>)
@@ -930,7 +960,7 @@ Please note that the Ghidra Server does not currently support Certificate Revoca
     <br>
     <LI>Uninstall an installed Ghidra Server Service by following the <typewriter>Uninstall Service</typewriter> 
     instructions corresponding to your operating system (<a href="#windows_uninstall">Windows</a> 
-    or <a href="#linux_mac_uninstall">Linux/Mac OS</a>).</LI>
+    or <a href="#linux_mac_uninstall">Linux/macOS</a>).</LI>
     <br>
     <LI>Unzip the new Ghidra distribution to a new installation directory (general unpacking and installation 
     guidelines may be found in <typewriter>ghidra_<I>x.x</I>/docs/InstallationGuide.html</typewriter>).</LI>
@@ -951,7 +981,7 @@ Please note that the Ghidra Server does not currently support Certificate Revoca
 	<br>
 	<LI>If desired, install the Ghidra Server Service from the new installation server 
 	subdirectory by following the instructions corresponding to your operating system 
-	(<a href="#windows_install">Windows</a> or <a href="#linux_mac_install">Linux/Mac-OSX</a>).</LI>
+	(<a href="#windows_install">Windows</a> or <a href="#linux_mac_install">Linux/macOS</a>).</LI>
 </OL>
 
 <P>
@@ -1008,6 +1038,14 @@ newer SSL/TLS enabled Ghidra Server registry, the following connection error wil
 <PRE>
 	non-JRMP server at remote endpoint
 </PRE> 
+</P>
+
+<br>
+<a name="windowsWatchService"><h3><u>MS Windows - ERROR Incorrect function (WindowsWatchService)</u></h3></a>
+<P>
+The Ghidra Server employs a file system watcher service for the repositories directory which must 
+reside within a locally mounted NTFS or ReFS filesystem.
+</P>
 
 <br>
 <a name="windowsMissingTempDirectory"><h3><u>MS Windows - ERROR Missing Temp Directory</u></h3></a>
@@ -1064,14 +1102,14 @@ Expansion Daemon) which will satisfy the entropy demand needed by /dev/random.
 </P>
 
 <br>
-<a name="macDiskAccess"><h3><u>Mac OS - Service fails to start (macOS 10.14 Mojave and later)</u></h3></a>
+<a name="macDiskAccess"><h3><u>macOS - Service fails to start</u></h3></a>
 <P>
-The installed service may fail to start with Mac OS Majave (10.14) and later due
-to changes in the Mac OS system protection feature.  When the service fails to start it does not
+The installed service may fail to start with macOS Mojave (10.14) to macOS Monterey (12.0) due
+to changes in the macOS system protection feature.  When the service fails to start it does not
 provide any error or logging to help determine the cause.  Although granting <i>Full Disk Access</i> 
 to <i>Java</i> can be a workaround, this is rather drastic and is not considered desirable 
-since it will allow any Java application to run as root.  For this reason, installation
-of the Ghidra Server as a service on Mac OS is discouraged.
+since it will allow any Java application to run as root.  Newer versions of macOS (Ventura 13.0 and
+later) do not exhibit this issue.
 </P>
 
 (<a href="#top">Back to Top</a>)

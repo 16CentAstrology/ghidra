@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -94,12 +94,12 @@ public class OrganizationNode extends SymbolTreeNode {
 	 *  abcc
 	 *  g
 	 * </pre>
-	 * <p>
+	 *
 	 * @param list list of child nodes of to breakup into smaller groups
 	 * @param maxGroupSize the max number of nodes to allow before trying to organize into
 	 * smaller groups
 	 * @param monitor the TaskMonitor to be checked for canceling this operation
-	 * @return the given <tt>list</tt> sub-grouped as outlined above
+	 * @return the given {@code list} sub-grouped as outlined above
 	 * @throws CancelledException if the operation is cancelled
 	 */
 	public static List<GTreeNode> organize(List<GTreeNode> list, int maxGroupSize,
@@ -116,7 +116,7 @@ public class OrganizationNode extends SymbolTreeNode {
 		// loop through and create organization nodes for groups larger than one element
 		List<GTreeNode> children = new ArrayList<>();
 		for (String prefix : prefixMap.keySet()) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 
 			List<GTreeNode> nodesSamePrefix = prefixMap.get(prefix);
 
@@ -368,7 +368,7 @@ public class OrganizationNode extends SymbolTreeNode {
 		int uniquePrefixSize = commonPrefixSize + 1;
 		Map<String, List<GTreeNode>> map = new LinkedHashMap<>();
 		for (GTreeNode node : nodeList) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			String prefix = getPrefix(node, uniquePrefixSize);
 			List<GTreeNode> list = map.computeIfAbsent(prefix, k -> new ArrayList<>());
 			list.add(node);

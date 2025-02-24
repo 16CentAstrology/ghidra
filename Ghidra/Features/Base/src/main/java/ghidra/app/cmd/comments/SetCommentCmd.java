@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,15 +15,15 @@
  */
 package ghidra.app.cmd.comments;
 
+import ghidra.app.util.viewer.field.CommentUtils;
 import ghidra.framework.cmd.Command;
-import ghidra.framework.model.DomainObject;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.listing.*;
 
 /**
  *  Command to set a specific type of comment on a code unit.
  */
-public class SetCommentCmd implements Command {
+public class SetCommentCmd implements Command<Program> {
 
 	private Address address;
 	private int commentType;
@@ -44,9 +44,6 @@ public class SetCommentCmd implements Command {
 		cmdName = comment == null ? "Delete Comment" : "Set Comment";
 	}
 
-	/**
-	 * @see ghidra.framework.cmd.Command#getName()
-	 */
 	@Override
 	public String getName() {
 		return cmdName;
@@ -68,19 +65,18 @@ public class SetCommentCmd implements Command {
 		return !oldValue.equals(newValue);
 	}
 
-	/**
-	 * @see ghidra.framework.cmd.Command#applyTo(ghidra.framework.model.DomainObject)
-	 */
 	@Override
-	public boolean applyTo(DomainObject obj) {
-		CodeUnit cu = getCodeUnit((Program) obj);
+	public boolean applyTo(Program program) {
+		CodeUnit cu = getCodeUnit(program);
 		if (cu == null) {
 			message = "No Instruction or Data found for address " + address.toString() +
 				"  Is this address valid?";
 			return false;
 		}
-		if (commentChanged(cu.getComment(commentType), comment)) {
-			cu.setComment(commentType, comment);
+
+		String updatedComment = CommentUtils.sanitize(comment);
+		if (commentChanged(cu.getComment(commentType), updatedComment)) {
+			cu.setComment(commentType, updatedComment);
 		}
 		return true;
 	}
@@ -104,9 +100,6 @@ public class SetCommentCmd implements Command {
 		return cu;
 	}
 
-	/**
-	 * @see ghidra.framework.cmd.Command#getStatusMsg()
-	 */
 	@Override
 	public String getStatusMsg() {
 		return message;

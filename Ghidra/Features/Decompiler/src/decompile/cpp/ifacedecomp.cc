@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,6 +19,8 @@ extern "C" {
 }
 #include "pcodeparse.hh"
 #include "blockaction.hh"
+
+namespace ghidra {
 
 // Constructing this registers the capability
 IfaceDecompCapability IfaceDecompCapability::ifaceDecompCapability;
@@ -53,6 +55,8 @@ void IfaceDecompCapability::registerCommands(IfaceStatus *status)
   status->registerCom(new IfcCleararch(),"clear","architecture");
   status->registerCom(new IfcMapaddress(),"map","address");
   status->registerCom(new IfcMaphash(),"map","hash");
+  status->registerCom(new IfcMapParam(),"map","param");
+  status->registerCom(new IfcMapReturn(),"map","return");
   status->registerCom(new IfcMapfunction(),"map","function");
   status->registerCom(new IfcMapexternalref(),"map","externalref");
   status->registerCom(new IfcMaplabel(),"map","label");
@@ -114,6 +118,7 @@ void IfaceDecompCapability::registerCommands(IfaceStatus *status)
   status->registerCom(new IfcRename(),"rename");
   status->registerCom(new IfcRetype(),"retype");
   status->registerCom(new IfcRemove(),"remove");
+  status->registerCom(new IfcIsolate(),"isolate");
   status->registerCom(new IfcLockPrototype(),"prototype","lock");
   status->registerCom(new IfcUnlockPrototype(),"prototype","unlock");
   status->registerCom(new IfcCommentInstr(),"comment","instruction");
@@ -149,6 +154,10 @@ void IfaceDecompCapability::registerCommands(IfaceStatus *status)
   status->registerCom(new IfcTraceClear(),"trace","clear");
   status->registerCom(new IfcTraceList(),"trace","list");
   status->registerCom(new IfcBreakjump(),"break","jumptable");
+#endif
+
+#ifdef TYPEPROP_DEBUG
+  status->registerCom(new IfcTracePropagation(),"trace","propagation");
 #endif
 }
 
@@ -316,7 +325,7 @@ void IfcOption::execute(istream &s)
   }
   
   try {
-    string res = dcp->conf->options->set(ElementId::find(optname),p1,p2,p3);
+    string res = dcp->conf->options->set(ElementId::find(optname,0),p1,p2,p3);
     *status->optr << res << endl;
   }
   catch(ParseError &err) {
@@ -593,6 +602,49 @@ void IfcMaphash::execute(istream &s)
 
   Symbol *sym = dcp->fd->getScopeLocal()->addDynamicSymbol(name,ct,addr,hash);
   sym->getScope()->setAttribute(sym,Varnode::namelock|Varnode::typelock);
+}
+
+/// \class IfcMapParam
+/// \brief Map a parameter symbol for the current function: `map param #i <address> <typedeclaration>`
+///
+/// The position of the parameter in the input list is parsed as an integer, starting at 0.
+/// The address range used for parameter is explicitly set.  The data-type and name of the parameter
+/// are parsed from the type declaration.  The parameter is treated as name and type locked.
+void IfcMapParam::execute(istream &s)
+
+{
+  if (dcp->fd == (Funcdata *)0)
+    throw IfaceExecutionError("No function loaded");
+  int4 i;
+  string name;
+  int4 size;
+  ParameterPieces piece;
+  s >> dec >> i;		// Position of the parameter
+  piece.addr = parse_machaddr(s,size,*dcp->conf->types);	// Starting address of parameter
+  piece.type = parse_type(s,name,dcp->conf);
+  piece.flags = ParameterPieces::typelock | ParameterPieces::namelock;
+
+  dcp->fd->getFuncProto().setParam(i, name, piece);
+}
+
+/// \class IfcMapReturn
+/// \brief Map the return storage for the current function: `map return <address> <typedeclaration>`
+///
+/// The address range used for return storage is explicitly set, and the return value is set to the
+/// parsed data-type.  The function's output is considered locked.
+void IfcMapReturn::execute(istream &s)
+
+{
+  if (dcp->fd == (Funcdata *)0)
+    throw IfaceExecutionError("No function loaded");
+  string name;
+  int4 size;
+  ParameterPieces piece;
+  piece.addr = parse_machaddr(s,size,*dcp->conf->types);	// Starting address of return storage
+  piece.type = parse_type(s,name,dcp->conf);
+  piece.flags = ParameterPieces::typelock;
+
+  dcp->fd->getFuncProto().setOutput(piece);
 }
 
 /// \class IfcMapfunction
@@ -916,7 +968,9 @@ void IfcPrintCXml::execute(istream &s)
 
   dcp->conf->print->setOutputStream(status->fileoptr);
   dcp->conf->print->setMarkup(true);
+  dcp->conf->print->setPackedOutput(false);
   dcp->conf->print->docFunction(dcp->fd);
+  *status->fileoptr << endl;
   dcp->conf->print->setMarkup(false);
 }
 
@@ -1365,6 +1419,29 @@ void IfcRetype::execute(istream &s)
   }
 }
 
+/// \class IfcIsolate
+/// \brief Mark a symbol as isolated from speculative merging: `isolate <name>`
+void IfcIsolate::execute(istream &s)
+
+{
+  string symbolName;
+
+  s >> ws >> symbolName;
+  if (symbolName.size() == 0)
+    throw IfaceParseError("Missing symbol name");
+
+  Symbol *sym;
+  vector<Symbol *> symList;
+  dcp->readSymbol(symbolName,symList);
+  if (symList.empty())
+    throw IfaceExecutionError("No symbol named: "+symbolName);
+  if (symList.size() == 1)
+    sym = symList[0];
+  else
+    throw IfaceExecutionError("More than one symbol named: "+symbolName);
+  sym->setIsolated(true);
+}
+
 /// The Varnode is selected from the \e current function.  It is specified as a
 /// storage location with info about its defining p-code in parantheses.
 ///   - `%EAX(r0x10000:0x65)`
@@ -1771,7 +1848,7 @@ void IfcProtooverride::execute(istream &s)
   s >> ws;
   Address callpoint(parse_machaddr(s,discard,*dcp->conf->types));
   int4 i;
-  for(i=0;dcp->fd->numCalls();++i)
+  for(i=0;i<dcp->fd->numCalls();++i)
     if (dcp->fd->getCallSpecs(i)->getOp()->getAddr() == callpoint) break;
   if (i == dcp->fd->numCalls())
     throw IfaceExecutionError("No call is made at this address");
@@ -3513,6 +3590,24 @@ void IfcBreakjump::execute(istream &s)
 
 #endif
 
+#ifdef TYPEPROP_DEBUG
+
+void IfcTracePropagation::execute(istream &s)
+
+{
+  string token;
+  s >> ws >> token;
+  if (token == "on")
+    TypeFactory::propagatedbg_on = true;
+  else if (token == "off")
+    TypeFactory::propagatedbg_on = false;
+  else
+    throw IfaceParseError("Must specific on/off");
+  *status->optr << "Data-type propagation trace set to: "<< token << endl;
+}
+
+#endif
+
 /// Execute one command and handle any exceptions.
 /// Error messages are printed to the console.  For low-level errors,
 /// the current function is reset to null
@@ -3588,3 +3683,5 @@ void IfcSource::execute(istream &s)
   s >> filename;
   status->pushScript(filename,filename+"> ");
 }
+
+} // End namespace ghidra

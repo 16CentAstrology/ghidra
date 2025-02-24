@@ -27,17 +27,18 @@ import javax.swing.KeyStroke;
 import org.apache.commons.collections4.map.DefaultedMap;
 import org.apache.commons.collections4.map.LazyMap;
 
+import db.Transaction;
 import docking.action.KeyBindingData;
 import docking.action.MenuData;
 import docking.widgets.autocomplete.*;
 import docking.widgets.fieldpanel.*;
 import docking.widgets.fieldpanel.support.FieldLocation;
 import generic.theme.GThemeDefaults.Colors;
+import ghidra.app.cmd.disassemble.ReDisassembleCommand;
 import ghidra.app.plugin.assembler.Assembler;
 import ghidra.app.plugin.assembler.Assemblers;
 import ghidra.app.plugin.core.assembler.AssemblyDualTextField.*;
 import ghidra.framework.plugintool.Plugin;
-import ghidra.program.database.util.ProgramTransaction;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.lang.Language;
 import ghidra.program.model.listing.*;
@@ -217,8 +218,8 @@ public class PatchInstructionAction extends AbstractPatchAction {
 	protected void prepare() {
 		CodeUnit cu = getCodeUnit();
 		language = getLanguage(cu);
-		warnLanguage();
 		cache.get(language).get(null);
+		warnLanguage();
 		assembler = getAssembler(cu);
 	}
 
@@ -301,7 +302,11 @@ public class PatchInstructionAction extends AbstractPatchAction {
 	}
 
 	protected void applyPatch(byte[] data) throws MemoryAccessException {
+		// NB. This will immediately re-disassembly the one command.
+		// We'll background the context repair, which may include more disassembly
 		assembler.patchProgram(data, getAddress());
+		ReDisassembleCommand cmd = new ReDisassembleCommand(getAddress());
+		tool.executeBackgroundCommand(cmd, getProgram());
 	}
 
 	/**
@@ -312,10 +317,9 @@ public class PatchInstructionAction extends AbstractPatchAction {
 	public void accept(AssemblyInstruction ins) {
 		Program program = getProgram();
 		Address address = getAddress();
-		try (ProgramTransaction trans =
-			ProgramTransaction.open(program, "Assemble @" + address + ": " + input.getText())) {
+		try (Transaction tx =
+			program.openTransaction("Assemble @" + address + ": " + input.getText())) {
 			applyPatch(ins.getData());
-			trans.commit();
 			hide();
 		}
 		catch (MemoryAccessException e) {

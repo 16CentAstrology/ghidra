@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -114,11 +114,11 @@ public record AttributeId(String name, int id) {
 	public static final AttributeId ATTRIB_ARRAYSIZE = new AttributeId("arraysize", 48);
 	public static final AttributeId ATTRIB_CHAR = new AttributeId("char", 49);
 	public static final AttributeId ATTRIB_CORE = new AttributeId("core", 50);
-	public static final AttributeId ATTRIB_ENUM = new AttributeId("enum", 51);
-	public static final AttributeId ATTRIB_ENUMSIGNED = new AttributeId("enumsigned", 52);
-	public static final AttributeId ATTRIB_ENUMSIZE = new AttributeId("enumsize", 53);
-	public static final AttributeId ATTRIB_INTSIZE = new AttributeId("intsize", 54);
-	public static final AttributeId ATTRIB_LONGSIZE = new AttributeId("longsize", 55);
+//	public static final AttributeId ATTRIB_ENUM = new AttributeId("enum", 51);	// deprecated
+	public static final AttributeId ATTRIB_INCOMPLETE = new AttributeId("incomplete", 52);
+//	public static final AttributeId ATTRIB_ENUMSIZE = new AttributeId("enumsize", 53);  // deprecated
+//	public static final AttributeId ATTRIB_INTSIZE = new AttributeId("intsize", 54);  // deprecated
+//	public static final AttributeId ATTRIB_LONGSIZE = new AttributeId("longsize", 55);  // deprecated
 	public static final AttributeId ATTRIB_OPAQUESTRING = new AttributeId("opaquestring", 56);
 	public static final AttributeId ATTRIB_SIGNED = new AttributeId("signed", 57);
 	public static final AttributeId ATTRIB_STRUCTALIGN = new AttributeId("structalign", 58);
@@ -171,19 +171,11 @@ public record AttributeId(String name, int id) {
 
 	// space
 	public static final AttributeId ATTRIB_BASE = new AttributeId("base", 89);
-	public static final AttributeId ATTRIB_DEADCODEDELAY = new AttributeId("deadcodedelay", 90);
+//	public static final AttributeId ATTRIB_DEADCODEDELAY = new AttributeId("deadcodedelay", 90);
 	public static final AttributeId ATTRIB_DELAY = new AttributeId("delay", 91);
 	public static final AttributeId ATTRIB_LOGICALSIZE = new AttributeId("logicalsize", 92);
 	public static final AttributeId ATTRIB_PHYSICAL = new AttributeId("physical", 93);
-	public static final AttributeId ATTRIB_PIECE1 = new AttributeId("piece1", 94);	// piece attributes must have sequential ids
-	public static final AttributeId ATTRIB_PIECE2 = new AttributeId("piece2", 95);
-	public static final AttributeId ATTRIB_PIECE3 = new AttributeId("piece3", 96);
-	public static final AttributeId ATTRIB_PIECE4 = new AttributeId("piece4", 97);
-	public static final AttributeId ATTRIB_PIECE5 = new AttributeId("piece5", 98);
-	public static final AttributeId ATTRIB_PIECE6 = new AttributeId("piece6", 99);
-	public static final AttributeId ATTRIB_PIECE7 = new AttributeId("piece7", 100);
-	public static final AttributeId ATTRIB_PIECE8 = new AttributeId("piece8", 101);
-	public static final AttributeId ATTRIB_PIECE9 = new AttributeId("piece9", 102);
+	public static final AttributeId ATTRIB_PIECE = new AttributeId("piece", 94);
 
 	// architecture
 	public static final AttributeId ATTRIB_ADJUSTVMA = new AttributeId("adjustvma", 103);
@@ -243,6 +235,18 @@ public record AttributeId(String name, int id) {
 //	public static final AttributeId ATTRIB_VARIANT = new AttributeId("variant", 143);
 //	public static final AttributeId ATTRIB_VERSION = new AttributeId("version", 144);
 
+	// signature
+	public static final AttributeId ATTRIB_BADDATA = new AttributeId("baddata", 145);
+	public static final AttributeId ATTRIB_HASH = new AttributeId("hash", 146);
+	public static final AttributeId ATTRIB_UNIMPL = new AttributeId("unimpl", 147);
+
 // public static final AttributeId ATTRIB_ADDRESS = new AttributeId("address", 148);
-	public static final AttributeId ATTRIB_UNKNOWN = new AttributeId("XMLunknown", 149);
+	public static final AttributeId ATTRIB_STORAGE = new AttributeId("storage", 149);
+	public static final AttributeId ATTRIB_STACKSPILL = new AttributeId("stackspill", 150);
+
+	// modelrules
+	public static final AttributeId ATTRIB_SIZES = new AttributeId("sizes", 151);
+	public static final AttributeId ATTRIB_BACKFILL = new AttributeId("backfill", 152);
+
+	public static final AttributeId ATTRIB_UNKNOWN = new AttributeId("XMLunknown", 153);
 }

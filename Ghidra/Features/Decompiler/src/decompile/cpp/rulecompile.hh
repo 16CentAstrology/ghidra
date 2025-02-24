@@ -4,19 +4,21 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef __CPUI_RULE_COMPILE__
-#define __CPUI_RULE_COMPILE__
+#ifndef __RULECOMPILE_HH__
+#define __RULECOMPILE_HH__
 
 #include "unify.hh"
+
+namespace ghidra {
 
 class RuleLexer {
   static int4 identlist[256];	// 1 is identifier, 2 is digit, 4=namechar
@@ -63,6 +65,7 @@ public:
   virtual void initialize(DocumentStorage &store) {}
   virtual const VarnodeData &getRegister(const string &nm) const { throw LowlevelError("Cannot add register to DummyTranslate"); }
   virtual string getRegisterName(AddrSpace *base,uintb off,int4 size) const { return ""; }
+  virtual string getExactRegisterName(AddrSpace *base,uintb off,int4 size) const { return ""; }
   virtual void getAllRegisters(map<VarnodeData,string> &reglist) const {}
   virtual void getUserOpNames(vector<string> &res) const {}
   virtual int4 instructionLength(const Address &baseaddr) const { return -1; }
@@ -198,4 +201,5 @@ public:
 
  */
 
+} // End namespace ghidra
 #endif

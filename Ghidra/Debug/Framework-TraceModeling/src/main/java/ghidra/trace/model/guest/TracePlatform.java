@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,18 +15,18 @@
  */
 package ghidra.trace.model.guest;
 
-import java.util.List;
+import java.util.Collection;
 
-import ghidra.dbg.target.TargetObject;
-import ghidra.dbg.target.TargetRegister;
-import ghidra.dbg.target.schema.TargetObjectSchema;
-import ghidra.dbg.util.PathMatcher;
 import ghidra.program.model.address.*;
 import ghidra.program.model.lang.*;
 import ghidra.program.model.mem.MemBuffer;
 import ghidra.trace.model.Trace;
+import ghidra.trace.model.memory.TraceObjectRegister;
 import ghidra.trace.model.symbol.TraceLabelSymbol;
 import ghidra.trace.model.target.TraceObject;
+import ghidra.trace.model.target.path.KeyPath;
+import ghidra.trace.model.target.path.PathFilter;
+import ghidra.trace.model.target.schema.TraceObjectSchema;
 
 /**
  * A platform within a trace
@@ -171,27 +171,29 @@ public interface TracePlatform {
 	AddressRange getConventionalRegisterRange(AddressSpace overlay, Register register);
 
 	/**
-	 * Get the name or index of the register object for the given platform register
+	 * Get the names or indices of the register object for the given platform register
 	 * 
 	 * <p>
 	 * This will check for a label in the host physical space, allowing a mapper to specify an
-	 * alternative register object name. See {@link #addRegisterMapOverride(Register, String)}.
+	 * alternative register object name. See {@link #addRegisterMapOverride(Register, String)}. If
+	 * one exists, then only that name is returned. Otherwise, the given register's names and
+	 * aliases are all returned as defined and in all-upper and all-lower case.
 	 * 
 	 * @param register the platform register
 	 * @return the mapped name
 	 */
-	String getConventionalRegisterObjectName(Register register);
+	Collection<String> getConventionalRegisterObjectNames(Register register);
 
 	/**
 	 * Get the expected path where an object defining the register value would be
 	 * 
 	 * @param schema the schema of the register container
 	 * @param path the path to the register container
-	 * @param name the name of the register on the target
+	 * @param names the possible names of the register on the target
 	 * @return the path matcher, possibly empty
 	 */
-	PathMatcher getConventionalRegisterPath(TargetObjectSchema schema, List<String> path,
-			String name);
+	PathFilter getConventionalRegisterPath(TraceObjectSchema schema, KeyPath path,
+			Collection<String> names);
 
 	/**
 	 * Get the expected path where an object defining the register value would be
@@ -205,45 +207,35 @@ public interface TracePlatform {
 	 * @param register the platform register
 	 * @return the path matcher, possibly empty
 	 */
-	PathMatcher getConventionalRegisterPath(TargetObjectSchema schema, List<String> path,
+	PathFilter getConventionalRegisterPath(TraceObjectSchema schema, KeyPath path,
 			Register register);
 
 	/**
 	 * Get the expected path where an object defining the register value would be
 	 * 
-	 * @see #getConventionalRegisterPath(TargetObjectSchema, List, Register)
+	 * @see #getConventionalRegisterPath(TraceObjectSchema, KeyPath, Register)
 	 * @param container the register container
 	 * @param register the platform register
 	 * @return that path matcher, possibly empty, or null if the trace has no root schema
 	 */
-	PathMatcher getConventionalRegisterPath(TraceObject container, Register register);
-
-	/**
-	 * Get the expected path where an object defining the register value would be
-	 * 
-	 * @see #getConventionalRegisterPath(TargetObjectSchema, List, Register)
-	 * @param container the target register container
-	 * @param register the platform register
-	 * @return the path matcher, possibly empty
-	 */
-	PathMatcher getConventionalRegisterPath(TargetObject container, Register register);
+	PathFilter getConventionalRegisterPath(TraceObject container, Register register);
 
 	/**
 	 * Get the expected path where an object defining the register value would be
 	 *
-	 * @see #getConventionalRegisterPath(TargetObjectSchema, List, Register)
+	 * @see #getConventionalRegisterPath(TraceObjectSchema, KeyPath, Register)
 	 * @param overlay the overlay space allocated for a thread or frame
 	 * @param register the platform register
 	 * @return the path matcher, or null if there is no root schema
 	 */
-	PathMatcher getConventionalRegisterPath(AddressSpace overlay, Register register);
+	PathFilter getConventionalRegisterPath(AddressSpace overlay, Register register);
 
 	/**
-	 * Add a label the conventionally maps the value of a {@link TargetRegister} in the object
+	 * Add a label the conventionally maps the value of a {@link TraceObjectRegister} in the object
 	 * manager to a register from this platform
 	 * 
 	 * @param register the language register
-	 * @param objectName the name of the {@link TargetRegister} in the object tree
+	 * @param objectName the name of the {@link TraceObjectRegister} in the object tree
 	 * @return the label
 	 */
 	TraceLabelSymbol addRegisterMapOverride(Register register, String objectName);

@@ -72,7 +72,7 @@ public abstract class AssemblyTestCase extends AbstractGenericTest {
 	public void setUp() throws Exception {
 		LanguageID langID = getLanguageID();
 		if (!setupLangID.equals(langID.toString())) {
-			SleighLanguageProvider provider = new SleighLanguageProvider();
+			SleighLanguageProvider provider = SleighLanguageProvider.getSleighLanguageProvider();
 			lang = (SleighLanguage) provider.getLanguage(langID);
 			context = new AssemblyDefaultContext(lang);
 			setupLangID = langID.toString();
@@ -365,8 +365,8 @@ public abstract class AssemblyTestCase extends AbstractGenericTest {
 			}
 
 			@Override
-			public AssemblyResolvedPatterns select(AssemblyResolutionResults rr,
-					AssemblyPatternBlock ctx) throws AssemblySemanticException {
+			public Selection select(AssemblyResolutionResults rr, AssemblyPatternBlock ctx)
+					throws AssemblySemanticException {
 				if (checkOneCompat) {
 					checkOneCompat(instr, rr);
 				}

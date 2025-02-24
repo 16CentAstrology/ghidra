@@ -23,10 +23,15 @@ import java.util.Map;
  * Class for web color support. This class defines many of the colors used by html. This class
  * includes methods for converting a color to a string (name or hex value) and for converting
  * those strings back to a color.
+ * <p>
+ * Usage Note: Java's HTML rendering engine supports colors in hex form ('#aabb11').  Also, the
+ * engine supports many web color names ('silver').  However, not all web color names defined in
+ * this file are supported.  Thus, when specifying HTML colors, do not rely on these web color
+ * names.
  */
 public abstract class WebColors {
 	private static final Map<String, Color> nameToColorMap = new HashMap<>();
-	private static final Map<Color, String> colorToNameMap = new HashMap<>();
+	private static final Map<Integer, String> colorToNameMap = new HashMap<>();
 
 	//@formatter:off
 	public static final Color BLACK = registerColor("Black", Color.black);
@@ -180,7 +185,7 @@ public abstract class WebColors {
 	 * Tries to find a color for the given String value. The String value can either be
 	 * a hex string (see {@link Color#decode(String)}) or a web color name as defined
 	 * above
-	 * 
+	 *
 	 * @param value the string value to interpret as a color
 	 * @param defaultColor a default color to return if the string can't be converted to a color
 	 * @return a color for the given string value or the default color if the string can't be translated
@@ -195,7 +200,7 @@ public abstract class WebColors {
 	 * the color name will be returned. Otherwise, it will return a hex string for the color as
 	 * follows. If the color has an non-opaque alpha value, it will be of the form #rrggbb. If
 	 * it has an alpha value,then the format will be #rrggbbaa.
-	 * 
+	 *
 	 * @param color the color to convert to a string.
 	 * @return the string representation for the given color.
 	 */
@@ -208,7 +213,7 @@ public abstract class WebColors {
 	 * is true, the name of the color will be returned. OOtherwise, it will return a hex string for the color as
 	 * follows. If the color has an non-opaque alpha value, it will be of the form #rrggbb. If
 	 * it has an alpha value ,then the format will be #rrggbbaa.
-	 * 
+	 *
 	 * @param color the color to convert to a string.
 	 * @param useNameIfPossible if true, the name of the color will be returned if the color is
 	 * a WebColor
@@ -216,11 +221,24 @@ public abstract class WebColors {
 	 */
 	public static String toString(Color color, boolean useNameIfPossible) {
 		if (useNameIfPossible) {
-			String name = colorToNameMap.get(color);
+			String name = colorToNameMap.get(color.getRGB());
 			if (name != null) {
 				return name;
 			}
 		}
+		return toHexString(color);
+	}
+
+	public static String toColorName(Color color) {
+		return colorToNameMap.get(color.getRGB());
+	}
+
+	/**
+	 * Returns the hex value string for the given color
+	 * @param color the color
+	 * @return the string
+	 */
+	public static String toHexString(Color color) {
 		int rgb = color.getRGB() & 0xffffff; //mask off any alpha value
 		int alpha = color.getAlpha();
 		if (alpha != 0xff) {
@@ -230,17 +248,36 @@ public abstract class WebColors {
 	}
 
 	/**
+	 * Returns the rgb value string for the given color
+	 * @param color the color
+	 * @return the string
+	 */
+	public static String toRgbString(Color color) {
+		int r = color.getRed();
+		int g = color.getGreen();
+		int b = color.getBlue();
+		int a = color.getAlpha();
+
+		String rgb = r + "," + g + "," + b;
+
+		if (a != 0xff) {
+			return "rgba(" + rgb + "," + a + ")";
+		}
+		return "rgb(" + rgb + ")";
+	}
+
+	/**
 	 * Returns the WebColor name for the given color. Returns null if the color is not a WebColor
 	 * @param color the color to lookup a WebColor name.
 	 * @return the WebColor name for the given color. Returns null if the color is not a WebColor
 	 */
 	public static String toWebColorName(Color color) {
-		return colorToNameMap.get(color);
+		return colorToNameMap.get(color.getRGB());
 	}
 
 	private static Color registerColor(String name, Color color) {
 		nameToColorMap.put(name.toLowerCase(), color);
-		colorToNameMap.put(color, name);
+		colorToNameMap.put(color.getRGB(), name);
 		return color;
 	}
 
@@ -279,10 +316,11 @@ public abstract class WebColors {
 		if (colorString.startsWith("#") || colorString.startsWith("0x")) {
 			return parseHexColor(colorString);
 		}
-		if (colorString.startsWith("rgb(")) {
-			return parseRGBColor(colorString);
+
+		if (colorString.startsWith("rgba(")) {
+			return parseRgbaColor(colorString);
 		}
-		return parseRGBAColor(colorString);
+		return parseRgbColor(colorString);
 	}
 
 	/**
@@ -290,12 +328,12 @@ public abstract class WebColors {
 	 * <pre>
 	 * #rrggbb
 	 * #rrggbbaa
-	 * 0xrrggbb 
+	 * 0xrrggbb
 	 * 0xrrggbbaa
-	 * </pre> 
-	 * 
+	 * </pre>
+	 *
 	 * Each of the hex digits "rr", "gg", "bb", and "aa" specify the red, green, blue, and alpha
-	 * values respectively. 
+	 * values respectively.
 	 * <br><br>
 	 *
 	 * @param hexString the string to parse into a color.
@@ -337,19 +375,19 @@ public abstract class WebColors {
 	 * <pre>
 	 * rgb(red, green, blue)
 	 * rgb(red, green, blue, alpha)
-	 * </pre> 
+	 * </pre>
 	 * Each of the values "red", "green", "blue", and "alpha" must be integer values between 0-255
 	 * <br><br>
 	 * @param rgbString the string to parse into a color.
 	 * @return the parsed Color or null if the input string was invalid.
 	 */
-	private static Color parseRGBColor(String rgbString) {
+	private static Color parseRgbColor(String rgbString) {
 		String value = rgbString.trim().replaceAll(" ", "");
-		if (!(value.startsWith("rgb(") && value.endsWith(")"))) {
-			return null;
+		if (value.startsWith("rgb(") && value.endsWith(")")) {
+			value = value.substring(4, value.length() - 1);
 		}
+
 		// strip off to comma separated values
-		value = value.substring(4, value.length() - 1);
 		String[] split = value.split(",");
 		if (split.length != 3) {
 			return null;
@@ -365,13 +403,13 @@ public abstract class WebColors {
 		}
 	}
 
-	private static Color parseRGBAColor(String rgbaString) {
+	private static Color parseRgbaColor(String rgbaString) {
 		String value = rgbaString.replaceAll(" ", "");
-		if (!(value.startsWith("rgba(") && value.endsWith(")"))) {
-			return null;
+		if (value.startsWith("rgba(") && value.endsWith(")")) {
+			value = value.substring(5, value.length() - 1);
 		}
+
 		// strip off to comma separated values
-		value = value.substring(5, value.length() - 1);
 		value = value.replaceAll(" ", "");
 		String[] split = value.split(",");
 		if (split.length != 4) {

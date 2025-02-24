@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -23,6 +23,7 @@ import java.util.*;
 import org.apache.commons.io.FilenameUtils;
 
 import ghidra.formats.gfilesystem.FSRL;
+import ghidra.framework.generic.auth.Password;
 import ghidra.util.Msg;
 import utilities.util.FileUtilities;
 
@@ -37,7 +38,6 @@ import utilities.util.FileUtilities;
  * Example file contents, where each line is divided into fields by a tab
  * character where the first field is the password and the second optional field
  * is the file's identifying information (name, path, etc):
- * <p>
  * <pre>
  * <code>password1   [tab]   myfirstzipfile.zip</code> <b>&larr; supplies a password for the named file located in any directory</b>
  * <code>someOtherPassword   [tab]   /full/path/tozipfile.zip</code> <b>&larr; supplies password for file at specified location</b> 
@@ -51,7 +51,7 @@ public class CmdLinePasswordProvider implements PasswordProvider {
 	public static final String CMDLINE_PASSWORD_PROVIDER_PROPERTY_NAME = "filesystem.passwords";
 
 	@Override
-	public Iterator<PasswordValue> getPasswordsFor(FSRL fsrl, String prompt, Session session) {
+	public Iterator<Password> getPasswordsFor(FSRL fsrl, String prompt, Session session) {
 		String propertyValue = System.getProperty(CMDLINE_PASSWORD_PROVIDER_PROPERTY_NAME);
 		if (propertyValue == null) {
 			return Collections.emptyIterator();
@@ -60,8 +60,8 @@ public class CmdLinePasswordProvider implements PasswordProvider {
 		return load(passwordFile, fsrl).iterator();
 	}
 
-	private List<PasswordValue> load(File f, FSRL fsrl) {
-		List<PasswordValue> result = new ArrayList<>();
+	private List<Password> load(File f, FSRL fsrl) {
+		List<Password> result = new ArrayList<>();
 		try {
 			for (String s : FileUtilities.getLines(f)) {
 				String[] fields = s.split("\t");
@@ -73,7 +73,7 @@ public class CmdLinePasswordProvider implements PasswordProvider {
 
 				if (fileIdStr == null) {
 					// no file identifier string, always matches
-					result.add(PasswordValue.wrap(password.toCharArray()));
+					result.add(Password.wrap(password.toCharArray()));
 					continue;
 				}
 
@@ -82,7 +82,7 @@ public class CmdLinePasswordProvider implements PasswordProvider {
 					FSRL currentFSRL = FSRL.fromString(fileIdStr);
 					// was a fsrl string, only test as fsrl
 					if (currentFSRL.isEquivalent(fsrl)) {
-						result.add(PasswordValue.wrap(password.toCharArray()));
+						result.add(Password.wrap(password.toCharArray()));
 					}
 					continue;
 				}
@@ -93,14 +93,14 @@ public class CmdLinePasswordProvider implements PasswordProvider {
 				if (!nameOnly.equals(fileIdStr)) {
 					// was a path str, only test against path component
 					if (fileIdStr.equals(fsrl.getPath())) {
-						result.add(PasswordValue.wrap(password.toCharArray()));
+						result.add(Password.wrap(password.toCharArray()));
 					}
 					continue;
 				}
 
 				// was a plain name, only test against name component
 				if (nameOnly.equals(fsrl.getName())) {
-					result.add(PasswordValue.wrap(password.toCharArray()));
+					result.add(Password.wrap(password.toCharArray()));
 					continue;
 				}
 				// no matches, try next line

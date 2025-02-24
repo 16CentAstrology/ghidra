@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,7 +16,6 @@
 package ghidra.app.plugin.core.programtree;
 
 import java.awt.*;
-import java.awt.image.BufferedImage;
 import java.util.*;
 
 import javax.swing.Icon;
@@ -26,7 +25,6 @@ import javax.swing.tree.DefaultTreeCellRenderer;
 import docking.widgets.GComponent;
 import generic.theme.GColor;
 import generic.theme.GIcon;
-import generic.theme.GThemeDefaults.Colors;
 import ghidra.program.model.listing.Group;
 import resources.ResourceManager;
 
@@ -36,6 +34,7 @@ import resources.ResourceManager;
 class DnDTreeCellRenderer extends DefaultTreeCellRenderer {
 	private static final Color BACKGROUND_UNSELECTED = new GColor("color.bg.tree");
 	private static final Color BACKGROUND_SELECTED = new GColor("color.bg.tree.selected");
+	private static final Color FOREGROUND_SELECTED = new GColor("color.fg.tree.selected");
 
 	private static final String DISABLED_DOCS = "DisabledDocument.gif";
 	private static final String DISABLED_FRAGMENT = "DisabledFragment";
@@ -68,6 +67,7 @@ class DnDTreeCellRenderer extends DefaultTreeCellRenderer {
 	private Color defaultNonSelectionColor;
 	private Color selectionForDragColor;
 	private Color nonSelectionForDragColor;
+	private Color defaultTextSelectionColor;
 	private int rowForFeedback;
 
 	/**
@@ -77,6 +77,7 @@ class DnDTreeCellRenderer extends DefaultTreeCellRenderer {
 		super();
 		defaultNonSelectionColor = BACKGROUND_UNSELECTED;
 		defaultSelectionColor = BACKGROUND_SELECTED;
+		defaultTextSelectionColor = FOREGROUND_SELECTED;
 		rowForFeedback = -1;
 
 		// disable HTML rendering
@@ -89,7 +90,7 @@ class DnDTreeCellRenderer extends DefaultTreeCellRenderer {
 	/**
 	 * Enables and disables the rendering of HTML content in this renderer.  If enabled, this
 	 * renderer will interpret HTML content when the text this renderer is showing begins with
-	 * <tt>&lt;html&gt;</tt>
+	 * {@code <html>}
 	 *
 	 * @param enable true to enable HTML rendering; false to disable it
 	 */
@@ -168,12 +169,14 @@ class DnDTreeCellRenderer extends DefaultTreeCellRenderer {
 			}
 			else {
 				setBackgroundSelectionColor(defaultSelectionColor);
+				setTextSelectionColor(defaultTextSelectionColor);
 				setBackgroundNonSelectionColor(defaultNonSelectionColor);
 			}
 			setToolTipText(null);
 		}
 		else {
 			setBackgroundSelectionColor(defaultSelectionColor);
+			setTextSelectionColor(defaultTextSelectionColor);
 			setBackgroundNonSelectionColor(defaultNonSelectionColor);
 			setToolTipText(dtree.getToolTipText(node));
 		}
@@ -315,11 +318,9 @@ class DnDTreeCellRenderer extends DefaultTreeCellRenderer {
 	private void loadImages() {
 		// try to load icon images
 		iconMap = new HashMap<>();
-		String[] iconIds =
-			{ DOCS, FRAGMENT, EMPTY_FRAGMENT, VIEWED_FRAGMENT, VIEWED_EMPTY_FRAGMENT,
-				VIEWED_CLOSED_FOLDER, VIEWED_OPEN_FOLDER, VIEWED_CLOSED_FOLDER_WITH_DESC,
-				CLOSED_FOLDER, OPEN_FOLDER,
-			};
+		String[] iconIds = { DOCS, FRAGMENT, EMPTY_FRAGMENT, VIEWED_FRAGMENT, VIEWED_EMPTY_FRAGMENT,
+			VIEWED_CLOSED_FOLDER, VIEWED_OPEN_FOLDER, VIEWED_CLOSED_FOLDER_WITH_DESC, CLOSED_FOLDER,
+			OPEN_FOLDER, };
 		String[] disabledNames = { DISABLED_DOCS, DISABLED_FRAGMENT, DISABLED_EMPTY_FRAGMENT,
 			DISABLED_VIEWED_EMPTY_FRAGMENT, DISABLED_VIEWED_FRAGMENT, DISABLED_VIEWED_CLOSED_FOLDER,
 			DISABLED_VIEWED_OPEN_FOLDER, DISABLED_VIEWED_CLOSED_FOLDER_WITH_DESC,
@@ -328,7 +329,7 @@ class DnDTreeCellRenderer extends DefaultTreeCellRenderer {
 		for (int i = 0; i < iconIds.length; i++) {
 			GIcon icon = new GIcon(iconIds[i]);
 			iconMap.put(iconIds[i], icon);
-			Icon disabledIcon = getDisabledIcon(iconIds[i], icon);
+			Icon disabledIcon = ResourceManager.getDisabledIcon(icon);
 			iconMap.put(disabledNames[i], disabledIcon);
 		}
 	}
@@ -340,16 +341,5 @@ class DnDTreeCellRenderer extends DefaultTreeCellRenderer {
 			return new Dimension(dim.width, dim.height + 2);
 		}
 		return dim;
-	}
-
-	static Icon getDisabledIcon(String imageName, GIcon icon) {
-		Image cutImage = icon.getImageIcon().getImage();
-		BufferedImage bufferedImage = new BufferedImage(cutImage.getWidth(null),
-			cutImage.getHeight(null), BufferedImage.TYPE_INT_ARGB);
-		Graphics2D g2d = bufferedImage.createGraphics();
-		g2d.drawImage(cutImage, 0, 0, null);
-		g2d.setColor(Colors.DISABLED);
-		g2d.fillRect(0, 0, bufferedImage.getWidth(), bufferedImage.getHeight());
-		return ResourceManager.getImageIconFromImage(imageName, bufferedImage);
 	}
 }

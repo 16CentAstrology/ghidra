@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -197,6 +197,8 @@ public class CodeBrowserOptionsTest extends AbstractGhidraHeadedIntegrationTest 
 		assertEquals("Pre-comments Field", groups[idx++]);
 		assertEquals("Register Field", groups[idx++]);
 		assertEquals("Selection Colors", groups[idx++]);
+		assertEquals("Source Map", groups[idx++]);
+		assertEquals("Templates", groups[idx++]);
 		assertEquals("XREFs Field", groups[idx++]);
 	}
 
@@ -351,27 +353,27 @@ public class CodeBrowserOptionsTest extends AbstractGhidraHeadedIntegrationTest 
 		assertEquals("01", btf.getText());
 		assertEquals(3, btf.getNumCols(0));
 		FieldElement fe = btf.getFieldElement(0, 1);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 
 		cb.goToField(addr("0x1001104"), "Bytes", 0, 0);
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals("05 06 07 08", btf.getText());
 		assertEquals(12, btf.getNumCols(0));
 		fe = btf.getFieldElement(0, 1);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 		fe = btf.getFieldElement(0, 3);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 		fe = btf.getFieldElement(0, 6);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 		fe = btf.getFieldElement(0, 9);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 
 		cb.goToField(addr("0x1001108"), "Bytes", 0, 0);
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals("09", btf.getText());
 		assertEquals(3, btf.getNumCols(0));
 		fe = btf.getFieldElement(0, 1);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 	}
 
 	@Test
@@ -393,39 +395,39 @@ public class CodeBrowserOptionsTest extends AbstractGhidraHeadedIntegrationTest 
 		assertEquals("0102 0304", btf.getText());
 		assertEquals(10, btf.getNumCols(0));
 		FieldElement fe = btf.getFieldElement(0, 1);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 		fe = btf.getFieldElement(0, 2);
-		assertColorsEqual(BytesFieldFactory.ALIGNMENT_BYTES_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES_ALIGNMENT, fe.getColor(0));
 		fe = btf.getFieldElement(0, 5);
-		assertColorsEqual(BytesFieldFactory.ALIGNMENT_BYTES_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES_ALIGNMENT, fe.getColor(0));
 		fe = btf.getFieldElement(0, 7);
-		assertColorsEqual(BytesFieldFactory.ALIGNMENT_BYTES_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES_ALIGNMENT, fe.getColor(0));
 
 		cb.goToField(addr("0x1001104"), "Bytes", 0, 0);
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals("0506 0708", btf.getText());
 		assertEquals(10, btf.getNumCols(0));
 		fe = btf.getFieldElement(0, 1);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 		fe = btf.getFieldElement(0, 2);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 		fe = btf.getFieldElement(0, 5);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 		fe = btf.getFieldElement(0, 7);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 
 		cb.goToField(addr("0x1001108"), "Bytes", 0, 0);
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals("090a 0b0c", btf.getText());
 		assertEquals(10, btf.getNumCols(0));
 		fe = btf.getFieldElement(0, 1);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 		fe = btf.getFieldElement(0, 2);
-		assertColorsEqual(BytesFieldFactory.ALIGNMENT_BYTES_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES_ALIGNMENT, fe.getColor(0));
 		fe = btf.getFieldElement(0, 5);
-		assertColorsEqual(BytesFieldFactory.ALIGNMENT_BYTES_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES_ALIGNMENT, fe.getColor(0));
 		fe = btf.getFieldElement(0, 7);
-		assertColorsEqual(BytesFieldFactory.ALIGNMENT_BYTES_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES_ALIGNMENT, fe.getColor(0));
 	}
 
 	@Test
@@ -445,39 +447,39 @@ public class CodeBrowserOptionsTest extends AbstractGhidraHeadedIntegrationTest 
 		assertEquals("01 02 03 04", btf.getText());
 		assertEquals(12, btf.getNumCols(0));
 		FieldElement fe = btf.getFieldElement(0, 1);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 		fe = btf.getFieldElement(0, 3);
-		assertEquals(BytesFieldFactory.ALIGNMENT_BYTES_COLOR, fe.getColor(0));
+		assertEquals(ListingColors.BYTES_ALIGNMENT, fe.getColor(0));
 		fe = btf.getFieldElement(0, 6);
-		assertEquals(BytesFieldFactory.ALIGNMENT_BYTES_COLOR, fe.getColor(0));
+		assertEquals(ListingColors.BYTES_ALIGNMENT, fe.getColor(0));
 		fe = btf.getFieldElement(0, 9);
-		assertEquals(BytesFieldFactory.ALIGNMENT_BYTES_COLOR, fe.getColor(0));
+		assertEquals(ListingColors.BYTES_ALIGNMENT, fe.getColor(0));
 
 		cb.goToField(addr("0x1001104"), "Bytes", 0, 0);
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals("05 06 07 08", btf.getText());
 		assertEquals(12, btf.getNumCols(0));
 		fe = btf.getFieldElement(0, 1);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 		fe = btf.getFieldElement(0, 3);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 		fe = btf.getFieldElement(0, 6);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 		fe = btf.getFieldElement(0, 9);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 
 		cb.goToField(addr("0x1001108"), "Bytes", 0, 0);
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals("09 0a 0b 0c", btf.getText());
 		assertEquals(12, btf.getNumCols(0));
 		fe = btf.getFieldElement(0, 1);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 		fe = btf.getFieldElement(0, 3);
-		assertColorsEqual(BytesFieldFactory.ALIGNMENT_BYTES_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES_ALIGNMENT, fe.getColor(0));
 		fe = btf.getFieldElement(0, 6);
-		assertColorsEqual(BytesFieldFactory.ALIGNMENT_BYTES_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES_ALIGNMENT, fe.getColor(0));
 		fe = btf.getFieldElement(0, 9);
-		assertColorsEqual(BytesFieldFactory.ALIGNMENT_BYTES_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES_ALIGNMENT, fe.getColor(0));
 	}
 
 	@Test
@@ -498,69 +500,69 @@ public class CodeBrowserOptionsTest extends AbstractGhidraHeadedIntegrationTest 
 		assertEquals("01", btf.getText());
 		assertEquals(3, btf.getNumCols(0));
 		FieldElement fe = btf.getFieldElement(0, 1);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 
 		cb.goToField(addr("0x1001201"), "Bytes", 0, 0);
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals("02", btf.getText());
 		assertEquals(3, btf.getNumCols(0));
 		fe = btf.getFieldElement(0, 1);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 
 		cb.goToField(addr("0x1001202"), "Bytes", 0, 0);
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals("03", btf.getText());
 		assertEquals(3, btf.getNumCols(0));
 		fe = btf.getFieldElement(0, 1);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 
 		cb.goToField(addr("0x1001203"), "Bytes", 0, 0);
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals("04", btf.getText());
 		assertEquals(3, btf.getNumCols(0));
 		fe = btf.getFieldElement(0, 1);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 
 		cb.goToField(addr("0x1001204"), "Bytes", 0, 0);
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals("05 06 07 08", btf.getText());
 		assertEquals(12, btf.getNumCols(0));
 		fe = btf.getFieldElement(0, 1);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 		fe = btf.getFieldElement(0, 3);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 		fe = btf.getFieldElement(0, 6);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 		fe = btf.getFieldElement(0, 9);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 
 		cb.goToField(addr("0x1001208"), "Bytes", 0, 0);
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals("09", btf.getText());
 		assertEquals(3, btf.getNumCols(0));
 		fe = btf.getFieldElement(0, 1);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 
 		cb.goToField(addr("0x1001209"), "Bytes", 0, 0);
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals("0a", btf.getText());
 		assertEquals(3, btf.getNumCols(0));
 		fe = btf.getFieldElement(0, 1);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 
 		cb.goToField(addr("0x100120a"), "Bytes", 0, 0);
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals("0b", btf.getText());
 		assertEquals(3, btf.getNumCols(0));
 		fe = btf.getFieldElement(0, 1);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 
 		cb.goToField(addr("0x100120b"), "Bytes", 0, 0);
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals("0c", btf.getText());
 		assertEquals(3, btf.getNumCols(0));
 		fe = btf.getFieldElement(0, 1);
-		assertColorsEqual(BytesFieldFactory.DEFAULT_COLOR, fe.getColor(0));
+		assertColorsEqual(ListingColors.BYTES, fe.getColor(0));
 	}
 
 	@SuppressWarnings("unchecked")
@@ -577,29 +579,16 @@ public class CodeBrowserOptionsTest extends AbstractGhidraHeadedIntegrationTest 
 	@Test
 	public void testEOLCommentsOptions() throws Exception {
 
-		final int SHOW_AUTO = 0;
-		final int SHOW_REF_REPEAT = 1;
-		final int SHOW_REPEATABLE = 2;
-		final int WORD_WRAP = 3;
-		final int MAX_LINES = 4;
-		final int SHOW_REF_ADDR = 5;
-		//final int SHOW_FUNCTION_AUTO = 6;
-		final int SHOW_SEMICOLON = 7;
+		// for readability
+		String EXTRA_COMMENTS = EolCommentFieldFactory.EXTRA_COMMENT_KEY;
+		String WORD_WRAP = EolCommentFieldFactory.ENABLE_WORD_WRAP_KEY;
+		String MAX_LINES = EolCommentFieldFactory.MAX_DISPLAY_LINES_KEY;
+		String SHOW_REF_ADDR = EolCommentFieldFactory.ENABLE_PREPEND_REF_ADDRESS_KEY;
+		String SHOW_SEMICOLON = EolCommentFieldFactory.ENABLE_SHOW_SEMICOLON_KEY;
+
 		showTool(tool);
 		loadProgram();
 		Options options = tool.getOptions(GhidraOptions.CATEGORY_BROWSER_FIELDS);
-		List<String> names = getOptionNames(options, "EOL Comments Field");
-		assertEquals(9, names.size());
-		assertEquals(EolCommentFieldFactory.ENABLE_ALWAYS_SHOW_AUTOMATIC_MSG, names.get(0));
-		assertEquals(EolCommentFieldFactory.ENABLE_ALWAYS_SHOW_REF_REPEATABLE_MSG, names.get(1));
-		assertEquals(EolCommentFieldFactory.ENABLE_ALWAYS_SHOW_REPEATABLE_MSG, names.get(2));
-		assertEquals(EolCommentFieldFactory.ENABLE_WORD_WRAP_MSG, names.get(3));
-		assertEquals(EolCommentFieldFactory.MAX_DISPLAY_LINES_MSG, names.get(4));
-		assertEquals(EolCommentFieldFactory.ENABLE_PREPEND_REF_ADDRESS_MSG, names.get(5));
-		assertEquals(EolCommentFieldFactory.SHOW_FUNCTION_AUTOMITIC_COMMENT_MSG, names.get(6));
-		assertEquals(EolCommentFieldFactory.ENABLE_SHOW_SEMICOLON_MSG, names.get(7));
-		assertEquals(EolCommentFieldFactory.USE_ABBREVIATED_AUTOMITIC_COMMENT_MSG, names.get(8));
-
 		Address callAddress = addr("0x1003fcc");
 		Address callRefAddress = addr("0x1006642");
 		Address otherRefAddress = addr("0x1003fa1");
@@ -636,66 +625,77 @@ public class CodeBrowserOptionsTest extends AbstractGhidraHeadedIntegrationTest 
 			CodeUnit.REPEATABLE_COMMENT, "Mem ref line1.\n" + "");
 		tool.execute(commentRefCmd, program);
 
-		options.setBoolean(names.get(SHOW_AUTO), false);
-		options.setBoolean(names.get(SHOW_REF_REPEAT), false);
-		options.setBoolean(names.get(SHOW_REPEATABLE), false);
-		options.setBoolean(names.get(WORD_WRAP), false);
-		options.setInt(names.get(MAX_LINES), 20);
-		options.setBoolean(names.get(SHOW_REF_ADDR), false);
-		options.setBoolean(names.get(SHOW_SEMICOLON), false);
+		// these values are all DEFAULT, by default; set them in case that changes in the future
+		EolExtraCommentsOption extraCommentsOption = new EolExtraCommentsOption();
+		extraCommentsOption.setRepeatable(EolEnablement.DEFAULT);
+		extraCommentsOption.setRefRepeatable(EolEnablement.DEFAULT);
+		extraCommentsOption.setAutoData(EolEnablement.DEFAULT);
+		extraCommentsOption.setAutoFunction(EolEnablement.DEFAULT);
+
+		options.setCustomOption(EXTRA_COMMENTS, extraCommentsOption);
+		options.setBoolean(WORD_WRAP, false);
+		options.setInt(MAX_LINES, 20);
+		options.setBoolean(SHOW_REF_ADDR, false);
+		options.setBoolean(SHOW_SEMICOLON, false);
+
 		cb.updateNow();
 		cb.goToField(callAddress, "EOL Comment", 0, 0);
 		ListingTextField btf = (ListingTextField) cb.getCurrentField();
 		assertEquals(9, getNumberOfLines(btf));
 
-		options.setBoolean(names.get(WORD_WRAP), true);
+		options.setBoolean(WORD_WRAP, true);
 		cb.updateNow();
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals(18, getNumberOfLines(btf));
 
-		options.setBoolean(names.get(SHOW_SEMICOLON), true);
+		options.setBoolean(SHOW_SEMICOLON, true);
 		cb.updateNow();
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals(20, getNumberOfLines(btf));
 		assertEquals("; ", btf.getFieldElement(1, 0).getText());
 
-		options.setBoolean(names.get(SHOW_REPEATABLE), true);
+		extraCommentsOption.setRepeatable(EolEnablement.ALWAYS);
+		options.setCustomOption(EXTRA_COMMENTS, extraCommentsOption);
 		cb.updateNow();
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals(20, getNumberOfLines(btf));
 		assertEquals("; ", btf.getFieldElement(1, 0).getText());
 
-		options.setBoolean(names.get(SHOW_AUTO), true);
+		extraCommentsOption.setAutoData(EolEnablement.ALWAYS);
+		extraCommentsOption.setAutoFunction(EolEnablement.ALWAYS);
+		options.setCustomOption(EXTRA_COMMENTS, extraCommentsOption);
 		cb.updateNow();
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals(20, getNumberOfLines(btf));
 		assertEquals("; ", btf.getFieldElement(1, 0).getText());
 
-		options.setBoolean(names.get(SHOW_REF_REPEAT), true);
+		extraCommentsOption.setRefRepeatable(EolEnablement.ALWAYS);
+		options.setCustomOption(EXTRA_COMMENTS, extraCommentsOption);
 		cb.updateNow();
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals(20, getNumberOfLines(btf));
 		assertEquals("; ", btf.getFieldElement(1, 0).getText());
 
-		options.setBoolean(names.get(SHOW_REF_ADDR), true);
+		options.setBoolean(EolCommentFieldFactory.ENABLE_PREPEND_REF_ADDRESS_KEY, true);
 		cb.updateNow();
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals(20, getNumberOfLines(btf));
 		assertEquals("; ", btf.getFieldElement(1, 0).getText());
 
-		options.setBoolean(names.get(SHOW_REPEATABLE), false);
+		extraCommentsOption.setRepeatable(EolEnablement.DEFAULT);
+		options.setCustomOption(EXTRA_COMMENTS, extraCommentsOption);
 		cb.updateNow();
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals(20, getNumberOfLines(btf));
 		assertEquals("; ", btf.getFieldElement(1, 0).getText());
 
-		options.setBoolean(names.get(WORD_WRAP), false);
+		options.setBoolean(WORD_WRAP, false);
 		cb.updateNow();
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals(12, getNumberOfLines(btf));
 		assertTrue("; ".equals(btf.getFieldElement(5, 0).getText()));
 
-		options.setBoolean(names.get(SHOW_SEMICOLON), false);
+		options.setBoolean(SHOW_SEMICOLON, false);
 		cb.updateNow();
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals(12, getNumberOfLines(btf));
@@ -703,7 +703,7 @@ public class CodeBrowserOptionsTest extends AbstractGhidraHeadedIntegrationTest 
 		assertEquals("01003fa1", btf.getFieldElement(11, 4).getText());
 		assertEquals("Mem ref line1.", btf.getFieldElement(11, 11).getText());
 
-		options.setBoolean(names.get(SHOW_REF_ADDR), false);
+		options.setBoolean(SHOW_REF_ADDR, false);
 		cb.updateNow();
 		btf = (ListingTextField) cb.getCurrentField();
 		assertEquals(11, getNumberOfLines(btf));
@@ -728,12 +728,12 @@ public class CodeBrowserOptionsTest extends AbstractGhidraHeadedIntegrationTest 
 
 		options.setBoolean(names.get(0), false);
 		cb.updateNow();
-		waitForPostedSwingRunnables();
+		waitForSwing();
 
 		assertFalse(cb.goToField(addr("0x10048a3"), "Label", 0, 0));
 		options.setBoolean(names.get(0), true);
 		cb.updateNow();
-		waitForPostedSwingRunnables();
+		waitForSwing();
 		assertTrue(cb.goToField(addr("0x10048a3"), "Label", 0, 0));
 		ListingTextField btf = (ListingTextField) cb.getCurrentField();
 		assertEquals("doStuff", btf.getText());
@@ -746,7 +746,7 @@ public class CodeBrowserOptionsTest extends AbstractGhidraHeadedIntegrationTest 
 		loadProgram();
 		Options options = tool.getOptions(GhidraOptions.CATEGORY_BROWSER_FIELDS);
 		List<String> names = getOptionNames(options, "Operands Field");
-		assertEquals(15, names.size());
+		assertEquals(16, names.size());
 		assertEquals("Operands Field.Add Space After Separator", names.get(0));
 		assertEquals("Operands Field.Always Show Primary Reference", names.get(1));
 		assertEquals("Operands Field.Display Abbreviated Default Label Names", names.get(2));
@@ -762,10 +762,10 @@ public class CodeBrowserOptionsTest extends AbstractGhidraHeadedIntegrationTest 
 		assertEquals("Operands Field.Show Block Names", names.get(12));
 		assertEquals("Operands Field.Show Offcut Information", names.get(13));
 		assertEquals("Operands Field.Underline References", names.get(14));
+		assertEquals("Operands Field.Wrap on Semicolons", names.get(15));
 
-		NamespaceWrappedOption namespaceOption =
-			(NamespaceWrappedOption) options.getCustomOption(names.get(3),
-				new NamespaceWrappedOption());
+		NamespaceWrappedOption namespaceOption = (NamespaceWrappedOption) options
+				.getCustomOption(names.get(3), new NamespaceWrappedOption());
 
 		assertTrue(cb.goToField(addr("0x100eee0"), "Address", 0, 0));
 		ListingTextField btf = (ListingTextField) cb.getCurrentField();
@@ -1007,13 +1007,16 @@ public class CodeBrowserOptionsTest extends AbstractGhidraHeadedIntegrationTest 
 				List<HelpLocation> nestedHelp = getParentHelpLocations(options, name);
 				for (HelpLocation help : nestedHelp) {
 					if (help != null && !isValidHelpLocation(help)) {
-						missing.add("Bad help location: " + help.toString());
+						missing.add("Bad parent help for path: " + options.getName() + "." + name +
+							"; help: " + help.toString() + "\nMake sure your options parent node " +
+							"has a help location set, in addition to the individual options " +
+							"node");
 					}
 				}
 
 				// it has a help location; is it valid?
 				if (hl != null && !isValidHelpLocation(hl)) {
-					missing.add(name + "." + name);
+					missing.add(options.getName() + "." + name);
 				}
 			}
 		}

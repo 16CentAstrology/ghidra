@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,6 +19,7 @@ import static ghidra.util.WebColors.*;
 
 import java.awt.Color;
 import java.awt.Component;
+import java.util.List;
 import java.util.Set;
 
 import javax.swing.plaf.ComponentUI;
@@ -58,11 +59,6 @@ public class StubThemeManager extends ThemeManager {
 		addPalette("white", WHITE);
 		addPalette("yellow", YELLOW);
 
-	}
-
-	@Override
-	public void reloadApplicationDefaults() {
-		throw new UnsupportedOperationException();
 	}
 
 	@Override
@@ -121,7 +117,7 @@ public class StubThemeManager extends ThemeManager {
 	}
 
 	@Override
-	public Set<GTheme> getSupportedThemes() {
+	public List<GTheme> getSupportedThemes() {
 		throw new UnsupportedOperationException();
 	}
 
@@ -186,6 +182,11 @@ public class StubThemeManager extends ThemeManager {
 	}
 
 	@Override
+	public boolean isUsingAquaUI() {
+		return false;
+	}
+
+	@Override
 	public boolean isUsingNimbusUI() {
 		return false;
 	}
@@ -215,21 +216,21 @@ public class StubThemeManager extends ThemeManager {
 	}
 
 	@Override
-	protected ThemeDefaultsProvider getThemeDefaultsProvider() {
-		return new ThemeDefaultsProvider() {
+	protected ApplicationThemeDefaults loadApplicationDefaults() {
+		return new ApplicationThemeDefaults() {
 
 			@Override
-			public GThemeValueMap getDefaults() {
+			public GThemeValueMap getLightValues() {
 				return null;
 			}
 
 			@Override
-			public GThemeValueMap getDarkDefaults() {
+			public GThemeValueMap getDarkValues() {
 				return null;
 			}
 
 			@Override
-			public GThemeValueMap getLookAndFeelDefaults(LafType lafType) {
+			public GThemeValueMap getLookAndFeelValues(LafType lafType) {
 				return null;
 			}
 

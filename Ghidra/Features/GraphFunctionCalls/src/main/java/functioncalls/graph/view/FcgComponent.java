@@ -32,21 +32,18 @@ import ghidra.graph.viewer.vertex.VisualVertexRenderer;
  */
 public class FcgComponent extends GraphComponent<FcgVertex, FcgEdge, FunctionCallGraph> {
 
-	// our parent stores a reference to this graph, but we do it here to maintain its type
-	private FunctionCallGraph fcGraph;
-
 	private FcgVertexPaintTransformer vertexPaintTransformer =
 		new FcgVertexPaintTransformer(FcgVertex.DEFAULT_VERTEX_SHAPE_COLOR);
 
 	private FcgEdgePaintTransformer edgePaintTransformer =
-		new FcgEdgePaintTransformer(new GColor("color.bg.fcg.edge.primary.direct"),
-			new GColor("color.bg.fcg.edge.primary.indirect"));
+		new FcgEdgePaintTransformer(new GColor("color.bg.plugin.fcg.edge.primary.direct"),
+			new GColor("color.bg.plugin.fcg.edge.primary.indirect"));
 	private FcgEdgePaintTransformer selectedEdgePaintTransformer =
-		new FcgEdgePaintTransformer(new GColor("color.bg.fcg.edge.primary.direct.selected"),
-			new GColor("color.bg.fcg.edge.primary.indirect.selected"));
+		new FcgEdgePaintTransformer(new GColor("color.bg.plugin.fcg.edge.primary.direct.selected"),
+			new GColor("color.bg.plugin.fcg.edge.primary.indirect.selected"));
 	private FcgEdgePaintTransformer satelliteEdgePaintTransformer =
-		new FcgEdgePaintTransformer(new GColor("color.bg.fcg.edge.satellite.direct"),
-			new GColor("color.bg.fcg.edge.satellite.indirect"));
+		new FcgEdgePaintTransformer(new GColor("color.bg.plugin.fcg.edge.satellite.direct"),
+			new GColor("color.bg.plugin.fcg.edge.satellite.indirect"));
 
 	FcgComponent(FunctionCallGraph g) {
 		setGraph(g);
@@ -55,7 +52,7 @@ public class FcgComponent extends GraphComponent<FcgVertex, FcgEdge, FunctionCal
 
 	@Override
 	protected FcgVertex getInitialVertex() {
-		return fcGraph.getSource();
+		return graph.getSource();
 	}
 
 	@Override
@@ -89,13 +86,6 @@ public class FcgComponent extends GraphComponent<FcgVertex, FcgEdge, FunctionCal
 		VisualEdgeRenderer<FcgVertex, FcgEdge> edgeRenderer =
 			(VisualEdgeRenderer<FcgVertex, FcgEdge>) renderer.getEdgeRenderer();
 		edgeRenderer.setDrawColorTransformer(satelliteEdgePaintTransformer);
-	}
-
-	@Override
-	public void dispose() {
-
-		fcGraph = null;
-		super.dispose();
 	}
 
 	@Override // open access for testing

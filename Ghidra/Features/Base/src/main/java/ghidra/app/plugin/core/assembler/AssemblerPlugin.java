@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,7 +18,6 @@ package ghidra.app.plugin.core.assembler;
 import docking.ActionContext;
 import ghidra.app.CorePluginPackage;
 import ghidra.app.context.ListingActionContext;
-import ghidra.app.plugin.PluginCategoryNames;
 import ghidra.app.plugin.ProgramPlugin;
 import ghidra.app.plugin.assembler.Assemblers;
 import ghidra.docking.settings.Settings;
@@ -43,7 +42,7 @@ import ghidra.program.model.mem.MemBuffer;
 @PluginInfo(
 	status = PluginStatus.RELEASED,
 	packageName = CorePluginPackage.NAME,
-	category = PluginCategoryNames.PATCHING,
+	category = "Patching",
 	shortDescription = "Assembler",
 	description = "This plugin provides functionality for assembly patching. " +
 		"The assembler supports most processor languages also supported by the " +
@@ -64,29 +63,39 @@ public class AssemblerPlugin extends ProgramPlugin {
 	}
 
 	private void createActions() {
-		// Debugger provides its own "Patch Instruction" action
+		// Debugger provides its own "Patch" actions
 		patchInstructionAction = new PatchInstructionAction(this) {
 			@Override
 			public boolean isEnabledForContext(ActionContext context) {
-				if (!super.isEnabledForContext(context)) {
-					return false;
-				}
-				ListingActionContext lac = (ListingActionContext) context;
-				return !lac.getNavigatable().isDynamic();
+				return super.isEnabledForContext(context) &&
+					context instanceof ListingActionContext lac &&
+					!lac.getNavigatable().isDynamic();
 			}
 
 			@Override
 			public boolean isAddToPopup(ActionContext context) {
-				if (!super.isAddToPopup(context)) {
-					return false;
-				}
-				ListingActionContext lac = (ListingActionContext) context;
-				return !lac.getNavigatable().isDynamic();
+				return super.isAddToPopup(context) &&
+					context instanceof ListingActionContext lac &&
+					!lac.getNavigatable().isDynamic();
 			}
 		};
 		tool.addAction(patchInstructionAction);
 
-		patchDataAction = new PatchDataAction(this);
+		patchDataAction = new PatchDataAction(this) {
+			@Override
+			public boolean isEnabledForContext(ActionContext context) {
+				return super.isEnabledForContext(context) &&
+					context instanceof ListingActionContext lac &&
+					!lac.getNavigatable().isDynamic();
+			}
+
+			@Override
+			public boolean isAddToPopup(ActionContext context) {
+				return super.isAddToPopup(context) &&
+					context instanceof ListingActionContext lac &&
+					!lac.getNavigatable().isDynamic();
+			}
+		};
 		tool.addAction(patchDataAction);
 	}
 

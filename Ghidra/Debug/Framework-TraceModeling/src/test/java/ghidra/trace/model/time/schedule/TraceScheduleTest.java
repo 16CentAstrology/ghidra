@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -22,6 +22,7 @@ import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 
+import db.Transaction;
 import ghidra.app.plugin.processors.sleigh.SleighLanguage;
 import ghidra.program.model.lang.LanguageID;
 import ghidra.program.model.lang.LanguageNotFoundException;
@@ -29,7 +30,6 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest;
 import ghidra.test.ToyProgramBuilder;
 import ghidra.trace.database.ToyDBTraceBuilder;
 import ghidra.trace.model.thread.TraceThread;
-import ghidra.util.database.UndoableTransaction;
 import ghidra.util.task.TaskMonitor;
 
 public class TraceScheduleTest extends AbstractGhidraHeadlessIntegrationTest {
@@ -224,19 +224,30 @@ public class TraceScheduleTest extends AbstractGhidraHeadlessIntegrationTest {
 		expectU("0:10", "1:10");
 		expectU("0:t0-10", "0:t1-10");
 		// We don't know how many p-code steps complete an instruction step
-		expectU("0:t0-10.1", "0:t0-11");
+		// But we need at least 2 to actually enter the instruction
+		expectU("0:t0-10.2", "0:t0-11");
 		expectU("0:t0-10;t1-5", "0:t0-11;t1-5");
 
 		expectR("0:t0-10", "0:t0-11");
 		expectR("0:t0-10", "0:t0-10;t1-5");
 		expectR("0:t0-10", "0:t0-11;t1-5");
-		expectR("0:t0-10", "0:t0-10.1");
-		expectR("0:t0-10", "0:t0-11.1");
-		expectR("0:t0-10", "0:t0-10;t1-5.1");
-		expectR("0:t0-10", "0:t0-11;t1-5.1");
+		expectR("0:t0-10", "0:t0-10.2");
+		expectR("0:t0-10", "0:t0-11.2");
+		expectR("0:t0-10", "0:t0-10;t1-5.2");
+		expectR("0:t0-10", "0:t0-11;t1-5.2");
 
 		expectE("0:t0-10", "0:t0-10");
-		expectE("0:t0-10.1", "0:t0-10.1");
+		expectE("0:t0-10.2", "0:t0-10.2");
+	}
+
+	@Test
+	public void testCompare2() {
+		TraceSchedule timeL = TraceSchedule.parse("0:t0-2.5");
+		TraceSchedule timeR = TraceSchedule.parse("0:t0-3");
+
+		assertEquals(CompareResult.UNREL_LT, timeL.compareSchedule(timeR));
+		assertEquals(CompareResult.REL_LT, timeL.assumeRecorded().compareSchedule(timeR));
+		assertEquals(CompareResult.UNREL_LT, timeL.compareSchedule(timeR.assumeRecorded()));
 	}
 
 	public String strRelativize(String fromSpec, String toSpec) {
@@ -269,7 +280,7 @@ public class TraceScheduleTest extends AbstractGhidraHeadlessIntegrationTest {
 		TraceSchedule time = TraceSchedule.parse("1:4;t0-3;t1-2.1");
 		try (ToyDBTraceBuilder tb = new ToyDBTraceBuilder("test", ToyProgramBuilder._TOY64_BE)) {
 			TraceThread t2;
-			try (UndoableTransaction tid = tb.startTransaction()) {
+			try (Transaction tx = tb.startTransaction()) {
 				tb.trace.getThreadManager().createThread("Threads[0]", 0);
 				tb.trace.getThreadManager().createThread("Threads[1]", 0);
 				t2 = tb.trace.getThreadManager().createThread("Threads[2]", 0);
@@ -298,7 +309,7 @@ public class TraceScheduleTest extends AbstractGhidraHeadlessIntegrationTest {
 		TraceSchedule time = TraceSchedule.parse("1:4;t0-s3;t1-2.s1");
 		try (ToyDBTraceBuilder tb = new ToyDBTraceBuilder("test", ToyProgramBuilder._TOY64_BE)) {
 			TraceThread t2;
-			try (UndoableTransaction tid = tb.startTransaction()) {
+			try (Transaction tx = tb.startTransaction()) {
 				tb.trace.getThreadManager().createThread("Threads[0]", 0);
 				tb.trace.getThreadManager().createThread("Threads[1]", 0);
 				t2 = tb.trace.getThreadManager().createThread("Threads[2]", 0);
@@ -327,7 +338,7 @@ public class TraceScheduleTest extends AbstractGhidraHeadlessIntegrationTest {
 		TraceSchedule time = TraceSchedule.parse("1:{r0=0x1234};4");
 		try (ToyDBTraceBuilder tb = new ToyDBTraceBuilder("test", "Toy:BE:64:default")) {
 			TraceThread t2;
-			try (UndoableTransaction tid = tb.startTransaction()) {
+			try (Transaction tx = tb.startTransaction()) {
 				tb.trace.getThreadManager().createThread("Threads[0]", 0);
 				tb.trace.getThreadManager().createThread("Threads[1]", 0);
 				t2 = tb.trace.getThreadManager().createThread("Threads[2]", 0);
@@ -350,7 +361,7 @@ public class TraceScheduleTest extends AbstractGhidraHeadlessIntegrationTest {
 		TestMachine machine = new TestMachine();
 		TraceSchedule time = TraceSchedule.parse("1:4;t0-3;t1-2.1");
 		try (ToyDBTraceBuilder tb = new ToyDBTraceBuilder("test", "Toy:BE:64:default")) {
-			try (UndoableTransaction tid = tb.startTransaction()) {
+			try (Transaction tx = tb.startTransaction()) {
 				tb.trace.getThreadManager().createThread("Threads[0]", 0);
 				tb.trace.getThreadManager().createThread("Threads[1]", 0);
 				tb.trace.getThreadManager().createThread("Threads[2]", 0);
@@ -366,7 +377,7 @@ public class TraceScheduleTest extends AbstractGhidraHeadlessIntegrationTest {
 		TraceSchedule time = TraceSchedule.parse("1:4;t0-3;t5-2.1");
 		try (ToyDBTraceBuilder tb = new ToyDBTraceBuilder("test", "Toy:BE:64:default")) {
 			TraceThread t2;
-			try (UndoableTransaction tid = tb.startTransaction()) {
+			try (Transaction tx = tb.startTransaction()) {
 				tb.trace.getThreadManager().createThread("Threads[0]", 0);
 				tb.trace.getThreadManager().createThread("Threads[1]", 0);
 				t2 = tb.trace.getThreadManager().createThread("Threads[2]", 0);
@@ -382,7 +393,7 @@ public class TraceScheduleTest extends AbstractGhidraHeadlessIntegrationTest {
 		TraceSchedule time = TraceSchedule.parse("1:4;t0-3;t1-2.1");
 		try (ToyDBTraceBuilder tb = new ToyDBTraceBuilder("test", "Toy:BE:64:default")) {
 			TraceThread t2;
-			try (UndoableTransaction tid = tb.startTransaction()) {
+			try (Transaction tx = tb.startTransaction()) {
 				tb.trace.getThreadManager().createThread("Threads[0]", 0);
 				tb.trace.getThreadManager().createThread("Threads[1]", 0);
 				t2 = tb.trace.getThreadManager().createThread("Threads[2]", 0);
@@ -405,7 +416,7 @@ public class TraceScheduleTest extends AbstractGhidraHeadlessIntegrationTest {
 		TraceSchedule time = TraceSchedule.parse("1:4;t0-3;t1-2.1");
 		try (ToyDBTraceBuilder tb = new ToyDBTraceBuilder("test", "Toy:BE:64:default")) {
 			TraceThread t2;
-			try (UndoableTransaction tid = tb.startTransaction()) {
+			try (Transaction tx = tb.startTransaction()) {
 				tb.trace.getThreadManager().createThread("Threads[0]", 0);
 				tb.trace.getThreadManager().createThread("Threads[1]", 0);
 				t2 = tb.trace.getThreadManager().createThread("Threads[2]", 0);
@@ -426,7 +437,7 @@ public class TraceScheduleTest extends AbstractGhidraHeadlessIntegrationTest {
 		TraceSchedule time = TraceSchedule.parse("1:4;t0-3;t1-2.1");
 		try (ToyDBTraceBuilder tb = new ToyDBTraceBuilder("test", "Toy:BE:64:default")) {
 			TraceThread t2;
-			try (UndoableTransaction tid = tb.startTransaction()) {
+			try (Transaction tx = tb.startTransaction()) {
 				tb.trace.getThreadManager().createThread("Threads[0]", 0);
 				tb.trace.getThreadManager().createThread("Threads[1]", 0);
 				t2 = tb.trace.getThreadManager().createThread("Threads[2]", 0);
@@ -441,7 +452,7 @@ public class TraceScheduleTest extends AbstractGhidraHeadlessIntegrationTest {
 		// TODO: Should parse require coalescing? Can't without passing a language...
 		try (ToyDBTraceBuilder tb = new ToyDBTraceBuilder("test", "Toy:BE:64:default")) {
 			TraceThread thread;
-			try (UndoableTransaction tid = tb.startTransaction()) {
+			try (Transaction tx = tb.startTransaction()) {
 				thread = tb.trace.getThreadManager().createThread("Threads[0]", 0);
 			}
 			TraceSchedule time = TraceSchedule.parse("0");
@@ -458,5 +469,38 @@ public class TraceScheduleTest extends AbstractGhidraHeadlessIntegrationTest {
 			assertEquals("0:t0-{*:8 0xcafe:8=0xdead112233445566};t0-{*:2 0xcb06:8=0x7788};" +
 				"t0-{r0=0x200000001};t0-{r1l=0x3}", time.toString());
 		}
+	}
+
+	@Test
+	public void testDiffersOnlyByPatch() throws Exception {
+		assertTrue(TraceSchedule.parse("1").differsOnlyByPatch(TraceSchedule.parse("1")));
+		assertTrue(TraceSchedule.parse("1:1").differsOnlyByPatch(TraceSchedule.parse("1:1")));
+		assertTrue(TraceSchedule.parse("1:1.1").differsOnlyByPatch(TraceSchedule.parse("1:1.1")));
+		assertTrue(TraceSchedule.parse("1:1;{r0=1}")
+				.differsOnlyByPatch(TraceSchedule.parse("1:1;{r0=1}")));
+		assertTrue(TraceSchedule.parse("1:1.1;{r0=1}")
+				.differsOnlyByPatch(TraceSchedule.parse("1:1.1;{r0=1}")));
+
+		assertFalse(TraceSchedule.parse("1").differsOnlyByPatch(TraceSchedule.parse("1:1")));
+		assertFalse(TraceSchedule.parse("1:1").differsOnlyByPatch(TraceSchedule.parse("1")));
+
+		assertFalse(TraceSchedule.parse("1:1").differsOnlyByPatch(TraceSchedule.parse("1:2")));
+		assertFalse(TraceSchedule.parse("1:2").differsOnlyByPatch(TraceSchedule.parse("1:1")));
+
+		assertFalse(TraceSchedule.parse("1:1").differsOnlyByPatch(TraceSchedule.parse("1:1.1")));
+		assertFalse(TraceSchedule.parse("1:1.1").differsOnlyByPatch(TraceSchedule.parse("1:1")));
+
+		assertTrue(TraceSchedule.parse("1").differsOnlyByPatch(TraceSchedule.parse("1:{r0=1}")));
+		assertFalse(TraceSchedule.parse("1:{r0=1}").differsOnlyByPatch(TraceSchedule.parse("1")));
+
+		assertTrue(
+			TraceSchedule.parse("1:1").differsOnlyByPatch(TraceSchedule.parse("1:1;{r0=1}")));
+		assertFalse(
+			TraceSchedule.parse("1:1;{r0=1}").differsOnlyByPatch(TraceSchedule.parse("1:1")));
+
+		assertTrue(
+			TraceSchedule.parse("1:1.1").differsOnlyByPatch(TraceSchedule.parse("1:1.1;{r0=1}")));
+		assertFalse(
+			TraceSchedule.parse("1:1.1;{r0=1}").differsOnlyByPatch(TraceSchedule.parse("1:1.1")));
 	}
 }

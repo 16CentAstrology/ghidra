@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -27,6 +27,7 @@ import docking.DockingUtils;
 import docking.action.*;
 import docking.menu.ActionState;
 import docking.menu.MultiStateDockingAction;
+import docking.options.OptionsService;
 import docking.widgets.EventTrigger;
 import docking.widgets.OptionDialog;
 import edu.uci.ics.jung.graph.Graph;
@@ -42,7 +43,6 @@ import ghidra.app.plugin.core.functiongraph.mvc.FGController;
 import ghidra.app.plugin.core.functiongraph.mvc.FGData;
 import ghidra.framework.options.SaveState;
 import ghidra.framework.plugintool.PluginTool;
-import ghidra.framework.plugintool.util.OptionsService;
 import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.address.AddressSetView;
 import ghidra.program.model.listing.Function;
@@ -61,13 +61,13 @@ class FGActionManager {
 	private static final String LAYOUT_CLASS_NAME = "LAYOUT_CLASS_NAME";
 
 	//@formatter:off
-	private static final Icon GROUP_ICON = new GIcon("icon.functiongraph.action.vertex.group");
-	private static final Icon GROUP_ADD_ICON = new GIcon("icon.functiongraph.action.vertex.group.add");
-	private static final Icon UNGROUP_ICON = new GIcon("icon.functiongraph.action.vertex.ungroup");
+	private static final Icon GROUP_ICON = new GIcon("icon.plugin.functiongraph.action.vertex.group");
+	private static final Icon GROUP_ADD_ICON = new GIcon("icon.plugin.functiongraph.action.vertex.group.add");
+	private static final Icon UNGROUP_ICON = new GIcon("icon.plugin.functiongraph.action.vertex.ungroup");
 
-	private static final Icon EDIT_ICON = new GIcon("icon.functiongraph.action.vertex.edit.label");
-	private static final Icon FULL_SCREEN_ICON = new GIcon("icon.functiongraph.action.vertex.full.screen");
-	private static final Icon XREFS_ICON = new GIcon("icon.functiongraph.action.vertex.full.screen");
+	private static final Icon EDIT_ICON = new GIcon("icon.plugin.functiongraph.action.vertex.edit.label");
+	private static final Icon FULL_SCREEN_ICON = new GIcon("icon.plugin.functiongraph.action.vertex.full.screen");
+	private static final Icon XREFS_ICON = new GIcon("icon.plugin.functiongraph.action.vertex.full.screen");
 	//@formatter:off
 
 	private PluginTool tool;
@@ -127,7 +127,7 @@ class FGActionManager {
 
 		// subgroup 3, after the refresh and layout actions
 		chooseFormatsAction.setToolBarData(new ToolBarData(
-			new GIcon("icon.functiongraph.action.vertex.edit.format"), layoutGroup, "3"));
+			new GIcon("icon.plugin.functiongraph.action.vertex.edit.format"), layoutGroup, "3"));
 		chooseFormatsAction.setHelpLocation(
 			new HelpLocation("FunctionGraphPlugin", "Function_Graph_Action_Format"));
 
@@ -144,7 +144,7 @@ class FGActionManager {
 				}
 			};
 		homeAction.setToolBarData(
-			new ToolBarData(new GIcon("icon.functiongraph.action.viewer.home"), toolBarGroup1));
+			new ToolBarData(new GIcon("icon.plugin.functiongraph.action.viewer.home"), toolBarGroup1));
 		homeAction.setHelpLocation(
 			new HelpLocation("FunctionGraphPlugin", "Function_Graph_Action_Home"));
 
@@ -166,7 +166,7 @@ class FGActionManager {
 			}
 		};
 		resetGraphAction.setToolBarData(
-			new ToolBarData(new GIcon("icon.functiongraph.action.viewer.reset"), layoutGroup, "1"));
+			new ToolBarData(new GIcon("icon.plugin.functiongraph.action.viewer.reset"), layoutGroup, "1"));
 		resetGraphAction.setDescription("<html>Reloads the graph--All positioning and grouping " +
 			"information is <b>lost</b>");
 		resetGraphAction.setHelpLocation(
@@ -659,10 +659,10 @@ class FGActionManager {
 				return controller.getGraphedFunction() != null;
 			}
 		};
-		Icon image = new GIcon("icon.functiongraph.action.viewer.clone");
+		Icon image = new GIcon("icon.plugin.functiongraph.action.viewer.clone");
 		cloneAction.setToolBarData(new ToolBarData(image, toolbarEndGroup));
 		cloneAction.setDescription(
-			"Create a snapshot (disconnected) copy of this Function Graph window ");
+			"Create a snapshot (disconnected) copy of this Function Graph window");
 		cloneAction.setHelpLocation(new HelpLocation("Snapshots", "Snapshots_Start"));
 		cloneAction.setHelpLocation(
 			new HelpLocation("FunctionGraphPlugin", "Function_Graph_Action_Snapshot"));
@@ -889,7 +889,7 @@ class FGActionManager {
 
 		// This icon will display when the action has no icon.   This allows actions with no good
 		// icon to be blank in the menu, but to use this icon on the toolbar.
-		layoutAction.setDefaultIcon(new GIcon("icon.functiongraph.action.viewer.layout"));
+		layoutAction.setDefaultIcon(new GIcon("icon.plugin.functiongraph.action.viewer.layout"));
 
 		List<ActionState<FGLayoutProvider>> actionStates = loadActionStatesForLayoutProviders();
 		for (ActionState<FGLayoutProvider> actionState : actionStates) {
@@ -911,13 +911,11 @@ class FGActionManager {
 	private List<ActionState<FGLayoutProvider>> createActionStates(
 			List<FGLayoutProvider> layoutProviders) {
 		List<ActionState<FGLayoutProvider>> list = new ArrayList<>();
-		HelpLocation layoutHelpLocation =
-			new HelpLocation("FunctionGraphPlugin", "Function_Graph_Action_Layout");
 		for (FGLayoutProvider layout : layoutProviders) {
 
 			ActionState<FGLayoutProvider> layoutState =
 				new ActionState<>(layout.getLayoutName(), layout.getActionIcon(), layout);
-			layoutState.setHelpLocation(layoutHelpLocation);
+			layoutState.setHelpLocation(layout.getHelpLocation());
 			list.add(layoutState);
 		}
 
@@ -944,14 +942,14 @@ class FGActionManager {
 	private void addVertexHoverModeAction(String group) {
 
 		//@formatter:off
-		Icon pathsToVertexIcon = new GIcon("icon.functiongraph.action.viewer.vertex.hover.paths.to.vertex");
-		Icon pathsFromVertexIcon = new GIcon("icon.functiongraph.action.viewer.vertex.hover.paths.from.vertex");
-		Icon pathsFromToVertexIcon = new GIcon("icon.functiongraph.action.viewer.vertex.hover.paths.from.to.vertex");
-		Icon pathsIcon = new GIcon("icon.functiongraph.action.viewer.vertex.hover.paths.all");
-		Icon cyclesIcon = new GIcon("icon.functiongraph.action.viewer.vertex.hover.cycles");
-		Icon forwardScopedIcon = new GIcon("icon.functiongraph.action.viewer.vertex.hover.scoped.flow.forward");
-		Icon reverseScopedIcon = new GIcon("icon.functiongraph.action.viewer.vertex.hover.scoped.flow.reverse");
-		Icon nothingIcon = new GIcon("icon.functiongraph.action.viewer.vertex.hover.off");
+		Icon pathsToVertexIcon = new GIcon("icon.plugin.functiongraph.action.viewer.vertex.hover.paths.to.vertex");
+		Icon pathsFromVertexIcon = new GIcon("icon.plugin.functiongraph.action.viewer.vertex.hover.paths.from.vertex");
+		Icon pathsFromToVertexIcon = new GIcon("icon.plugin.functiongraph.action.viewer.vertex.hover.paths.from.to.vertex");
+		Icon pathsIcon = new GIcon("icon.plugin.functiongraph.action.viewer.vertex.hover.paths.all");
+		Icon cyclesIcon = new GIcon("icon.plugin.functiongraph.action.viewer.vertex.hover.cycles");
+		Icon forwardScopedIcon = new GIcon("icon.plugin.functiongraph.action.viewer.vertex.hover.scoped.flow.forward");
+		Icon reverseScopedIcon = new GIcon("icon.plugin.functiongraph.action.viewer.vertex.hover.scoped.flow.reverse");
+		Icon nothingIcon = new GIcon("icon.plugin.functiongraph.action.viewer.vertex.hover.off");
 		//@formatter:off
 
 		HelpLocation pathHelpLocation =
@@ -1020,16 +1018,16 @@ class FGActionManager {
 	}
 
 	private void addVertexSelectedModeAction(String group) {
-		
+
 		//@formatter:off
-		Icon pathsToVertexIcon = new GIcon("icon.functiongraph.action.viewer.vertex.hover.paths.to.vertex");
-		Icon pathsFromVertexIcon = new GIcon("icon.functiongraph.action.viewer.vertex.hover.paths.from.vertex");
-		Icon pathsFromToVertexIcon = new GIcon("icon.functiongraph.action.viewer.vertex.hover.paths.from.to.vertex");
-		Icon cyclesIcon = new GIcon("icon.functiongraph.action.viewer.vertex.hover.cycles");
-		Icon allCyclesIcon = new GIcon("icon.functiongraph.action.viewer.vertex.hover.cycles.all");
-		Icon forwardScopedIcon = new GIcon("icon.functiongraph.action.viewer.vertex.hover.scoped.flow.forward");
-		Icon reverseScopedIcon = new GIcon("icon.functiongraph.action.viewer.vertex.hover.scoped.flow.reverse");
-		Icon nothingIcon = new GIcon("icon.functiongraph.action.viewer.vertex.hover.off");
+		Icon pathsToVertexIcon = new GIcon("icon.plugin.functiongraph.action.viewer.vertex.hover.paths.to.vertex");
+		Icon pathsFromVertexIcon = new GIcon("icon.plugin.functiongraph.action.viewer.vertex.hover.paths.from.vertex");
+		Icon pathsFromToVertexIcon = new GIcon("icon.plugin.functiongraph.action.viewer.vertex.hover.paths.from.to.vertex");
+		Icon cyclesIcon = new GIcon("icon.plugin.functiongraph.action.viewer.vertex.hover.cycles");
+		Icon allCyclesIcon = new GIcon("icon.plugin.functiongraph.action.viewer.vertex.hover.cycles.all");
+		Icon forwardScopedIcon = new GIcon("icon.plugin.functiongraph.action.viewer.vertex.hover.scoped.flow.forward");
+		Icon reverseScopedIcon = new GIcon("icon.plugin.functiongraph.action.viewer.vertex.hover.scoped.flow.reverse");
+		Icon nothingIcon = new GIcon("icon.plugin.functiongraph.action.viewer.vertex.hover.off");
 		//@formatter:off
 
 

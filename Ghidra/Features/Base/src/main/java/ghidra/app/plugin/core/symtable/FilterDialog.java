@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,14 +18,15 @@ package ghidra.app.plugin.core.symtable;
 import java.awt.*;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.swing.*;
 
 import org.jdom.Element;
 
 import docking.ComponentProvider;
-import docking.DialogComponentProvider;
+import docking.ReusableDialogComponentProvider;
 import docking.widgets.checkbox.GCheckBox;
 import docking.widgets.label.GHtmlLabel;
 import docking.widgets.label.GIconLabel;
@@ -35,7 +36,7 @@ import ghidra.util.*;
 import ghidra.util.layout.*;
 import resources.Icons;
 
-public class FilterDialog extends DialogComponentProvider {
+public class FilterDialog extends ReusableDialogComponentProvider {
 	private NewSymbolFilter filter;
 	private JPanel advancedPanel;
 	private JPanel advancedFilterPanel;
@@ -48,7 +49,7 @@ public class FilterDialog extends DialogComponentProvider {
 	private PluginTool tool;
 
 	public FilterDialog(PluginTool tool) {
-		super("Symbol Table Filter", false);
+		super("Symbol Table Filter", false, true, true, false);
 		this.tool = tool;
 		filter = new NewSymbolFilter();
 		addWorkPanel(buildWorkPanel());
@@ -58,7 +59,6 @@ public class FilterDialog extends DialogComponentProvider {
 		setHelpLocation(new HelpLocation(HelpTopics.SYMBOL_TABLE, "Set Filter"));
 		initCheckBoxes();
 		setRememberSize(false);
-
 	}
 
 	@Override
@@ -86,9 +86,7 @@ public class FilterDialog extends DialogComponentProvider {
 	private void initCheckBoxes() {
 		setChanged(false);
 		ignoreCallbacks = true;
-		Iterator<String> it = checkBoxMap.keySet().iterator();
-		while (it.hasNext()) {
-			String filterName = it.next();
+		for (String filterName : checkBoxMap.keySet()) {
 			JCheckBox cb = checkBoxMap.get(filterName);
 			cb.setSelected(filter.isActive(filterName));
 		}

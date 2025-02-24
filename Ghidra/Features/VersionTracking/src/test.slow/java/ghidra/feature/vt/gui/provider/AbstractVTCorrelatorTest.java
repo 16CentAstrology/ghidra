@@ -5,9 +5,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,8 +16,7 @@
  */
 package ghidra.feature.vt.gui.provider;
 
-import static ghidra.feature.vt.db.VTTestUtils.createProgramCorrelator;
-import static ghidra.feature.vt.db.VTTestUtils.createRandomMatch;
+import static ghidra.feature.vt.db.VTTestUtils.*;
 import static org.junit.Assert.*;
 
 import java.awt.Component;
@@ -31,8 +30,8 @@ import org.junit.After;
 import org.junit.Before;
 
 import docking.options.editor.OptionsEditorPanel;
-import docking.wizard.WizardManager;
-import docking.wizard.WizardPanel;
+import docking.wizard.WizardDialog;
+import docking.wizard.WizardStep;
 import generic.lsh.LSHMemoryModel;
 import generic.test.TestUtils;
 import ghidra.feature.vt.api.correlator.program.VTAbstractReferenceProgramCorrelatorFactory;
@@ -43,7 +42,8 @@ import ghidra.feature.vt.gui.plugin.VTController;
 import ghidra.feature.vt.gui.plugin.VTPlugin;
 import ghidra.feature.vt.gui.task.AcceptMatchTask;
 import ghidra.feature.vt.gui.task.ApplyMatchTask;
-import ghidra.feature.vt.gui.wizard.*;
+import ghidra.feature.vt.gui.wizard.add.*;
+import ghidra.feature.vt.gui.wizard.session.SummaryPanel;
 import ghidra.framework.options.*;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.program.model.address.Address;
@@ -52,11 +52,10 @@ import ghidra.program.model.listing.Library;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.symbol.*;
 import ghidra.test.AbstractGhidraHeadedIntegrationTest;
-import ghidra.util.HTMLUtilities;
 import ghidra.util.Msg;
 import ghidra.util.table.GhidraTable;
 import ghidra.util.task.Task;
-import ghidra.util.task.TaskMonitorAdapter;
+import ghidra.util.task.TaskMonitor;
 
 /**
  * An abstract class for Correlator Tests.
@@ -72,11 +71,10 @@ public abstract class AbstractVTCorrelatorTest extends AbstractGhidraHeadedInteg
 	protected Program destProg;
 	protected VTController controller;
 	protected VTPlugin plugin;
-	protected VTAddToSessionWizardManager vtWizardManager;
-	protected WizardManager wizardManager;
+	protected VTAddToSessionWizardModel wizardModel;
+	protected WizardDialog wizardDialog;
 
 	public AbstractVTCorrelatorTest(String sourceProgLoc, String destProgLoc) {
-		super();
 		this.sourceProgLoc = sourceProgLoc;
 		this.destProgLoc = destProgLoc;
 	}
@@ -108,17 +106,17 @@ public abstract class AbstractVTCorrelatorTest extends AbstractGhidraHeadedInteg
 	private void setupWizardBeforeCorrelatorOptions(String correlatorName) {
 
 		runSwing(() -> {
-			vtWizardManager = new VTAddToSessionWizardManager(controller);
-			wizardManager = new WizardManager("Version Tracking Wizard", true, vtWizardManager);
-			wizardManager.showWizard(controller.getParentComponent());
+			wizardModel = new VTAddToSessionWizardModel(controller);
+			wizardDialog = new WizardDialog(wizardModel);
+			wizardDialog.show(controller.getParentComponent());
 		}, false);
 
 		waitForSwing();
-		waitForDialogComponent(WizardManager.class);
-		assertNotNull(wizardManager);
+		waitForDialogComponent(WizardDialog.class);
+		assertNotNull(wizardDialog);
 
 		checkWizardButtonEnablement(false, false, false, true);
-		chooseFromCorrelationPanel(correlatorName, wizardManager::next);
+		chooseFromCorrelationPanel(correlatorName, wizardModel::goNext);
 
 		checkWizardButtonEnablement(true, true, true, true);
 	}
@@ -126,23 +124,21 @@ public abstract class AbstractVTCorrelatorTest extends AbstractGhidraHeadedInteg
 	private void finishWizardAfterCorrelatorOptions(String correlatorName) {
 		checkAddressSetOptionsPanel(false, false);
 		checkWizardButtonEnablement(true, true, true, true);
-		changeAddressSetOptionsPanel(false, false, wizardManager::next);
+		changeAddressSetOptionsPanel(false, false, wizardModel::goNext);
 
 		// Check the summary panel.
 		checkWizardButtonEnablement(true, false, true, true);
 
 		// Check the summary panel.
 		checkWizardButtonEnablement(true, false, true, true);
-		String labelString = "<html>" + "Operation:<br>" + "Session Name:<br>" +
-			"Source Program:<br>" + "Destination Program:<br>" + "Program Correlator:<br>" +
+		String labelString = "Operation:<br>" + "Session Name:<br>" + "Source Program:<br>" +
+			"Destination Program:<br>" + "Program Correlator:<br>" +
 			"Exclude Accepted Matches:<br>" + "Source Address Set:<br>" +
 			"Destination Address Set:<br>" + "</html>";
-		String summaryString = "<html>" + "Add to Version Tracking Session<br>" +
-			session.getName() + "<br>" + srcProg.getName() + "<br>" + destProg.getName() + "<br>" +
-			correlatorName + "<br>" + "No<br>" + "Entire Source Program<br>" +
-			"Entire Destination Program<br>" + "</html>";
-		checkSummaryPanel(HTMLUtilities.toHTML(labelString), HTMLUtilities.toHTML(summaryString),
-			wizardManager::finish);
+		String summaryString = "Add to Version Tracking Session<br>" + session.getName() + "<br>" +
+			srcProg.getName() + "<br>" + destProg.getName() + "<br>" + correlatorName + "<br>" +
+			"No<br>" + "Entire Source Program<br>" + "Entire Destination Program<br>" + "</html>";
+		checkSummaryPanel(labelString, summaryString, wizardModel::finish);
 	}
 
 	public void runTestCorrelator(String correlatorName) {
@@ -159,7 +155,7 @@ public abstract class AbstractVTCorrelatorTest extends AbstractGhidraHeadedInteg
 		long start = System.nanoTime();
 		setupWizardBeforeCorrelatorOptions(correlatorName);
 
-		useDefaultCorrelatorOptions(correlatorName, wizardManager::next);
+		useDefaultCorrelatorOptions(correlatorName, wizardModel::goNext);
 
 		finishWizardAfterCorrelatorOptions(correlatorName);
 
@@ -184,7 +180,7 @@ public abstract class AbstractVTCorrelatorTest extends AbstractGhidraHeadedInteg
 		setupWizardBeforeCorrelatorOptions(correlatorName);
 
 		changeReferenceCorrelatorOptions(correlatorName, confidence, memoryModel, score,
-			refineResults, wizardManager::next);
+			refineResults, wizardModel::goNext);
 
 		finishWizardAfterCorrelatorOptions(correlatorName);
 	}
@@ -258,7 +254,7 @@ public abstract class AbstractVTCorrelatorTest extends AbstractGhidraHeadedInteg
 		try {
 			testTransactionID = db.startTransaction("Test Match Set Setup");
 			VTMatchSet matchSet = db.createMatchSet(
-				createProgramCorrelator(null, db.getSourceProgram(), db.getDestinationProgram()));
+				createProgramCorrelator(db.getSourceProgram(), db.getDestinationProgram()));
 			for (VTAssociationPair associationPair : list) {
 				VTMatchInfo info = createRandomMatch(associationPair.getSource(),
 					associationPair.getDestination(), db);
@@ -378,11 +374,11 @@ public abstract class AbstractVTCorrelatorTest extends AbstractGhidraHeadedInteg
 	/**
 	 * Run Dummy Task Monitor, flush events and wait for Swing.
 	 * @param task
-	 * @throws Exception 
+	 * @throws Exception
 	 */
 	protected void runTask(Task task) throws Exception {
 
-		task.run(TaskMonitorAdapter.DUMMY_MONITOR);
+		task.run(TaskMonitor.DUMMY);
 		destProg.flushEvents();
 		waitForSwing();
 		waitForTasks();
@@ -390,7 +386,7 @@ public abstract class AbstractVTCorrelatorTest extends AbstractGhidraHeadedInteg
 
 	protected void checkWizardButtonEnablement(boolean backEnabled, boolean nextEnabled,
 			boolean finishEnabled, boolean cancelEnabled) {
-		JComponent component = wizardManager.getComponent();
+		JComponent component = wizardDialog.getComponent();
 		JButton backButton = findButtonByText(component, "<< Back");
 		JButton nextButton = findButtonByText(component, "Next >>");
 		JButton finishButton = findButtonByText(component, "Finish");
@@ -407,10 +403,10 @@ public abstract class AbstractVTCorrelatorTest extends AbstractGhidraHeadedInteg
 
 	protected void chooseFromCorrelationPanel(final String correlatorName, Runnable wizardAction) {
 
-		WizardPanel currentWizardPanel = wizardManager.getCurrentWizardPanel();
-		assertNotNull(currentWizardPanel);
-		assertTrue(currentWizardPanel instanceof CorrelatorPanel);
-		CorrelatorPanel correlatorPanel = (CorrelatorPanel) currentWizardPanel;
+		WizardStep<?> currentWizardStep = wizardModel.getCurrentStep();
+		JComponent component = currentWizardStep.getComponent();
+		assertTrue(component instanceof CorrelatorChooserPanel);
+		CorrelatorChooserPanel correlatorPanel = (CorrelatorChooserPanel) component;
 		runSwing(() -> {
 			GhidraTable table = (GhidraTable) TestUtils.getInstanceField("table", correlatorPanel);
 			TableModel model = table.getModel();
@@ -427,9 +423,9 @@ public abstract class AbstractVTCorrelatorTest extends AbstractGhidraHeadedInteg
 			Runnable wizardAction) {
 
 		// Options Panel
-		WizardPanel currentWizardPanel = wizardManager.getCurrentWizardPanel();
-		assertNotNull(currentWizardPanel);
-		assertTrue(currentWizardPanel instanceof OptionsPanel);
+		WizardStep<?> currentWizardStep = wizardModel.getCurrentStep();
+		JComponent component = currentWizardStep.getComponent();
+		assertTrue(component instanceof ghidra.feature.vt.gui.wizard.add.OptionsPanel);
 
 		runSwing(wizardAction);
 	}
@@ -463,33 +459,32 @@ public abstract class AbstractVTCorrelatorTest extends AbstractGhidraHeadedInteg
 			OptionsEditorPanel correlatorOptionsPanel = getCorrelatorOptionsPanel(correlatorName);
 
 			@SuppressWarnings("unchecked")
-			List<EditorState> editorInfoList =
-				(List<EditorState>) TestUtils.getInstanceField("editorInfoList",
-					correlatorOptionsPanel);
+			List<EditorState> editorInfoList = (List<EditorState>) TestUtils
+					.getInstanceField("editorInfoList", correlatorOptionsPanel);
 			for (EditorState editorState : editorInfoList) {
 				String optionName = editorState.getTitle();
 				Component editorComponent = editorState.getEditorComponent();
 
-				if (optionName.equals(
-					VTAbstractReferenceProgramCorrelatorFactory.CONFIDENCE_THRESHOLD)) {
+				if (optionName
+						.equals(VTAbstractReferenceProgramCorrelatorFactory.CONFIDENCE_THRESHOLD)) {
 					PropertyText fieldText = (PropertyText) editorComponent;
 					fieldText.setText(String.format("%f", confidence));
 					fieldText.repaint();
 				}
-				else if (optionName.equals(
-					VTAbstractReferenceProgramCorrelatorFactory.MEMORY_MODEL)) {
+				else if (optionName
+						.equals(VTAbstractReferenceProgramCorrelatorFactory.MEMORY_MODEL)) {
 					PropertySelector selector = (PropertySelector) editorComponent;
 					selector.setSelectedItem(memoryModel);
 					selector.repaint();
 				}
-				else if (optionName.equals(
-					VTAbstractReferenceProgramCorrelatorFactory.SIMILARITY_THRESHOLD)) {
+				else if (optionName
+						.equals(VTAbstractReferenceProgramCorrelatorFactory.SIMILARITY_THRESHOLD)) {
 					PropertyText fieldText = (PropertyText) editorComponent;
 					fieldText.setText(String.format("%f", score));
 					fieldText.repaint();
 				}
-				else if (optionName.equals(
-					VTAbstractReferenceProgramCorrelatorFactory.REFINE_RESULTS)) {
+				else if (optionName
+						.equals(VTAbstractReferenceProgramCorrelatorFactory.REFINE_RESULTS)) {
 					PropertyBoolean checkBox = (PropertyBoolean) editorComponent;
 					checkBox.setSelected(refineResults);
 					checkBox.repaint();
@@ -502,10 +497,10 @@ public abstract class AbstractVTCorrelatorTest extends AbstractGhidraHeadedInteg
 
 	private OptionsEditorPanel getCorrelatorOptionsPanel(String correlatorName) {
 		String desiredTitle = correlatorName + " Options";
-		WizardPanel currentWizardPanel = wizardManager.getCurrentWizardPanel();
-		assertNotNull(currentWizardPanel);
-		assertTrue(currentWizardPanel instanceof OptionsPanel);
-		OptionsPanel optionsPanel = (OptionsPanel) currentWizardPanel;
+		WizardStep<?> currentStep = wizardModel.getCurrentStep();
+		JComponent component = currentStep.getComponent();
+		assertTrue(component instanceof OptionsPanel);
+		OptionsPanel optionsPanel = (OptionsPanel) component;
 		Object instanceField = TestUtils.getInstanceField("optionsEditorPanelList", optionsPanel);
 		@SuppressWarnings("unchecked")
 		List<OptionsEditorPanel> optionsEditorPanelList = (List<OptionsEditorPanel>) instanceField;
@@ -529,18 +524,17 @@ public abstract class AbstractVTCorrelatorTest extends AbstractGhidraHeadedInteg
 	protected void checkAddressSetOptionsPanel(boolean excludeAccepted, boolean limitAddressSets) {
 
 		// Address Set Options Panel
-		WizardPanel currentWizardPanel = wizardManager.getCurrentWizardPanel();
-		assertNotNull(currentWizardPanel);
-		assertTrue(currentWizardPanel instanceof AddressSetOptionsPanel);
-		AddressSetOptionsPanel addressSetOptionsPanel = (AddressSetOptionsPanel) currentWizardPanel;
+		WizardStep<?> currentStep = wizardModel.getCurrentStep();
+		JComponent component = currentStep.getComponent();
+		assertTrue(component instanceof AddressSetOptionsPanel);
+		AddressSetOptionsPanel addressSetOptionsPanel = (AddressSetOptionsPanel) component;
 
 		JCheckBox excludeCheckbox =
 			(JCheckBox) TestUtils.getInstanceField("excludeCheckbox", addressSetOptionsPanel);
 		assertNotNull(excludeCheckbox);
 
-		JCheckBox showAddressSetPanelsCheckbox =
-			(JCheckBox) TestUtils.getInstanceField("showAddressSetPanelsCheckbox",
-				addressSetOptionsPanel);
+		JCheckBox showAddressSetPanelsCheckbox = (JCheckBox) TestUtils
+				.getInstanceField("limitAddressSetsCheckbox", addressSetOptionsPanel);
 		assertNotNull(showAddressSetPanelsCheckbox);
 
 		assertEquals("Exclude Accepted Matches checkbox", excludeAccepted,
@@ -553,18 +547,17 @@ public abstract class AbstractVTCorrelatorTest extends AbstractGhidraHeadedInteg
 			Runnable wizardAction) {
 
 		// Address Set Options Panel
-		WizardPanel currentWizardPanel = wizardManager.getCurrentWizardPanel();
-		assertNotNull(currentWizardPanel);
-		assertTrue(currentWizardPanel instanceof AddressSetOptionsPanel);
-		AddressSetOptionsPanel addressSetOptionsPanel = (AddressSetOptionsPanel) currentWizardPanel;
+		WizardStep<?> currentStep = wizardModel.getCurrentStep();
+		JComponent component = currentStep.getComponent();
+		assertTrue(component instanceof AddressSetOptionsPanel);
+		AddressSetOptionsPanel addressSetOptionsPanel = (AddressSetOptionsPanel) component;
 
 		JCheckBox excludeCheckbox =
 			(JCheckBox) TestUtils.getInstanceField("excludeCheckbox", addressSetOptionsPanel);
 		assertNotNull(excludeCheckbox);
 
-		JCheckBox showAddressSetPanelsCheckbox =
-			(JCheckBox) TestUtils.getInstanceField("showAddressSetPanelsCheckbox",
-				addressSetOptionsPanel);
+		JCheckBox showAddressSetPanelsCheckbox = (JCheckBox) TestUtils
+				.getInstanceField("limitAddressSetsCheckbox", addressSetOptionsPanel);
 		assertNotNull(showAddressSetPanelsCheckbox);
 
 		if (excludeCheckbox.isSelected() != excludeAccepted) {
@@ -602,10 +595,10 @@ public abstract class AbstractVTCorrelatorTest extends AbstractGhidraHeadedInteg
 			Runnable wizardAction) {
 
 		// Address Set Options Panel
-		WizardPanel currentWizardPanel = wizardManager.getCurrentWizardPanel();
-		assertNotNull(currentWizardPanel);
-		assertTrue(currentWizardPanel instanceof SummaryPanel);
-		SummaryPanel summaryPanel = (SummaryPanel) currentWizardPanel;
+		WizardStep<?> currentStep = wizardModel.getCurrentStep();
+		JComponent component = currentStep.getComponent();
+		assertTrue(component instanceof SummaryPanel);
+		SummaryPanel summaryPanel = (SummaryPanel) component;
 
 		JLabel labelLabel = (JLabel) TestUtils.getInstanceField("labelLabel", summaryPanel);
 		assertNotNull(labelLabel);

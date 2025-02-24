@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,31 +15,21 @@
  */
 package ghidra.app.plugin.core.cparser;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.StringTokenizer;
-
-import javax.swing.SwingUtilities;
-
-import org.apache.commons.io.DirectoryWalker.CancelException;
 
 import docking.ActionContext;
 import docking.action.DockingAction;
 import docking.action.MenuData;
 import docking.tool.ToolConstants;
 import docking.widgets.OptionDialog;
-import docking.widgets.dialogs.MultiLineMessageDialog;
 import ghidra.app.CorePluginPackage;
 import ghidra.app.plugin.PluginCategoryNames;
 import ghidra.app.plugin.ProgramPlugin;
 import ghidra.app.services.DataTypeManagerService;
-import ghidra.app.util.cparser.C.CParser;
-import ghidra.app.util.cparser.CPP.PreProcessor;
+import ghidra.app.util.cparser.C.CParserUtils;
+import ghidra.app.util.cparser.C.CParserUtils.CParseResults;
 import ghidra.framework.Application;
 import ghidra.framework.options.SaveState;
 import ghidra.framework.plugintool.PluginInfo;
@@ -48,11 +38,9 @@ import ghidra.framework.plugintool.util.PluginStatus;
 import ghidra.program.database.data.ProgramDataTypeManager;
 import ghidra.program.model.data.BuiltInDataTypeManager;
 import ghidra.program.model.data.DataTypeManager;
-import ghidra.program.model.data.FileDataTypeManager;
+import ghidra.program.model.lang.LanguageCompilerSpecPair;
 import ghidra.program.model.listing.Program;
-import ghidra.util.HTMLUtilities;
-import ghidra.util.HelpLocation;
-import ghidra.util.Msg;
+import ghidra.util.*;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
 
@@ -66,21 +54,19 @@ import ghidra.util.task.TaskMonitor;
 )
 //@formatter:on
 public class CParserPlugin extends ProgramPlugin {
-	final static String PARSE_ACTION_NAME = "Import C DataTypes";
+	public final static String PARSE_ACTION_NAME = "Import C DataTypes";
 
 	final static String USER_PROFILES_DIR =
 		Application.getUserSettingsDirectory().getAbsolutePath() + File.separatorChar +
 			"parserprofiles";
+	
 	private ParseDialog parseDialog;
 	private File userProfileDir;
 
-	private String parserMessages;
-	private String cppMessages;
+	private CParseResults results;
 
 	final static String DESCRIPTION =
 		"Parse C and C Header files, extracting data definitions and function signatures.";
-
-	private static final String PARSER_DEBUG_OUTFILE = "CParserPlugin.out";
 
 	public CParserPlugin(PluginTool plugintool) {
 		super(plugintool);
@@ -155,149 +141,69 @@ public class CParserPlugin extends ProgramPlugin {
 		if (parseDialog == null) {
 			parseDialog = new ParseDialog(this);
 		}
-		else {
-			parseDialog.toFront();
-		}
+		parseDialog.setupForDisplay();
 		tool.showDialog(parseDialog);
 	}
 
 	/*
 	 * Parse into a saved data type data base file
 	 */
-	protected void parse(String[] filenames, String options, String dataFilename) {
-		CParserTask parseTask = new CParserTask(this, filenames, options, dataFilename);
+	protected void parse(String[] filenames, String includePaths[], String options,
+		String languageIDString, String compilerSpecID, String dataFilename) {
+		
+		CParserTask parseTask = new CParserTask(this, dataFilename)
+				.setFileNames(filenames)
+				.setIncludePaths(includePaths)
+				.setOptions(options)
+				.setLanguageID(languageIDString)
+				.setCompilerID(compilerSpecID);
+		
 		this.getTool().execute(parseTask, 500);
 	}
 
+	
 	/*
 	 * Parse C-source into a data type manager
 	 */
-	protected void parse(String[] filenames, String options, DataTypeManager dtMgr,
-			TaskMonitor monitor) throws ghidra.app.util.cparser.C.ParseException,
+	protected CParseResults parse(String[] filenames, String includePaths[], String options,
+			DataTypeManager dtMgr, TaskMonitor monitor)
+			throws ghidra.app.util.cparser.C.ParseException,
 			ghidra.app.util.cparser.CPP.ParseException {
+
+		results = null;
+		
 		String[] args = parseOptions(options);
 
 		DataTypeManager openDTmanagers[] = null;
 		try {
 			openDTmanagers = getOpenDTMgrs();
 		} catch (CancelledException exc) {
-			return; // parse canceled
+			return null; // parse canceled
 		}
 
-		cppMessages = "";
-		PreProcessor cpp = new PreProcessor();
+		results = CParserUtils.parseHeaderFiles(openDTmanagers, filenames, includePaths,
+			args, dtMgr, monitor);
+		
+		return results;
+	}
 
-		cpp.setArgs(args);
-
-		PrintStream os = System.out;
-		String homeDir = System.getProperty("user.home");
-		String fName = homeDir + File.separator + "CParserPlugin.out";
-		try {
-			os = new PrintStream(new FileOutputStream(fName));
+	boolean isOpenInTool(DataTypeManager dtm) {
+		DataTypeManagerService dtService = tool.getService(DataTypeManagerService.class);
+		if (dtService == null) {
+			return false;
 		}
-		catch (FileNotFoundException e2) {
-			Msg.error(this, "Unexpected Exception: " + e2.getMessage(), e2);
-		}
-
-		PrintStream old = System.out;
-		System.setOut(os);
-
-		ByteArrayOutputStream bos = new ByteArrayOutputStream();
-		cpp.setOutputStream(bos);
-
-		try {
-			for (String filename : filenames) {
-				if (monitor.isCancelled()) {
-					break;
-				}
-				// any file beginning with a "#" is assumed to be a comment
-				if (filename.trim().startsWith("#")) {
-					continue;
-				}
-				File file = new File(filename);
-
-				if (file.isDirectory()) {
-					// process each header file in the directory
-					String[] children = file.list();
-					if (children == null) {
-						continue;
-					}
-					for (String element : children) {
-						File child = new File(file.getAbsolutePath() + "/" + element);
-						if (child.getName().endsWith(".h")) {
-							parseFile(child.getAbsolutePath(), monitor, cpp);
-						}
-					}
-				}
-				else {
-					parseFile(filename, monitor, cpp);
-				}
+		for (DataTypeManager openDtm : dtService.getDataTypeManagers()) {
+			if (dtm == openDtm) {
+				return true;
 			}
 		}
-		catch (RuntimeException re) {
-			os.close();
-			throw new ghidra.app.util.cparser.CPP.ParseException(re.getMessage());
-		}
-
-		// process all the defines and add any that are integer values into
-		// the Equates table
-		cpp.getDefinitions().populateDefineEquates(openDTmanagers, dtMgr);
-
-		System.out.println(bos.toString());
-
-		System.setOut(old);
-		os.close();
-
-		if (!monitor.isCancelled()) {
-			monitor.setMessage("Parsing C");
-
-			CParser cParser = new CParser(dtMgr, true, openDTmanagers);
-			cParser.setParseFileName(PARSER_DEBUG_OUTFILE);
-			ByteArrayInputStream bis = new ByteArrayInputStream(bos.toByteArray());
-			try {
-				parserMessages = "";
-				cParser.setParseFileName(fName);
-				cParser.parse(bis);
-			}
-			finally {
-				parserMessages = cParser.getParseMessages();
-			}
-
-			final boolean isProgramDtMgr = (dtMgr instanceof ProgramDataTypeManager);
-
-			SwingUtilities.invokeLater(() -> {
-				// CParserTask will show any errors
-				if (!cParser.didParseSucceed()) {
-					return;
-				}
-				if (isProgramDtMgr) {
-					MultiLineMessageDialog.showModalMessageDialog(parseDialog.getComponent(),
-						"C-Parse of Header Files Complete",
-						"Successfully parsed header file(s) to Program.",
-						getFormattedParseMessage(
-							"Check the Manage Data Types window for added data types."),
-						MultiLineMessageDialog.INFORMATION_MESSAGE);
-				}
-				else {
-					String archiveName = dtMgr.getName();
-					if (dtMgr instanceof FileDataTypeManager) {
-						archiveName = ((FileDataTypeManager) dtMgr).getFilename();
-					}
-					MultiLineMessageDialog.showModalMessageDialog(parseDialog.getComponent(),
-						"C-Parse of Header Files Complete. ",
-						"Successfully parsed header file(s) to Archive File:  " + archiveName,
-						getFormattedParseMessage(null), MultiLineMessageDialog.INFORMATION_MESSAGE);
-				}
-			});
-		}
-
+		return false;
 	}
 
 	/**
 	 * Get open data type managers.
 	 *    User can Use Open managers, Select not to use, or Cancel
 	 *    
-	 * @param openDTmanagers open mgrs, null if don't use
 	 * @return array of open data type managers
 	 * 
 	 * @throws CancelledException if user cancels
@@ -333,7 +239,7 @@ public class CParserPlugin extends ProgramPlugin {
 				"</ul>" + "<p><b>The new archive will become dependent on these archives<br>" +
 				"for any datatypes already defined in them </b>(only unique <br>" +
 				"data types will be added to the new archive).",
-			"Use Open Archives?", "Don't Use Open Archives", OptionDialog.QUESTION_MESSAGE);
+			"Use Open Archives", "Don't Use Open Archives", OptionDialog.QUESTION_MESSAGE);
 		    if (result == OptionDialog.CANCEL_OPTION) {
 		    	throw new CancelledException("User Cancelled");
 		    }
@@ -344,75 +250,68 @@ public class CParserPlugin extends ProgramPlugin {
 
 		return openDTmanagers;
 	}
+	
+	public CParseResults getParseResults() {
+		return results;
+	}
+	
+	public String getParseMessage() {
+		return (results != null ? results.cParseMessages() : "");
+	}
 
-	public String getFormattedParseMessage(String errMsg) {
-		String message = "";
+	protected String getFormattedParseMessage(String errMsg) {
+		String message = "<html>";
 
 		if (errMsg != null) {
 			message += errMsg + "\n\n";
+			message = HTMLUtilities.toHTML(message);
 		}
 
-		String msg = getParseMessage();
+		String msg = (results == null ? null : results.cParseMessages());
+		
 		if (msg != null && msg.length() != 0) {
-			message += "CParser Messages:\n" + msg + "\n\n";
+			message += "<b>CParser Messages:</b><br>\n" + HTMLUtilities.toHTML(msg) + "<br>\n<br>\n";
 		}
 
-		msg = getPreProcessorMessage();
+		msg = (results == null ? null : results.cppParseMessages());
 		if (msg != null && msg.length() != 0) {
-			message += "PreProcessor Messages:\n" + getPreProcessorMessage();
+			message += "<b>PreProcessor Messages:</b><br>\n" + HTMLUtilities.toHTML(msg);
 		}
 
 		return message;
 	}
 
-	/**
-	 * Get any parse messages produced by parsing good, or informational
-	 * 
-	 * @return messages from parser
-	 */
-	public String getParseMessage() {
-		return parserMessages;
-	}
-
-	public String getPreProcessorMessage() {
-		return cppMessages;
-	}
-
-	private void parseFile(String filename, TaskMonitor monitor, PreProcessor cpp)
-			throws ghidra.app.util.cparser.CPP.ParseException {
-		monitor.setMessage("PreProcessing " + filename);
-		try {
-			Msg.info(this, "parse " + filename);
-			cpp.parse(filename);
-		}
-		catch (Throwable e) {
-			Msg.error(this, "Parsing file :" + filename);
-			Msg.error(this, "Unexpected Exception: " + e.getMessage(), e);
-
-			throw new ghidra.app.util.cparser.CPP.ParseException(e.getMessage());
-		}
-		finally {
-			cppMessages += cpp.getParseMessages();
-		}
-	}
-
 	/*
 	 * Parse into the current programs data type manager
+	 * 
+	 * Always uses the program's processor architecture
 	 */
-	protected void parse(String[] filenames, String options) {
+	protected void parse(String[] filenames, String[] includePaths, String options) {
 		if (currentProgram == null) {
 			Msg.showInfo(getClass(), parseDialog.getComponent(), "No Open Program",
 				"A program must be open to \"Parse to Program\"");
 			return;
 		}
+		/*
+		 * always use the processor/compiler for the program when parsing to program
+		 */
+		LanguageCompilerSpecPair languageCompilerSpecPair = currentProgram.getLanguageCompilerSpecPair();
+		String procID = languageCompilerSpecPair.languageID.getIdAsString();
+		String compilerID = languageCompilerSpecPair.compilerSpecID.getIdAsString();
+		
 		int result = OptionDialog.showOptionDialog(parseDialog.getComponent(), "Confirm",
-			"Parse C source to \"" + currentProgram.getDomainFile().getName() + "\"?", "Continue");
+			"Parse C source to \"" + currentProgram.getDomainFile().getName() + "\"?" + "\n\n" +
+		    "Using program architecture: " + procID + " / " + compilerID, "Continue");
 
 		if (result == OptionDialog.CANCEL_OPTION) {
 			return;
 		}
+
 		CParserTask parseTask =
-			new CParserTask(this, filenames, options, currentProgram.getDataTypeManager());
+			new CParserTask(this, currentProgram.getDataTypeManager())
+					.setFileNames(filenames)
+					.setIncludePaths(includePaths)
+					.setOptions(options);
 
 		tool.execute(parseTask);
 	}

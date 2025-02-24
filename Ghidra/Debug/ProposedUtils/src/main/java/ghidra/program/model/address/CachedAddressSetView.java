@@ -15,8 +15,8 @@
  */
 package ghidra.program.model.address;
 
-import static ghidra.util.ComparatorMath.cmax;
-import static ghidra.util.ComparatorMath.cmin;
+import static ghidra.util.MathUtilities.cmax;
+import static ghidra.util.MathUtilities.cmin;
 
 import java.util.Iterator;
 
@@ -98,6 +98,10 @@ public class CachedAddressSetView implements AddressSetView {
 
 	protected void ensureKnown(Address min, Address max) {
 		if (minAddress == null) {
+			return;
+		}
+		if (minAddress.compareTo(max) > 0 ||
+			maxAddress.compareTo(min) < 0) {
 			return;
 		}
 		min = cmax(min, minAddress);

@@ -20,8 +20,7 @@ import java.awt.Graphics;
 import java.util.HashMap;
 import java.util.Map;
 
-import generic.theme.GColor;
-import generic.theme.GThemeDefaults.Colors.Java;
+import generic.theme.GThemeDefaults.Colors;
 import ghidra.program.model.address.AddressRange;
 import ghidra.trace.model.Lifespan;
 
@@ -36,7 +35,6 @@ public class MemoryBox {
 	protected long stopAddr = -1;
 	protected long startTime;
 	protected long stopTime = -1;
-	protected Color color = new GColor("color.bg.debugger.memview.box");
 
 	protected int pixAstart;
 	protected int pixAend;
@@ -44,6 +42,7 @@ public class MemoryBox {
 	protected int pixTstart;
 	protected int pixTend;
 	protected int boundT;
+	protected final Color color;
 
 	protected boolean current;
 
@@ -92,19 +91,6 @@ public class MemoryBox {
 		return color;
 	}
 
-	public void setColor(Color color) {
-		this.color = color;
-	}
-
-	public void setColor(Color base, int type) {
-		setColor(new Color(base.getRed(), (base.getGreen() + type) % 255, base.getBlue()));
-	}
-
-	public void setColor(Color base, int type, int src) {
-		setColor(new Color(base.getRed(), (base.getGreen() + type * 8) % 255,
-			(base.getBlue() + src * 16) % 255));
-	}
-
 	public int getAddressPixelStart() {
 		return pixAstart;
 	}
@@ -151,7 +137,7 @@ public class MemoryBox {
 		int w = vertical ? getTimePixelWidth() : getAddressPixelWidth();
 		int y = vertical ? getAddressPixelStart() : getTimePixelStart();
 		int h = vertical ? getAddressPixelWidth() : getTimePixelWidth();
-		g.setColor(Java.BORDER);
+		g.setColor(Colors.BORDER);
 		g.fillRect(x - 1, y - 1, w + 2, h + 2);
 		g.setColor(color);
 		g.fillRect(x, y, w, h);
@@ -162,7 +148,7 @@ public class MemoryBox {
 		int w = vertical ? sz : getAddressPixelWidth();
 		int y = vertical ? getAddressPixelStart() : 0;
 		int h = vertical ? getAddressPixelWidth() : sz;
-		g.setColor(Java.BORDER);
+		g.setColor(Colors.BORDER);
 		g.fillRect(x - 1, y - 1, w + 2, h + 2);
 		g.setColor(color);
 		g.fillRect(x, y, w, h);
@@ -173,7 +159,7 @@ public class MemoryBox {
 		int w = vertical ? 1 : sz;
 		int y = vertical ? 0 : getTimePixelStart();
 		int h = vertical ? sz : 1;
-		g.setColor(Java.BORDER);
+		g.setColor(Colors.BORDER);
 		g.fillRect(x - 1, y - 1, w + 2, h + 2);
 		g.setColor(color);
 		g.fillRect(x, y, w, h);

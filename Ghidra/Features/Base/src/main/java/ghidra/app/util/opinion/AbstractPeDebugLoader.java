@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,12 +17,15 @@ package ghidra.app.util.opinion;
 
 import java.util.*;
 
+import ghidra.app.util.Option;
+import ghidra.app.util.bin.ByteProvider;
 import ghidra.app.util.bin.format.pdb.PdbInfoCodeView;
 import ghidra.app.util.bin.format.pdb.PdbInfoDotNet;
 import ghidra.app.util.bin.format.pe.*;
 import ghidra.app.util.bin.format.pe.debug.*;
 import ghidra.app.util.demangler.DemangledObject;
 import ghidra.app.util.demangler.DemanglerUtil;
+import ghidra.framework.model.DomainObject;
 import ghidra.framework.options.Options;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.data.DWordDataType;
@@ -36,10 +39,53 @@ import ghidra.util.exception.InvalidInputException;
 import ghidra.util.task.TaskMonitor;
 
 abstract class AbstractPeDebugLoader extends AbstractOrdinalSupportLoader {
+
+	/** Loader option to display line numbers */
+	public static final String SHOW_LINE_NUMBERS_OPTION_NAME = "Show Debug Line Number Comments";
+	static final boolean SHOW_LINE_NUMBERS_OPTION_DEFAULT = false;
+
 	private HashMap<Address, StringBuffer> plateCommentMap = new HashMap<>();
 	private HashMap<Address, StringBuffer> preCommentMap = new HashMap<>();
 	private HashMap<Address, StringBuffer> postCommentMap = new HashMap<>();
 	private HashMap<Address, StringBuffer> eolCommentMap = new HashMap<>();
+
+	@Override
+	public List<Option> getDefaultOptions(ByteProvider provider, LoadSpec loadSpec,
+			DomainObject domainObject, boolean loadIntoProgram) {
+		List<Option> list =
+			super.getDefaultOptions(provider, loadSpec, domainObject, loadIntoProgram);
+		list.add(new Option(SHOW_LINE_NUMBERS_OPTION_NAME, SHOW_LINE_NUMBERS_OPTION_DEFAULT,
+			Boolean.class, Loader.COMMAND_LINE_ARG_PREFIX + "-showDebugLineNumbers"));
+		return list;
+	}
+
+	@Override
+	public String validateOptions(ByteProvider provider, LoadSpec loadSpec, List<Option> options,
+			Program program) {
+		if (options != null) {
+			for (Option option : options) {
+				String name = option.getName();
+				if (name.equals(SHOW_LINE_NUMBERS_OPTION_NAME)) {
+					if (!Boolean.class.isAssignableFrom(option.getValueClass())) {
+						return "Invalid type for option: " + name + " - " + option.getValueClass();
+					}
+				}
+			}
+		}
+		return super.validateOptions(provider, loadSpec, options, program);
+	}
+
+	private boolean shouldShowDebugLineNumbers(List<Option> options) {
+		if (options != null) {
+			for (Option option : options) {
+				String optName = option.getName();
+				if (optName.equals(SHOW_LINE_NUMBERS_OPTION_NAME)) {
+					return (Boolean) option.getValue();
+				}
+			}
+		}
+		return SHOW_LINE_NUMBERS_OPTION_DEFAULT;
+	}
 
 	protected void processComments(Listing listing, TaskMonitor monitor) {
 		List<HashMap<Address, StringBuffer>> maps = new ArrayList<>();
@@ -81,7 +127,8 @@ abstract class AbstractPeDebugLoader extends AbstractOrdinalSupportLoader {
 	}
 
 	protected void processDebug(DebugDirectoryParser parser, NTHeader ntHeader,
-			Map<SectionHeader, Address> sectionToAddress, Program program, TaskMonitor monitor) {
+			Map<SectionHeader, Address> sectionToAddress, Program program, List<Option> options,
+			TaskMonitor monitor) {
 
 		if (parser == null) {
 			return;
@@ -95,15 +142,16 @@ abstract class AbstractPeDebugLoader extends AbstractOrdinalSupportLoader {
 
 		monitor.setMessage("Processing code view debug...");
 		processDebugCodeView(parser.getDebugCodeView(), ntHeader, sectionToAddress, program,
-			monitor);
+			options, monitor);
 
 		monitor.setMessage("Processing coff debug...");
 		processDebugCOFF(parser.getDebugCOFFSymbolsHeader(), ntHeader, sectionToAddress, program,
-			monitor);
+			options, monitor);
 	}
 
 	private void processDebugCodeView(DebugCodeView dcv, NTHeader ntHeader,
-			Map<SectionHeader, Address> sectionToAddress, Program program, TaskMonitor monitor) {
+			Map<SectionHeader, Address> sectionToAddress, Program program, List<Option> options,
+			TaskMonitor monitor) {
 
 		if (dcv == null) {
 			return;
@@ -129,14 +177,11 @@ abstract class AbstractPeDebugLoader extends AbstractOrdinalSupportLoader {
 		FileHeader fileHeader = ntHeader.getFileHeader();
 		List<OMFSrcModule> srcModules = dcvst.getOMFSrcModules();
 		for (OMFSrcModule module : srcModules) {
-			short[] segs = module.getSegments();
-			int segIndex = 0;
-
 			OMFSrcModuleFile[] files = module.getOMFSrcModuleFiles();
 			for (OMFSrcModuleFile file : files) {
-				processFiles(file, segs[segIndex++], fileHeader, sectionToAddress, monitor);
+				processFiles(file, module.getSegments(), fileHeader, sectionToAddress, monitor);
 				processLineNumbers(fileHeader, sectionToAddress, file.getOMFSrcModuleLines(),
-					monitor);
+					options, monitor);
 
 				if (monitor.isCancelled()) {
 					return;
@@ -214,30 +259,36 @@ abstract class AbstractPeDebugLoader extends AbstractOrdinalSupportLoader {
 	}
 
 	private void demangle(Address address, String name, Program program) {
-		DemangledObject demangledObj = null;
+		StringBuilder builder = new StringBuilder();
 		try {
-			demangledObj = DemanglerUtil.demangle(program, name);
+			List<DemangledObject> demangledObjects = DemanglerUtil.demangle(program, name, address);
+			for (DemangledObject demangledObj : demangledObjects) {
+				if (builder.length() > 0) {
+					builder.append("\t");
+				}
+				builder.append(demangledObj.getSignature(true));
+			}
 		}
 		catch (Exception e) {
 			//log.appendMsg("Unable to demangle: "+name);
 		}
-		if (demangledObj != null) {
-			setComment(CodeUnit.PLATE_COMMENT, address, demangledObj.getSignature(true));
+		if (builder.length() > 0) {
+			setComment(CodeUnit.PLATE_COMMENT, address, builder.toString());
 		}
 	}
 
-	private void processFiles(OMFSrcModuleFile file, short segment, FileHeader fileHeader,
+	private void processFiles(OMFSrcModuleFile file, short[] segments, FileHeader fileHeader,
 			Map<SectionHeader, Address> sectionToAddress, TaskMonitor monitor) {
 
 		int[] starts = file.getStarts();
 		int[] ends = file.getEnds();
 
 		for (int k = 0; k < starts.length; ++k) {
-			if (starts[k] == 0 || ends[k] == 0) {
+			if (starts[k] == 0 || ends[k] == 0 || k >= segments.length) {
 				continue;
 			}
 
-			Address addr = sectionToAddress.get(fileHeader.getSectionHeader(segment - 1));
+			Address addr = sectionToAddress.get(fileHeader.getSectionHeader(segments[k] - 1));
 			if (addr == null) {
 				continue;
 			}
@@ -258,7 +309,10 @@ abstract class AbstractPeDebugLoader extends AbstractOrdinalSupportLoader {
 
 	private void processLineNumbers(FileHeader fileHeader,
 			Map<SectionHeader, Address> sectionToAddress, OMFSrcModuleLine[] lines,
-			TaskMonitor monitor) {//TODO revisit this method for accuracy
+			List<Option> options, TaskMonitor monitor) {//TODO revisit this method for accuracy
+		if (!shouldShowDebugLineNumbers(options)) {
+			return;
+		}
 		for (OMFSrcModuleLine line : lines) {
 			if (monitor.isCancelled()) {
 				return;
@@ -272,12 +326,6 @@ abstract class AbstractPeDebugLoader extends AbstractOrdinalSupportLoader {
 					if (monitor.isCancelled()) {
 						return;
 					}
-					if (offsets[j] == 0) {
-						System.out.println("");
-					}
-					if (offsets[j] == 1) {
-						System.out.println("");
-					}
 					if (offsets[j] > 0) {
 						addLineComment(addr.add(Conv.intToLong(offsets[j])),
 							Conv.shortToInt(lineNumbers[j]));
@@ -288,7 +336,8 @@ abstract class AbstractPeDebugLoader extends AbstractOrdinalSupportLoader {
 	}
 
 	private void processDebugCOFF(DebugCOFFSymbolsHeader dcsh, NTHeader ntHeader,
-			Map<SectionHeader, Address> sectionToAddress, Program program, TaskMonitor monitor) {
+			Map<SectionHeader, Address> sectionToAddress, Program program, List<Option> options,
+			TaskMonitor monitor) {
 		if (dcsh == null) {
 			return;
 		}
@@ -296,9 +345,8 @@ abstract class AbstractPeDebugLoader extends AbstractOrdinalSupportLoader {
 		if (dcst == null) {
 			return;
 		}
-		DebugCOFFSymbol[] symbols = dcst.getSymbols();
 		int errorCount = 0;
-		for (DebugCOFFSymbol symbol : symbols) {
+		for (DebugCOFFSymbol symbol : dcst.getSymbols()) {
 			if (monitor.isCancelled()) {
 				return;
 			}
@@ -313,7 +361,7 @@ abstract class AbstractPeDebugLoader extends AbstractOrdinalSupportLoader {
 		}
 
 		DebugCOFFLineNumber[] lineNumbers = dcsh.getLineNumbers();
-		if (lineNumbers != null) {
+		if (shouldShowDebugLineNumbers(options) && lineNumbers != null) {
 			for (DebugCOFFLineNumber lineNumber : lineNumbers) {
 				if (monitor.isCancelled()) {
 					return;
@@ -383,7 +431,7 @@ abstract class AbstractPeDebugLoader extends AbstractOrdinalSupportLoader {
 			Symbol newSymbol =
 				program.getSymbolTable().createLabel(address, sym, SourceType.IMPORTED);
 
-			// Force non-section symbols to be primary.  We never want section symbols (.text, 
+			// Force non-section symbols to be primary.  We never want section symbols (.text,
 			// .text$func_name) to be primary because we don't want to use them for function names
 			// or demangling.
 			if (!sym.equals(section.getName()) && !sym.startsWith(section.getName() + "$")) {

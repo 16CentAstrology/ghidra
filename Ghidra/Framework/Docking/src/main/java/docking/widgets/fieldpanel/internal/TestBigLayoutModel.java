@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -32,7 +32,7 @@ import generic.theme.GThemeDefaults.Colors;
 
 public class TestBigLayoutModel implements LayoutModel {
 	private static final Highlight[] NO_HIGHLIGHTS = new Highlight[0];
-	private static final HighlightFactory hlFactory =
+	private static final FieldHighlightFactory hlFactory =
 		(field, text, cursorTextOffset) -> NO_HIGHLIGHTS;
 	ArrayList<LayoutModelListener> listeners = new ArrayList<>();
 
@@ -43,9 +43,6 @@ public class TestBigLayoutModel implements LayoutModel {
 	private int startBigSizes = 0;
 	private int endBigSizes = -1;
 
-	/**
-	 * 
-	 */
 	public TestBigLayoutModel(FontMetrics fm, String name, BigInteger numIndexes) {
 		this.fm = fm;
 		this.name = name;

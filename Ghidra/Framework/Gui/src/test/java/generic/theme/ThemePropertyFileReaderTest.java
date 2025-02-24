@@ -36,8 +36,8 @@ public class ThemePropertyFileReaderTest {
 	@Test
 	public void testDefaults() throws IOException {
 		//@formatter:off
-		ThemePropertyFileReader reader = new ThemePropertyFileReader("test", new StringReader(String.join("\n", 
-			"[Defaults]", 
+		ThemePropertyFileReader reader = new ThemePropertyFileReader("test", new StringReader(String.join("\n",
+			"[Defaults]",
 			"  color.b.1    = white",					// WHITE
 			"  color.b.2    = #ff0000",					// RED
 			"  color.b.3    = 0x008000",				// GREEN
@@ -53,12 +53,18 @@ public class ThemePropertyFileReaderTest {
 			"  icon.a.12    = icon.a.10[size(17,21)]",
 			"  icon.a.13    = core.png[size(17,21)]",
 			"  icon.a.14    = icon.a.10{core.png[size(4,4)][move(8, 8)]}",
+			"  [laf.font]PasswordField.font = font.a.8",
+			"  [laf.font]TextArea.font = dialog-PLAIN-14",
+			"  [laf.color]TextArea.background = color.b.1",
+			"  [laf.string]Fake.title = This is my title",
+			"  [laf.string]OtherFake.title = [laf.string]Fake.title",
+			"  [laf.boolean]PopupMenu.consumeEventOnClose = false",
 			"")));
 		//@formatter:on
 
 		Color halfAlphaRed = new Color(0x80ff0000, true);
 		GThemeValueMap values = reader.getDefaultValues();
-		assertEquals(15, values.size());
+		assertEquals(21, values.size());
 
 		assertEquals(WHITE, getColor(values, "color.b.1"));
 		assertEquals(RED, getColor(values, "color.b.2"));
@@ -85,13 +91,27 @@ public class ThemePropertyFileReaderTest {
 		icon = getIcon(values, "icon.a.14");
 		assertTrue(icon instanceof MultiIcon);
 
+		Font f = new Font("dialog", Font.PLAIN, 14);
+		assertEquals(f, getFont(values, "laf.font.PasswordField.font")); // direct font
+		assertEquals(f, getFont(values, "laf.font.TextArea.font"));      // font reference
+		assertEquals("This is my title", getLafString(values, "Fake.title"));
+		assertEquals("This is my title", getLafString(values, "OtherFake.title"));
+		assertEquals(false, getLafBoolean(values, "PopupMenu.consumeEventOnClose"));
 	}
 
 	@Test
 	public void testDarkDefaults() throws IOException {
 		//@formatter:off
-		ThemePropertyFileReader reader = new ThemePropertyFileReader("test", new StringReader(String.join("\n", 
-			"[Dark Defaults]", 
+		ThemePropertyFileReader reader = new ThemePropertyFileReader("test", new StringReader(String.join("\n",
+			"[Defaults]",
+			"  color.b.1    = red",
+			"  color.b.2    = red",
+			"  color.b.3    = red",
+			"  color.b.4    = red",
+			"  color.b.5 	= red",
+			"  color.b.6 	= red",
+			"  color.b.7    = red",
+			"[Dark Defaults]",
 			"  color.b.1    = white",					// WHITE
 			"  color.b.2    = #ff0000",					// RED
 			"  color.b.3    = 0x008000",				// GREEN
@@ -118,11 +138,11 @@ public class ThemePropertyFileReaderTest {
 	@Test
 	public void testBothDefaultsAndDarkDefaultsInSameFile() throws IOException {
 		//@formatter:off
-		ThemePropertyFileReader reader = new ThemePropertyFileReader("test", new StringReader(String.join("\n", 
-			"[Defaults]", 
+		ThemePropertyFileReader reader = new ThemePropertyFileReader("test", new StringReader(String.join("\n",
+			"[Defaults]",
 			"  color.b.1    = white",					// WHITE
 			"  color.b.2    = #ff0000",					// RED
-			"[Dark Defaults]", 
+			"[Dark Defaults]",
 			"  color.b.1    = black",					// BLACK
 			"  color.b.2    = #0000ff",					// BLUE
 			"")));
@@ -143,14 +163,14 @@ public class ThemePropertyFileReaderTest {
 	@Test
 	public void testLookAndFeelValues() throws IOException {
 		//@formatter:off
-		ThemePropertyFileReader reader = new ThemePropertyFileReader("test", new StringReader(String.join("\n", 
-			"[Defaults]", 
-			"  color.b.1    = white",					
-			"[Dark Defaults]", 
-			"  color.b.1    = black",					
+		ThemePropertyFileReader reader = new ThemePropertyFileReader("test", new StringReader(String.join("\n",
+			"[Defaults]",
+			"  color.b.1    = white",
+			"[Dark Defaults]",
+			"  color.b.1    = black",
 			"[Metal]",
 			"  color.b.1    = red",
-			"[Nimbus]", 
+			"[Nimbus]",
 			"  color.b.1    = green",
 			"")));
 		//@formatter:on
@@ -180,8 +200,8 @@ public class ThemePropertyFileReaderTest {
 	@Test
 	public void testParseColorError() throws IOException {
 		//@formatter:off
-		ThemePropertyFileReader reader = new SilentThemePropertyFileReader("test", new StringReader(String.join("\n", 
-			"[Defaults]", 
+		ThemePropertyFileReader reader = new SilentThemePropertyFileReader("test", new StringReader(String.join("\n",
+			"[Defaults]",
 			"  color.b.1    = white",					// WHITE
 			"  color.b.2    = sdfsdf",					// RED
 			"")));
@@ -189,18 +209,18 @@ public class ThemePropertyFileReaderTest {
 		List<String> errors = reader.getErrors();
 		assertEquals(1, errors.size());
 		assertEquals(
-			"Error parsing theme file \"test\" at line: 3, Could not parse Color value: sdfsdf",
+			"Error parsing theme file \"test\" at line: 3. Could not parse Color value: sdfsdf",
 			errors.get(0));
 	}
 
 	@Test
 	public void testParseFontError() throws IOException {
 		//@formatter:off
-		ThemePropertyFileReader reader = new SilentThemePropertyFileReader("test", new StringReader(String.join("\n", 
-			"[Defaults]", 
-			"  font.b.1    =  Dialog-PLAIN-14",					
-			"  font.b.2    = Dialog-PLANE-13",				
-			"  font.b.3    = Dialog-BOLD-ITALIC",				
+		ThemePropertyFileReader reader = new SilentThemePropertyFileReader("test", new StringReader(String.join("\n",
+			"[Defaults]",
+			"  font.b.1    =  Dialog-PLAIN-14",
+			"  font.b.2    = Dialog-PLANE-13",
+			"  font.b.3    = Dialog-BOLD-ITALIC",
 			"")));
 		//@formatter:on
 		List<String> errors = reader.getErrors();
@@ -211,10 +231,10 @@ public class ThemePropertyFileReaderTest {
 	@Test
 	public void testParseFontModiferError() throws IOException {
 		//@formatter:off
-		ThemePropertyFileReader reader = new SilentThemePropertyFileReader("test", new StringReader(String.join("\n", 
-			"[Defaults]", 
-			"  font.b.1    =  Dialog-PLAIN-14",					
-			"  font.b.2    = (font.b.1[)",				
+		ThemePropertyFileReader reader = new SilentThemePropertyFileReader("test", new StringReader(String.join("\n",
+			"[Defaults]",
+			"  font.b.1    =  Dialog-PLAIN-14",
+			"  font.b.2    = (font.b.1[)",
 			"")));
 		//@formatter:on
 		List<String> errors = reader.getErrors();
@@ -225,14 +245,81 @@ public class ThemePropertyFileReaderTest {
 	@Test
 	public void testIconNoRightHandValueError() throws IOException {
 		//@formatter:off
-		ThemePropertyFileReader reader = new SilentThemePropertyFileReader("test", new StringReader(String.join("\n", 
-			"[Defaults]", 
-			"  icon.b.1    = core.png",					
-			"  icon.b.2    = 	",			
+		ThemePropertyFileReader reader = new SilentThemePropertyFileReader("test", new StringReader(String.join("\n",
+			"[Defaults]",
+			"  icon.b.1    = core.png",
+			"  icon.b.2    = 	",
 			"")));
 		//@formatter:on
 		List<String> errors = reader.getErrors();
 		assertEquals(1, errors.size());
+
+	}
+
+	@Test
+	public void testColorIdDefinedInNonDefaultsSectionOnly() throws IOException {
+		//@formatter:off
+		ThemePropertyFileReader reader = new SilentThemePropertyFileReader("test", new StringReader(String.join("\n",
+			"[Defaults]",
+			"  color.foo = red",
+			"[Dark Defaults]",
+			"  color.bar = blue",
+			"")));
+		//@formatter:on
+		List<String> errors = reader.getErrors();
+		assertEquals(1, errors.size());
+		assertEquals(
+			"Error parsing theme file \"test\". Color id found in \"Dark Defaults\" section, but not defined in \"Defaults\" section: color.bar",
+			errors.get(0));
+	}
+
+	@Test
+	public void testFontIdDefinedInNonDefaultsSectionOnly() throws IOException {
+		//@formatter:off
+		ThemePropertyFileReader reader = new SilentThemePropertyFileReader("test", new StringReader(String.join("\n",
+			"[Defaults]",
+			"[Dark Defaults]",
+			"  font.bar = dialog-PLAIN-14",
+			"")));
+		//@formatter:on
+		List<String> errors = reader.getErrors();
+		assertEquals(1, errors.size());
+		assertEquals(
+			"Error parsing theme file \"test\". Font id found in \"Dark Defaults\" section, but not defined in \"Defaults\" section: font.bar",
+			errors.get(0));
+	}
+
+	@Test
+	public void testIconIdDefinedInNonDefaultsSectionOnly() throws IOException {
+		//@formatter:off
+		ThemePropertyFileReader reader = new SilentThemePropertyFileReader("test", new StringReader(String.join("\n",
+			"[Defaults]",
+			"[Dark Defaults]",
+			"  icon.bar = core.png",
+			"")));
+		//@formatter:on
+		List<String> errors = reader.getErrors();
+		assertEquals(1, errors.size());
+		assertEquals(
+			"Error parsing theme file \"test\". Icon id found in \"Dark Defaults\" section, but not defined in \"Defaults\" section: icon.bar",
+			errors.get(0));
+	}
+
+	@Test
+	public void testDefaultSectionMustBeFirst() throws Exception {
+		//@formatter:off
+		ThemePropertyFileReader reader = new SilentThemePropertyFileReader("test", new StringReader(String.join("\n",
+			"[Dark Defaults]",
+			"  color.foo = red",
+			"[Defaults]",
+			"  color.bar = blue",
+			"")));
+		//@formatter:on
+		List<String> errors = reader.getErrors();
+		assertEquals(1, errors.size());
+		assertEquals(
+			"Error parsing theme file \"test\" at line: 1. Defaults section must be defined before Dark Defaults section!",
+			errors.get(0));
 
 	}
 
@@ -249,6 +336,16 @@ public class ThemePropertyFileReaderTest {
 	private Icon getIcon(GThemeValueMap values, String id) {
 		IconValue icon = values.getIcon(id);
 		return icon.get(values);
+	}
+
+	private String getLafString(GThemeValueMap values, String id) {
+		StringPropertyValue value = (StringPropertyValue) values.getProperty(id);
+		return (String) value.get(values);
+	}
+
+	private boolean getLafBoolean(GThemeValueMap values, String id) {
+		BooleanPropertyValue value = (BooleanPropertyValue) values.getProperty(id);
+		return (Boolean) value.get(values);
 	}
 
 	private class SilentThemePropertyFileReader extends ThemePropertyFileReader {

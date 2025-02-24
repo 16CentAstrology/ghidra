@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,19 +19,17 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import ghidra.dbg.target.TargetStackFrame;
-import ghidra.dbg.target.schema.TargetObjectSchema;
-import ghidra.dbg.util.*;
 import ghidra.trace.database.target.DBTraceObject;
 import ghidra.trace.database.target.DBTraceObjectInterface;
 import ghidra.trace.model.Lifespan;
-import ghidra.trace.model.Trace.TraceStackChangeType;
 import ghidra.trace.model.stack.*;
 import ghidra.trace.model.target.TraceObject;
+import ghidra.trace.model.target.path.KeyPath;
+import ghidra.trace.model.target.path.PathFilter;
+import ghidra.trace.model.target.schema.TraceObjectSchema;
 import ghidra.trace.model.thread.TraceObjectThread;
 import ghidra.trace.model.thread.TraceThread;
-import ghidra.trace.util.TraceChangeRecord;
-import ghidra.trace.util.TraceChangeType;
+import ghidra.trace.util.*;
 import ghidra.util.LockHold;
 
 public class DBTraceObjectStack implements TraceObjectStack, DBTraceObjectInterface {
@@ -42,18 +40,18 @@ public class DBTraceObjectStack implements TraceObjectStack, DBTraceObjectInterf
 		}
 
 		@Override
-		protected TraceChangeType<TraceStack, Void> getAddedType() {
-			return TraceStackChangeType.ADDED;
+		protected TraceEvent<TraceStack, Void> getAddedType() {
+			return TraceEvents.STACK_ADDED;
 		}
 
 		@Override
-		protected TraceChangeType<TraceStack, Lifespan> getLifespanChangedType() {
+		protected TraceEvent<TraceStack, Lifespan> getLifespanChangedType() {
 			return null;
 		}
 
 		@Override
-		protected TraceChangeType<TraceStack, ?> getChangedType() {
-			return TraceStackChangeType.CHANGED;
+		protected TraceEvent<TraceStack, ?> getChangedType() {
+			return TraceEvents.STACK_CHANGED;
 		}
 
 		@Override
@@ -62,8 +60,8 @@ public class DBTraceObjectStack implements TraceObjectStack, DBTraceObjectInterf
 		}
 
 		@Override
-		protected TraceChangeType<TraceStack, Void> getDeletedType() {
-			return TraceStackChangeType.DELETED;
+		protected TraceEvent<TraceStack, Void> getDeletedType() {
+			return TraceEvents.STACK_DELETED;
 		}
 	}
 
@@ -93,8 +91,7 @@ public class DBTraceObjectStack implements TraceObjectStack, DBTraceObjectInterf
 	@Override
 	public int getDepth() {
 		try (LockHold hold = object.getTrace().lockRead()) {
-			return object
-					.querySuccessorsInterface(computeSpan(), TraceObjectStackFrame.class)
+			return object.querySuccessorsInterface(computeSpan(), TraceObjectStackFrame.class, true)
 					.map(f -> f.getLevel())
 					.reduce(Integer::max)
 					.map(m -> m + 1)
@@ -104,15 +101,14 @@ public class DBTraceObjectStack implements TraceObjectStack, DBTraceObjectInterf
 
 	protected TraceObjectStackFrame doAddStackFrame(int level) {
 		try (LockHold hold = object.getTrace().lockWrite()) {
-			PathMatcher matcher = object.getTargetSchema().searchFor(TargetStackFrame.class, true);
-			List<String> relKeyList =
-				matcher.applyKeys(PathUtils.makeIndex(level)).getSingletonPath();
-			if (relKeyList == null) {
+			PathFilter filter =
+				object.getSchema().searchFor(TraceObjectStackFrame.class, true);
+			KeyPath relPath = filter.applyKeys(KeyPath.makeIndex(level)).getSingletonPath();
+			if (relPath == null) {
 				throw new IllegalStateException("Could not determine where to create new frame");
 			}
-			List<String> keyList =
-				PathUtils.extend(object.getCanonicalPath().getKeyList(), relKeyList);
-			return object.getManager().addStackFrame(keyList, getSnap());
+			KeyPath path = object.getCanonicalPath().extend(relPath);
+			return object.getManager().addStackFrame(path, getSnap());
 		}
 	}
 
@@ -178,15 +174,15 @@ public class DBTraceObjectStack implements TraceObjectStack, DBTraceObjectInterf
 	}
 
 	protected TraceStackFrame doGetFrame(int level) {
-		TargetObjectSchema schema = object.getTargetSchema();
-		PathPredicates matcher = schema.searchFor(TargetStackFrame.class, true);
-		PathPredicates decMatcher = matcher.applyKeys(PathUtils.makeIndex(level));
-		PathPredicates hexMatcher = matcher.applyKeys("0x" + Integer.toHexString(level));
+		TraceObjectSchema schema = object.getSchema();
+		PathFilter filter = schema.searchFor(TraceObjectStackFrame.class, true);
+		PathFilter decFilter = filter.applyKeys(KeyPath.makeIndex(level));
+		PathFilter hexFilter = filter.applyKeys("0x" + Integer.toHexString(level));
 		Lifespan span = computeSpan();
-		return object.getSuccessors(span, decMatcher)
+		return object.getSuccessors(span, decFilter)
 				.findAny()
 				.map(p -> p.getDestination(object).queryInterface(TraceObjectStackFrame.class))
-				.or(() -> object.getSuccessors(span, hexMatcher)
+				.or(() -> object.getSuccessors(span, hexFilter)
 						.findAny()
 						.map(p -> p.getDestination(object)
 								.queryInterface(TraceObjectStackFrame.class)))
@@ -210,8 +206,7 @@ public class DBTraceObjectStack implements TraceObjectStack, DBTraceObjectInterf
 	}
 
 	protected Stream<TraceObjectStackFrame> doGetFrames(long snap) {
-		return object
-				.querySuccessorsInterface(Lifespan.at(snap), TraceObjectStackFrame.class)
+		return object.querySuccessorsInterface(Lifespan.at(snap), TraceObjectStackFrame.class, true)
 				.sorted(Comparator.comparing(f -> f.getLevel()));
 	}
 

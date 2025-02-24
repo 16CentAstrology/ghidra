@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,13 +15,13 @@
  */
 package ghidra.examples;
 
-import java.awt.*;
+import java.awt.BorderLayout;
+import java.awt.FlowLayout;
 import java.awt.event.*;
 
 import javax.swing.*;
 
-import docking.ActionContext;
-import docking.WindowPosition;
+import docking.*;
 import docking.action.*;
 import docking.widgets.EmptyBorderButton;
 import generic.theme.GIcon;
@@ -31,14 +31,14 @@ import ghidra.util.HelpLocation;
 import ghidra.util.Msg;
 
 public class HelloWorldComponentProvider extends ComponentProviderAdapter {
-	private final static HelpLocation HELP = new HelpLocation("SampleHelpTopic",
-		"SampleHelpTopic_Anchor_Name");
+	private final static HelpLocation HELP =
+		new HelpLocation("SampleHelpTopic", "SampleHelpTopic_Anchor_Name");
 	private MyButton activeButtonObj;
 	private JPanel mainPanel;
 	private DockingAction action;
 
-	public HelloWorldComponentProvider(PluginTool tool, String name) {
-		super(tool, name, name);
+	public HelloWorldComponentProvider(PluginTool tool, String owner) {
+		super(tool, "Hello World", owner);
 		buildMainPanel();
 		setIcon(new GIcon("icon.sample.provider"));
 		setHelpLocation(HELP);
@@ -51,7 +51,7 @@ public class HelloWorldComponentProvider extends ComponentProviderAdapter {
 	private void createActions() {
 
 		// set actions for Hello->World menu item
-		action = new DockingAction("Hello World", getName()) {
+		action = new DockingAction("Hello World", getOwner()) {
 			@Override
 			public void actionPerformed(ActionContext context) {
 				// pop up a "Hello World" dialog
@@ -65,8 +65,8 @@ public class HelloWorldComponentProvider extends ComponentProviderAdapter {
 		// the menu item will appear on the local toolbar drop down.
 		Icon icon = new GIcon("icon.sample.action.hello.world");
 		action.setMenuBarData(new MenuData(new String[] { "Misc", "Hello World" }, icon));
-		action.setKeyBindingData(new KeyBindingData(KeyStroke.getKeyStroke(KeyEvent.VK_W,
-			InputEvent.CTRL_MASK)));
+		action.setKeyBindingData(
+			new KeyBindingData(KeyStroke.getKeyStroke(KeyEvent.VK_W, InputEvent.CTRL_DOWN_MASK)));
 
 		// puts the action on the local toolbar.
 		action.setToolBarData(new ToolBarData(icon));
@@ -77,16 +77,16 @@ public class HelloWorldComponentProvider extends ComponentProviderAdapter {
 		addLocalAction(action);
 
 		//Example popup action
-		DockingAction popupAction = new DockingAction("Hello Popup", getName()) {
+		DockingAction popupAction = new DockingAction("Hello Popup", getOwner()) {
 			@Override
 			public void actionPerformed(ActionContext context) {
 				announce("Hello World");
 
-				// To get the context object,				
+				// To get the context object,
 				Object contextObject = context.getContextObject();
 
 				// ...now we can cast activeObj to be a object of MyButton
-				// if that is necessary, as the overridden isAddToPopup() method below 
+				// if that is necessary, as the overridden isAddToPopup() method below
 				// will not add the popup action if the context object is not our button
 
 				@SuppressWarnings("unused")
@@ -121,8 +121,6 @@ public class HelloWorldComponentProvider extends ComponentProviderAdapter {
 		JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER));
 		panel.setBorder(BorderFactory.createTitledBorder("Example of a Component"));
 		activeButtonObj = new MyButton("Hello World");
-		Font f = activeButtonObj.getFont();
-		activeButtonObj.setFont(f.deriveFont(Font.BOLD, 14));
 		panel.add(activeButtonObj);
 		mainPanel.add(panel, BorderLayout.CENTER);
 	}
@@ -132,15 +130,12 @@ public class HelloWorldComponentProvider extends ComponentProviderAdapter {
 		if (event != null) {
 			Object source = event.getSource();
 			if (source == activeButtonObj) {
-				return new ActionContext(this, activeButtonObj);
+				return new DefaultActionContext(this, activeButtonObj);
 			}
 		}
 		return null;
 	}
 
-	/**
-	 * popup the Hello Dialog
-	 */
 	protected void announce(String message) {
 		Msg.showInfo(getClass(), mainPanel, "Hello World", message);
 	}
@@ -150,13 +145,7 @@ public class HelloWorldComponentProvider extends ComponentProviderAdapter {
 			super(name);
 			setBorder(BorderFactory.createEmptyBorder(10, 5, 10, 5));
 
-			addActionListener(new ActionListener() {
-
-				@Override
-				public void actionPerformed(ActionEvent e) {
-					announce("Hello World");
-				}
-			});
+			addActionListener(e -> announce("Hello World"));
 		}
 	}
 }

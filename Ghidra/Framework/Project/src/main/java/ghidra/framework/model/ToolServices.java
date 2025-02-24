@@ -17,9 +17,9 @@ package ghidra.framework.model;
 
 import java.io.*;
 import java.net.URL;
+import java.util.Collection;
 import java.util.Set;
 
-import ghidra.framework.plugintool.PluginEvent;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.framework.protocol.ghidra.GhidraURL;
 
@@ -33,22 +33,22 @@ public interface ToolServices {
 
 	/**
 	 * Notify the framework that the tool is closing.
-	 * 
+	 *
 	 * @param tool tool that is closing
 	 */
 	public void closeTool(PluginTool tool);
 
 	/**
 	 * Saves the tool's configuration in the standard
-	 * tool location.  
-	 * 
+	 * tool location.
+	 *
 	 * @param tool tool to save.
 	 */
 	public void saveTool(PluginTool tool);
 
 	/**
 	 * Save the tool to the given location on the local file system.
-	 * 
+	 *
 	 * @param tool the tool template to write
 	 * @return the file to which the tool was saved
 	 * @throws FileNotFoundException thrown if the file's directory doesn't exist.
@@ -63,30 +63,18 @@ public interface ToolServices {
 	public ToolChest getToolChest();
 
 	/**
-	 * Find a running tool like the one specified that has the named domain file.
-	 * If it finds a matching tool, then it is brought to the front.
-	 * Otherwise, it creates one and runs it.
-	 * It then invokes the specified event on the running tool.
-	 * 
-	 * @param tool find/create a tool like this one.
-	 * @param domainFile open this file in the found/created tool.
-	 * @param event invoke this event on the found/created tool
-	 */
-	public void displaySimilarTool(PluginTool tool, DomainFile domainFile, PluginEvent event);
-
-	/**
-	 * Returns the default/preferred tool template which should be used to open the specified 
+	 * Returns the default/preferred tool template which should be used to open the specified
 	 * domain file, whether defined by the user or the system default.
-	 * 
+	 *
 	 * @param domainFile The file whose preferred tool should be found.
 	 * @return The preferred tool that should be used to open the given file or null if none found.
 	 */
 	public ToolTemplate getDefaultToolTemplate(DomainFile domainFile);
 
 	/**
-	 * Returns the default/preferred tool template which should be used to open the specified 
+	 * Returns the default/preferred tool template which should be used to open the specified
 	 * domain file content type, whether defined by the user or the system default.
-	 * 
+	 *
 	 * @param contentType The content type whose preferred tool should be found.
 	 * @return The preferred tool that should be used to open the given file or null if none found.
 	 */
@@ -100,43 +88,48 @@ public interface ToolServices {
 	public Set<ToolTemplate> getCompatibleTools(Class<? extends DomainObject> domainClass);
 
 	/**
-	 * Returns the {@link ToolAssociationInfo associations}, which describe content 
+	 * Returns the {@link ToolAssociationInfo associations}, which describe content
 	 * types and the tools used to open them, for all content types known to the system.
-	 * 
+	 *
 	 * @return the associations
 	 * @see #setContentTypeToolAssociations(Set)
 	 */
 	public Set<ToolAssociationInfo> getContentTypeToolAssociations();
 
 	/**
-	 * Sets the  {@link ToolAssociationInfo associations}, which describe content 
-	 * types and the tools used to open them, for the system. 
-	 * 
+	 * Sets the  {@link ToolAssociationInfo associations}, which describe content
+	 * types and the tools used to open them, for the system.
+	 *
 	 * @param infos The associations to be applied
 	 * @see #getContentTypeToolAssociations()
 	 */
 	public void setContentTypeToolAssociations(Set<ToolAssociationInfo> infos);
 
 	/**
-	 * Launch the default tool and open the specified domainFile.
-	 * @param domainFile the file to open
+	 * Launch the default {@link PluginTool tool} and open the specified domainFiles.
+	 * NOTE: running tool reuse is implementation dependent
+	 * @param domainFiles the files to open.  A null or empty list will results in an immediate 
+	 * return of a null {@link PluginTool}.  Null entries are not permitted.
 	 * @return the launched tool.  Null returned if a suitable default tool
-	 * for the file content type was not found.
+	 * for the file content type was not found or failed to launch.
 	 */
-	public PluginTool launchDefaultTool(DomainFile domainFile);
+	public PluginTool launchDefaultTool(Collection<DomainFile> domainFiles);
 
 	/**
-	 * Launch the tool with the given name.  A domainFile may be specified and will be opened
-	 * if its content type is supported by the tool.
-	 * @param toolName name of the tool to launch
-	 * @param domainFile the file to open; may be null
-	 * @return the requested tool or null if the specified tool not found.
+	 * Launch the {@link PluginTool tool} with the given name and open the specified domainFiles.
+	 * Only those domainFiles with a content type supported by the specified tool will be opened.
+	 * NOTE: running tool reuse is implementation dependent.  
+	 * @param toolName name of the {@link ToolTemplate tool template} to launch or re-use
+	 * @param domainFiles the files to open; may be null or empty.  Null entries are not permitted.
+	 * @return the resulting {@link PluginTool tool} or null if the specified tool was not found
+	 * or failed to launch
 	 */
-	public PluginTool launchTool(String toolName, DomainFile domainFile);
+	public PluginTool launchTool(String toolName, Collection<DomainFile> domainFiles);
 
 	/**
 	 * Launch the default tool and open the specified Ghidra URL resource.
-	 * The tool choosen well be based upon the content type of the specified resource.
+	 * The tool chosen will be based upon the content type of the specified resource.
+	 * NOTE: running tool re-use is implementation dependent
 	 * @param ghidraUrl resource to be opened (see {@link GhidraURL})
 	 * @return the launched tool.  Null returned if a failure occurs while accessing the specified
 	 * resource or a suitable default tool for the file content type was not found.
@@ -154,18 +147,6 @@ public interface ToolServices {
 	 * the {@code ghidra} protocol is supported.
 	 */
 	public PluginTool launchToolWithURL(String toolName, URL ghidraUrl);
-
-	/**
-	 * Add a listener that will be notified when the default tool specification changes 
-	 * @param listener the listener
-	 */
-	public void addDefaultToolChangeListener(DefaultToolChangeListener listener);
-
-	/**
-	 * Remove the listener
-	 * @param listener the listener
-	 */
-	public void removeDefaultToolChangeListener(DefaultToolChangeListener listener);
 
 	/**
 	 * Return array of running tools

@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,6 +18,35 @@
  #ifdef a
  #undef a
  #endif
+
+#ifdef __WCHAR_MAX__
+# define __WCHAR_MAX    __WCHAR_MAX__
+#elif L'\0' - 1 > 0
+# define __WCHAR_MAX    (0xffffffffu + L'\0')
+#else
+# define __WCHAR_MAX    (0x7fffffff + L'\0')
+#endif
+
+/* test for comment parsing */
+# define         AComment(a)   B(a)  /**/
+
+# define         BComment(a)   C(a)  /***/
+# define         CComment            /****/
+ 
+# ifndef FOO
+#define DidFOO  "true" /* test comment */
+# endif
+
+#ifdef NOFOO
+int IntShouldBeCommented;
+#pragma PragmaShouldBeCommented
+#endif
+
+#ifndef NOFOO
+int IntShouldNotBeCommented;
+#pragma PragmaShouldNotBeCommented;
+#endif
+
 
  /* definition coming from -D, should evaluate to true */
  #if FROM_ARG_VALUE
@@ -75,13 +104,17 @@
  #define DID_FILE_ISDEF_DEF 1
  #endif
 
-#include "multinclude.h"
+#include <multinclude.h> /* include once */
+
+#include "multinclude.h" /* include twice */
 
 #include "multinclude.h"
 
 #include "multinclude.h"
 
-#include "multinclude.h"
+#define __DEFINED_INCLUDE <defined.h>
+
+#include __DEFINED_INCLUDE /* THIS SHOULD BE IGNORED <> */
 
 #define __TEXT(quote)  quote
 
@@ -100,6 +133,14 @@ int foo;
  
  
 #pragma once
+
+#pragma multiple \
+        lines \
+        pragma
+
+#pragma no comment here /* no comment / here */
+
+#pragma with no EOL comment here // no comment here
 
 #define PTYPE 4
 
@@ -158,10 +199,10 @@ int foo;
 #define TWOFISH 2
 
 #if (ONEFISH + TWOFISH + REDFISH + BLUEFISH) > 2
-#error "Too many fish"
 #define TOO_MANY_FISH 0
 int TooManyFish;
 #else
+#error "Too few fish"
 int NotEnoughFish;
 #endif
 
@@ -218,9 +259,46 @@ int TEST_FAILED;
 
 #define DefVal10 ((0x7fff) * 900L / 1000)
 
+#define DefVal_1L	1L
+#define DefVal_2l	2l
+#define DefVal_3U	3U 
+#define DefVal_4u	4u
+#define DefVal_5UL	5UL
+#define DefVal_6ul	6ul
+#define DefVal_7lu	7lu
+#define DefVal_8llu	8llu
+#define DefVal_9ull	9ull
+#define DefVal_10ll	10ll
+
+#define DefVal_P_1L (1L)
+#define DefVal_P_2l (2l)
+#define DefVal_P_3U (3U )
+#define DefVal_P_4u ( 4u)
+#define DefVal_P_5UL ( 5UL )
+#define DefVal_P_6ul (6ul)
+#define DefVal_P_7lu ( 7lu )
+#define DefVal_P_8llu ( 8llu )
+#define DefVal_P_9ull ( 9ull )
+#define DefVal_P_10ll ( 10ll )
+
 #define BIGNUM 64 * 16 + 16
 
 #define ImOctal 01234567
+
+
+#define BYTE_LEN_1   0x1
+#define BYTE_LEN_8   0x8
+#define BYTE_LEN_1F   0x1F
+#define BYTE_LEN_FF   0xFF
+#define BYTE_LEN_1FF   0x1FF
+#define BYTE_LEN_7FFF   0x7FFF
+#define BYTE_LEN_10000   0x10000
+#define BYTE_LEN_1000000 0x1000000
+#define BYTE_LEN_100000000   0x100000000
+#define BYTE_LEN_10000000000   0x10000000000
+#define BYTE_LEN_1000000000000   0x1000000000000
+#define BYTE_LEN_100000000000000   0x100000000000000
+#define BYTE_LEN_neg1   -1
 
 /**
  ** Test for recursive definitions, Should not cause an infinite loop
@@ -393,6 +471,23 @@ ldp LDP((
         _Pragma("clang diagnostic ignored \"-Wmismatched-tags\"")
 
 /**
+ ** Multi line false ifdef with Quoted string
+ */
+
+#define __USE_GNU "1"
+
+#ifdef __USE_GNU
+extern int pthread_yield (void) __THROW;
+# ifdef __REDIRECT_NTH
+extern int __REDIRECT_NTH (pthread_yield, (void), sched_yield)
+  __attribute_deprecated_msg__ ("\
+pthread_yield is deprecated, use sched_yield instead");
+# else
+#  define pthread_yield sched_yield
+# endif
+#endif
+
+/**
  ** Protected from macro expansion
  **/
  
@@ -471,5 +566,47 @@ int does_not_has_include();
 #define BEGINC  QUOTED('"')
 #define TEST_QUOTED_QUOTE    QUOTED('"')
 
+#define TEST_MULTILINE_TEXT(t) multi_line_worked(t)
+
+A = TEST_MULTILINE_TEXT("One Line")
+
+B = TEST_MULTILINE_TEXT("Some text first line"
+               "More text second line") 
+
+#define DUAL_MULTILINE(A, B) dual_line_worked(A,B)
+       
+C = DUAL_MULTILINE(1, OneLine("Caution: One Line"))
+
+D = DUAL_MULTILINE(2, "Caution: First line"
+                                      " second line"
+                                      " third line"
+                                      " fourth line")
+
+//
+// check calculations
+//
+#define NUMBER1        0x10000000
+#define NUMBER2        0x10000001
+#define NUMBER3        0xF0000002
+
+#if (NUMBER2 <= NUMBER1) || (NUMBER3 <= NUMBER2)
+#error new number must be greater than the old one
+#endif
+
+#if (NUMBER1 & 0xE0000000)
+#error NUMBER1 & 0xE0000000 should be false
+#endif
+
+#if (NUMBER2 & 0xE0000000)
+#error NUMBER2 & 0xE0000000 should be false
+#endif
+
+#if !(NUMBER3 & 0xE0000000)
+#error NUMBER3 & 0xE0000000 should be true
+#endif
+
+#if ((NUMBER2 & 0xE0000000) || (NUMBER2 & 0xE0000000)) || !(NUMBER3 & 0xE0000000)
+#error ((NUMBER2 & 0xE0000000) || (NUMBER2 & 0xE0000000)) || !(NUMBER3 & 0xE0000000) should be false
+#endif
 
 theEnd();

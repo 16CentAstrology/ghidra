@@ -17,7 +17,6 @@ package ghidra.app.util.viewer.field;
 
 import java.awt.Color;
 import java.awt.FontMetrics;
-import java.beans.PropertyEditor;
 import java.math.BigInteger;
 import java.util.*;
 import java.util.Map.Entry;
@@ -28,10 +27,10 @@ import javax.swing.event.ChangeListener;
 import docking.widgets.fieldpanel.field.*;
 import docking.widgets.fieldpanel.support.*;
 import generic.theme.GThemeDefaults.Colors;
-import ghidra.app.util.HighlightProvider;
+import ghidra.app.util.ListingHighlightProvider;
 import ghidra.app.util.XReferenceUtils;
+import ghidra.app.util.viewer.field.ListingColors.XrefColors;
 import ghidra.app.util.viewer.format.FieldFormatModel;
-import ghidra.app.util.viewer.options.OptionsGui;
 import ghidra.app.util.viewer.proxy.ProxyObj;
 import ghidra.framework.options.*;
 import ghidra.program.model.address.Address;
@@ -75,12 +74,6 @@ public class XRefFieldFactory extends FieldFactory {
 	static final String GROUP_BY_FUNCTION_KEY =
 		GROUP_TITLE + Options.DELIMITER + "Group by Function";
 
-	private PropertyEditor namespaceOptionsEditor = new NamespacePropertyEditor();
-
-	protected Color offcutColor;
-	protected Color readColor;
-	protected Color writeColor;
-	protected Color otherColor;
 	protected String delim = DELIMITER;
 	protected boolean displayBlockName;
 	protected boolean groupByFunction;
@@ -110,7 +103,7 @@ public class XRefFieldFactory extends FieldFactory {
 	 * @param displayOptions the Options for display properties.
 	 * @param fieldOptions the Options for field specific properties.
 	 */
-	public XRefFieldFactory(FieldFormatModel model, HighlightProvider hlProvider,
+	public XRefFieldFactory(FieldFormatModel model, ListingHighlightProvider hlProvider,
 			Options displayOptions, ToolOptions fieldOptions) {
 		this(FIELD_NAME, model, hlProvider, displayOptions, fieldOptions);
 
@@ -125,7 +118,8 @@ public class XRefFieldFactory extends FieldFactory {
 	 * @param displayOptions the Options for display properties.
 	 * @param fieldOptions the Options for field specific properties.
 	 */
-	protected XRefFieldFactory(String name, FieldFormatModel model, HighlightProvider hlProvider,
+	protected XRefFieldFactory(String name, FieldFormatModel model,
+			ListingHighlightProvider hlProvider,
 			Options displayOptions, ToolOptions fieldOptions) {
 		super(name, model, hlProvider, displayOptions, fieldOptions);
 
@@ -142,15 +136,6 @@ public class XRefFieldFactory extends FieldFactory {
 			"How to sort the xrefs");
 		fieldOptions.registerOption(GROUP_BY_FUNCTION_KEY, false, hl,
 			"True signals to group all xrefs by the containing calling function.");
-
-		offcutColor = displayOptions.getColor(OptionsGui.XREF_OFFCUT.getColorOptionName(),
-			OptionsGui.XREF_OFFCUT.getDefaultColor());
-		readColor = displayOptions.getColor(OptionsGui.XREF_READ.getColorOptionName(),
-			OptionsGui.XREF_READ.getDefaultColor());
-		writeColor = displayOptions.getColor(OptionsGui.XREF_WRITE.getColorOptionName(),
-			OptionsGui.XREF_WRITE.getDefaultColor());
-		otherColor = displayOptions.getColor(OptionsGui.XREF_OTHER.getColorOptionName(),
-			OptionsGui.XREF_OTHER.getDefaultColor());
 
 		typeComparator = (r1, r2) -> {
 			if (r1.getReferenceType().toString().equals(r2.getReferenceType().toString())) {
@@ -179,17 +164,14 @@ public class XRefFieldFactory extends FieldFactory {
 	private void setupNamespaceOptions(Options fieldOptions) {
 		// we need to install a custom editor that allows us to edit a group of related options
 		fieldOptions.registerOption(NAMESPACE_OPTIONS_KEY, OptionType.CUSTOM_TYPE,
-			new NamespaceWrappedOption(), null, "Adjusts the XREFs Field namespace display",
-			namespaceOptionsEditor);
+			new NamespaceWrappedOption(), new HelpLocation("CodeBrowserPlugin", "XREFs_Field"),
+			"Adjusts the XREFs Field namespace display", () -> new NamespacePropertyEditor());
 		CustomOption customOption = fieldOptions.getCustomOption(NAMESPACE_OPTIONS_KEY, null);
-		fieldOptions.getOptions(NAMESPACE_OPTIONS_KEY)
-				.setOptionsHelpLocation(
-					new HelpLocation("CodeBrowserPlugin", "XREFs_Field"));
+
 		if (!(customOption instanceof NamespaceWrappedOption)) {
-			throw new AssertException(
-				"Someone set an option for " + NAMESPACE_OPTIONS_KEY +
-					" that is not the expected " +
-					"ghidra.app.util.viewer.field.NamespaceWrappedOption type.");
+			throw new AssertException("Someone set an option for " + NAMESPACE_OPTIONS_KEY +
+				" that is not the expected " +
+				NamespaceWrappedOption.class.getName() + " type.");
 		}
 
 		NamespaceWrappedOption namespaceOption = (NamespaceWrappedOption) customOption;
@@ -197,33 +179,6 @@ public class XRefFieldFactory extends FieldFactory {
 		displayNonLocalNamespace = namespaceOption.isShowNonLocalNamespace();
 		useLocalPrefixOverride = namespaceOption.isUseLocalPrefixOverride();
 		localPrefixText = namespaceOption.getLocalPrefixText();
-	}
-
-	@Override
-	public void displayOptionsChanged(Options options, String optionName, Object oldValue,
-			Object newValue) {
-		super.displayOptionsChanged(options, optionName, oldValue, newValue);
-
-		if (optionName.equals(OptionsGui.XREF_OFFCUT.getColorOptionName())) {
-			offcutColor = (Color) newValue;
-			model.update();
-		}
-		else if (optionName.equals(OptionsGui.XREF.getColorOptionName())) {
-			color = (Color) newValue;
-			model.update();
-		}
-		else if (optionName.equals(OptionsGui.XREF_READ.getColorOptionName())) {
-			readColor = (Color) newValue;
-			model.update();
-		}
-		else if (optionName.equals(OptionsGui.XREF_WRITE.getColorOptionName())) {
-			writeColor = (Color) newValue;
-			model.update();
-		}
-		else if (optionName.equals(OptionsGui.XREF_OTHER.getColorOptionName())) {
-			otherColor = (Color) newValue;
-			model.update();
-		}
 	}
 
 	@Override
@@ -266,11 +221,6 @@ public class XRefFieldFactory extends FieldFactory {
 			options.setInt(MAX_XREFS_KEY, 1);
 		}
 		maxXRefs = n;
-	}
-
-	@Override
-	public Color getDefaultColor() {
-		return OptionsGui.XREF.getDefaultColor();
 	}
 
 	@Override
@@ -330,8 +280,8 @@ public class XRefFieldFactory extends FieldFactory {
 									
 									
 	*/
-	private ListingField getFieldByFunction(ProxyObj<?> proxy, int varWidth,
-			List<Reference> xrefs, List<Reference> offcuts) {
+	private ListingField getFieldByFunction(ProxyObj<?> proxy, int varWidth, List<Reference> xrefs,
+			List<Reference> offcuts) {
 
 		int totalXrefs = xrefs.size() + offcuts.size();
 		if (totalXrefs == 0) {
@@ -369,12 +319,11 @@ public class XRefFieldFactory extends FieldFactory {
 		//
 		Set<Reference> offcutSet = new HashSet<>(offcuts);
 		Predicate<Reference> isOffcut = r -> offcutSet.contains(r);
-		HighlightFactory hlFactory =
-			new FieldHighlightFactory(hlProvider, getClass(), proxy.getObject());
+		ListingFieldHighlightFactoryAdapter hlFactory =
+			new ListingFieldHighlightFactoryAdapter(hlProvider);
 		Function currentFunction = functionManager.getFunctionContaining(cu.getMinAddress());
-		List<TextField> functionRows =
-			createXrefRowsByFunction(program, currentFunction, xrefsByFunction, isOffcut, varWidth,
-				hlFactory);
+		List<TextField> functionRows = createXrefRowsByFunction(program, currentFunction,
+			xrefsByFunction, isOffcut, varWidth, hlFactory);
 
 		//
 		// TODO maxXRefs makes sense when simply displaying xrefs.  What does max mean when
@@ -398,9 +347,8 @@ public class XRefFieldFactory extends FieldFactory {
 		//       Our screen rows are what we are building to display; a data row we are here
 		//       defining to be a single xref.   This is a somewhat arbitrary decision.
 		int dataRow = totalXrefs - noFunction.size();
-		TextField noFunctionXrefsField =
-			createWrappingXrefRow(program, dataRow, noFunction, currentFunction, isOffcut,
-				availableLines, hlFactory);
+		TextField noFunctionXrefsField = createWrappingXrefRow(program, dataRow, noFunction,
+			currentFunction, isOffcut, availableLines, hlFactory);
 
 		List<TextField> allFields = new ArrayList<>();
 		allFields.addAll(functionRows);
@@ -412,7 +360,8 @@ public class XRefFieldFactory extends FieldFactory {
 		if (tooMany) {
 			// add the [more] element
 			int lastRow = allFields.size() - 1;
-			AttributedString as = new AttributedString(MORE_XREFS_STRING, color, metrics);
+			AttributedString as =
+				new AttributedString(MORE_XREFS_STRING, XrefColors.DEFAULT, metrics);
 			TextFieldElement moreElement = new TextFieldElement(as, lastRow, 0);
 			ClippingTextField ctf = new ClippingTextField(newStartX, width, moreElement, hlFactory);
 			allFields.add(ctf);
@@ -420,13 +369,14 @@ public class XRefFieldFactory extends FieldFactory {
 
 		CompositeVerticalLayoutTextField compositefield =
 			new CompositeVerticalLayoutTextField(allFields, newStartX, width, maxXRefs, hlFactory);
-		return new XrefListingField(this, proxy, compositefield);
+		XrefListingField listingField =
+			new XrefListingField(this, proxy, compositefield, hlFactory);
+		return listingField;
 	}
 
 	private List<TextField> createXrefRowsByFunction(Program program, Function currentFunction,
 			TreeMap<Function, List<Reference>> xrefsByFunction, Predicate<Reference> isOffcut,
-			int varWidth,
-			HighlightFactory hlFactory) {
+			int varWidth, FieldHighlightFactory hlFactory) {
 
 		FontMetrics metrics = getMetrics();
 		AttributedString delimiter = new AttributedString(delim, Colors.FOREGROUND, metrics);
@@ -449,12 +399,10 @@ public class XRefFieldFactory extends FieldFactory {
 				sizeText = "[" + refs.size() + "]: ";
 			}
 			String text = functionName + sizeText;
-			AttributedString nameString =
-				new AttributedString(text, color, metrics);
+			AttributedString nameString = new AttributedString(text, XrefColors.DEFAULT, metrics);
 			List<XrefFieldElement> rowElements = new ArrayList<>();
 			Reference firstRef = refs.get(0);
-			XrefAttributedString xrefString =
-				new XrefAttributedString(firstRef, nameString);
+			XrefAttributedString xrefString = new XrefAttributedString(firstRef, nameString);
 			rowElements.add(new XrefFieldElement(xrefString, row, 0));
 
 			//
@@ -466,9 +414,8 @@ public class XRefFieldFactory extends FieldFactory {
 				boolean isLast = i == n - 1;
 				Reference ref = refs.get(i);
 				String prefix = getMergedPrefix(program, ref, currentFunction, fromFunction);
-				XrefFieldElement element =
-					createFunctionElement(program, prefix, ref, row, isLast ? null : delimiter,
-						isOffcut.test(ref));
+				XrefFieldElement element = createFunctionElement(program, prefix, ref, row,
+					isLast ? null : delimiter, isOffcut.test(ref));
 				rowElements.add(element);
 			}
 
@@ -488,7 +435,7 @@ public class XRefFieldFactory extends FieldFactory {
 
 	private TextField createWrappingXrefRow(Program program, int startRow, List<Reference> xrefs,
 			Function currentFunction, Predicate<Reference> isOffcut, int availableLines,
-			HighlightFactory hlFactory) {
+			FieldHighlightFactory hlFactory) {
 
 		FontMetrics metrics = getMetrics();
 		AttributedString delimiter = new AttributedString(delim, Colors.FOREGROUND, metrics);
@@ -583,11 +530,11 @@ public class XRefFieldFactory extends FieldFactory {
 
 		// assumption: the given array has been limited to the maxXref size already
 		int n = list.size();
-		HighlightFactory hlFactory =
-			new FieldHighlightFactory(hlProvider, getClass(), proxy.getObject());
-		TextField field =
-			new FlowLayoutTextField(list, startX + varWidth, width, n, hlFactory);
-		return new XrefListingField(this, proxy, field);
+		ListingFieldHighlightFactoryAdapter hlFactory =
+			new ListingFieldHighlightFactoryAdapter(hlProvider);
+		TextField field = new FlowLayoutTextField(list, startX + varWidth, width, n, hlFactory);
+		XrefListingField listingField = new XrefListingField(this, proxy, field, hlFactory);
+		return listingField;
 	}
 
 	private List<FieldElement> toFieldElements(List<XrefFieldElement> list, boolean showEllipses) {
@@ -596,8 +543,9 @@ public class XRefFieldFactory extends FieldFactory {
 		if (showEllipses) {
 			// add the 'more' string
 			int lastRow = list.size() - 1;
-			AttributedString as = new AttributedString(MORE_XREFS_STRING, color, getMetrics());
-			fieldElements.add(new TextFieldElement(as, lastRow, 0));
+			AttributedString as =
+				new AttributedString(MORE_XREFS_STRING, XrefColors.DEFAULT, getMetrics());
+			fieldElements.add(new TextFieldElement(as, lastRow + 1, 0));
 		}
 		return fieldElements;
 	}
@@ -607,14 +555,13 @@ public class XRefFieldFactory extends FieldFactory {
 
 		FontMetrics metrics = getMetrics();
 		String addressString = ref.getFromAddress().toString(prefix);
-		Color refColor = isOffcut ? offcutColor : color;
+		Color refColor = isOffcut ? XrefColors.OFFCUT : XrefColors.DEFAULT;
 		AttributedString addressPart = new AttributedString(addressString, refColor, metrics);
 		if (displayRefType) {
 			addressPart = createRefTypeAttributedString(ref, addressPart);
 		}
 
-		XrefAttributedString xrefString =
-			new XrefAttributedString(ref, addressPart, delimiter);
+		XrefAttributedString xrefString = new XrefAttributedString(ref, addressPart, delimiter);
 		if (delimiter == null) {
 			xrefString.hideDelimiter();
 		}
@@ -627,14 +574,13 @@ public class XRefFieldFactory extends FieldFactory {
 
 		FontMetrics metrics = getMetrics();
 		String addressString = ref.getFromAddress().toString(prefix);
-		Color refColor = isOffcut ? offcutColor : color;
+		Color refColor = isOffcut ? XrefColors.OFFCUT : XrefColors.DEFAULT;
 		AttributedString as = new AttributedString(addressString, refColor, metrics);
 		if (displayRefType) {
 			as = createRefTypeAttributedString(ref, as);
 		}
 
-		XrefAttributedString xrefString =
-			new XrefAttributedString(ref, as, delimiter);
+		XrefAttributedString xrefString = new XrefAttributedString(ref, as, delimiter);
 		return new XrefFieldElement(xrefString, row, 0);
 	}
 
@@ -642,23 +588,23 @@ public class XRefFieldFactory extends FieldFactory {
 			AttributedString referenceString) {
 		AttributedString fullReferenceString = referenceString;
 		if (reference.getReferenceType().isRead() && reference.getReferenceType().isWrite()) {
-			AttributedString typeString = new AttributedString("(R", readColor, getMetrics());
+			AttributedString typeString = new AttributedString("(R", XrefColors.READ, getMetrics());
 			fullReferenceString = new CompositeAttributedString(
 				new AttributedString[] { fullReferenceString, typeString });
-			typeString = new AttributedString("W)", writeColor, getMetrics());
+			typeString = new AttributedString("W)", XrefColors.WRITE, getMetrics());
 			return new CompositeAttributedString(
 				new AttributedString[] { fullReferenceString, typeString });
 		}
 
-		Color displayColor = color;
+		Color displayColor = XrefColors.DEFAULT;
 		if (reference.getReferenceType().isRead() || reference.getReferenceType().isIndirect()) {
-			displayColor = readColor;
+			displayColor = XrefColors.READ;
 		}
 		else if (reference.getReferenceType().isWrite()) {
-			displayColor = writeColor;
+			displayColor = XrefColors.WRITE;
 		}
 		else if (reference.getReferenceType().isData()) {
-			displayColor = otherColor;
+			displayColor = XrefColors.OTHER;
 		}
 
 		AttributedString typeString =
@@ -823,8 +769,7 @@ public class XRefFieldFactory extends FieldFactory {
 	}
 
 	private XRefFieldLocation getXRefLocation(XrefFieldElement xrefElement, CodeUnit cu,
-			int[] cpath,
-			RowColLocation loc, int row) {
+			int[] cpath, RowColLocation loc, int row) {
 		Reference xref = xrefElement.getXref();
 		Address refAddr = xref.getFromAddress();
 		return new XRefFieldLocation(cu.getProgram(), cu.getMinAddress(), cpath, refAddr, row,
@@ -871,7 +816,8 @@ public class XRefFieldFactory extends FieldFactory {
 	}
 
 	@Override
-	public FieldFactory newInstance(FieldFormatModel formatModel, HighlightProvider provider,
+	public FieldFactory newInstance(FieldFormatModel formatModel,
+			ListingHighlightProvider provider,
 			ToolOptions toolOptions, ToolOptions fieldOptions) {
 		return new XRefFieldFactory(formatModel, provider, toolOptions, fieldOptions);
 	}
@@ -912,9 +858,8 @@ public class XRefFieldFactory extends FieldFactory {
 			// resizing field to a particular size, resulted in layout of references to be strange
 			char[] charSpaces = new char[length];
 			Arrays.fill(charSpaces, ' ');
-			AttributedString spaces =
-				new AttributedString(new String(charSpaces), source.getColor(0),
-					source.getFontMetrics(0));
+			AttributedString spaces = new AttributedString(new String(charSpaces),
+				source.getColor(0), source.getFontMetrics(0));
 			attributedStrings[attributedStrings.length - 1] = spaces;
 		}
 
@@ -943,8 +888,9 @@ public class XRefFieldFactory extends FieldFactory {
 
 	private class XrefListingField extends ListingTextField {
 
-		XrefListingField(XRefFieldFactory factory, ProxyObj<?> proxy, TextField field) {
-			super(factory, proxy, field);
+		XrefListingField(XRefFieldFactory factory, ProxyObj<?> proxy, TextField field,
+				ListingFieldHighlightFactoryAdapter hlFactory) {
+			super(factory, proxy, field, hlFactory);
 		}
 
 	}

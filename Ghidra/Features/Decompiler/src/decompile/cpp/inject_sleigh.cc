@@ -17,6 +17,8 @@
 #include "pcodeparse.hh"
 #include "architecture.hh"
 
+namespace ghidra {
+
 InjectContextSleigh::~InjectContextSleigh(void)
 
 {
@@ -89,7 +91,8 @@ void InjectPayloadSleigh::decode(Decoder &decoder)
 void InjectPayloadSleigh::printTemplate(ostream &s) const
 
 {
-  tpl->saveXml(s,-1);
+  XmlEncode encoder(s);
+  tpl->encode(encoder,-1);
 }
 
 void InjectPayloadSleigh::checkParameterRestrictions(InjectContextSleigh &con,
@@ -245,7 +248,8 @@ void ExecutablePcodeSleigh::decode(Decoder &decoder)
 void ExecutablePcodeSleigh::printTemplate(ostream &s) const
 
 {
-  tpl->saveXml(s,-1);
+  XmlEncode encoder(s);
+  tpl->encode(encoder,-1);
 }
 
 InjectPayloadDynamic::~InjectPayloadDynamic(void)
@@ -468,3 +472,5 @@ int4 PcodeInjectLibrarySleigh::manualCallOtherFixup(const string &name,const str
   registerInject(injectid);
   return injectid;
 }
+
+} // End namespace ghidra

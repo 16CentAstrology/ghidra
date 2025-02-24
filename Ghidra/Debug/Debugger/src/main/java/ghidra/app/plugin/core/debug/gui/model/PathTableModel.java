@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,7 +16,8 @@
 package ghidra.app.plugin.core.debug.gui.model;
 
 import java.awt.Color;
-import java.util.*;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import docking.widgets.table.RangeCursorTableHeaderRenderer.SeekListener;
@@ -27,16 +28,24 @@ import ghidra.framework.plugintool.Plugin;
 import ghidra.trace.model.Lifespan;
 import ghidra.trace.model.Trace;
 import ghidra.trace.model.target.*;
+import ghidra.trace.model.target.path.KeyPath;
 
 public class PathTableModel extends AbstractQueryTableModel<PathRow> {
+	record Seen(KeyPath path, long minSnap) {
+		static Seen forPath(TraceObjectValPath valPath) {
+			TraceObjectValue last = valPath.getLastEntry();
+			return new Seen(valPath.getPath(), last == null ? 0 : last.getMinSnap());
+		}
+	}
+
 	/** Initialized in {@link #createTableColumnDescriptor()}, which precedes this. */
 	private TracePathValueColumn valueColumn;
 	private TracePathLastLifespanPlotColumn lifespanPlotColumn;
 
 	protected static Stream<? extends TraceObjectValPath> distinctKeyPath(
 			Stream<? extends TraceObjectValPath> stream) {
-		Set<List<String>> seen = new HashSet<>();
-		return stream.filter(path -> seen.add(path.getKeyList()));
+		Set<Seen> seen = new HashSet<>();
+		return stream.filter(path -> seen.add(Seen.forPath(path)));
 	}
 
 	public class PathRow {
@@ -95,6 +104,17 @@ public class PathTableModel extends AbstractQueryTableModel<PathRow> {
 			// Root is canonical
 			return last == null || last.isCanonical();
 		}
+
+		public boolean isCurrent() {
+			TraceObject current = getCurrentObject();
+			if (current == null) {
+				return false;
+			}
+			if (!(getValue() instanceof TraceObject child)) {
+				return false;
+			}
+			return child.getCanonicalPath().isAncestor(current.getCanonicalPath());
+		}
 	}
 
 	public PathTableModel(Plugin plugin) {
@@ -142,9 +162,9 @@ public class PathTableModel extends AbstractQueryTableModel<PathRow> {
 	protected TableColumnDescriptor<PathRow> createTableColumnDescriptor() {
 		TableColumnDescriptor<PathRow> descriptor = new TableColumnDescriptor<>();
 		descriptor.addHiddenColumn(new TracePathStringColumn());
-		descriptor.addVisibleColumn(new TracePathLastKeyColumn());
+		descriptor.addVisibleColumn(new TracePathLastKeyColumn(), 1, true);
 		descriptor.addVisibleColumn(valueColumn = new TracePathValueColumn());
-		descriptor.addVisibleColumn(new TracePathLastLifespanColumn());
+		descriptor.addVisibleColumn(new TracePathLastLifespanColumn(), 2, true);
 		descriptor.addHiddenColumn(lifespanPlotColumn = new TracePathLastLifespanPlotColumn());
 		return descriptor;
 	}

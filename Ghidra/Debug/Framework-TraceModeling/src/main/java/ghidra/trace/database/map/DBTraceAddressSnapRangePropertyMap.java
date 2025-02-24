@@ -22,10 +22,9 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.function.Predicate;
 
-import com.google.common.collect.Collections2;
-
 import db.DBHandle;
 import db.DBRecord;
+import ghidra.framework.data.OpenMode;
 import ghidra.program.model.address.AddressSetView;
 import ghidra.program.model.address.AddressSpace;
 import ghidra.program.model.lang.Language;
@@ -42,7 +41,6 @@ import ghidra.trace.model.stack.TraceStackFrame;
 import ghidra.trace.model.thread.TraceThread;
 import ghidra.util.UnionAddressSetView;
 import ghidra.util.database.DBCachedObjectStore;
-import ghidra.util.database.DBOpenMode;
 import ghidra.util.database.spatial.SpatialMap;
 import ghidra.util.exception.VersionException;
 import ghidra.util.task.TaskMonitor;
@@ -60,7 +58,7 @@ public class DBTraceAddressSnapRangePropertyMap<T, DR extends AbstractDBTraceAdd
 	protected final Class<DR> dataType;
 	protected final DBTraceAddressSnapRangePropertyMapDataFactory<T, DR> dataFactory;
 
-	public DBTraceAddressSnapRangePropertyMap(String name, DBHandle dbh, DBOpenMode openMode,
+	public DBTraceAddressSnapRangePropertyMap(String name, DBHandle dbh, OpenMode openMode,
 			ReadWriteLock lock, TaskMonitor monitor, Language baseLanguage, DBTrace trace,
 			DBTraceThreadManager threadManager, Class<DR> dataType,
 			DBTraceAddressSnapRangePropertyMapDataFactory<T, DR> dataFactory)
@@ -86,23 +84,22 @@ public class DBTraceAddressSnapRangePropertyMap<T, DR extends AbstractDBTraceAdd
 	}
 
 	@Override
-	protected DBTraceAddressSnapRangePropertyMapSpace<T, DR> createRegisterSpace(
-			AddressSpace space, TraceThread thread, DBTraceSpaceEntry ent)
-			throws VersionException, IOException {
+	protected DBTraceAddressSnapRangePropertyMapSpace<T, DR> createRegisterSpace(AddressSpace space,
+			TraceThread thread, DBTraceSpaceEntry ent) throws VersionException, IOException {
 		return new DBTraceAddressSnapRangePropertyMapSpace<>(
 			tableName(space, ent.getThreadKey(), ent.getFrameLevel()), trace.getStoreFactory(),
 			lock, space, thread, ent.getFrameLevel(), dataType, dataFactory);
 	}
 
 	@Override
-	public DBTraceAddressSnapRangePropertyMapSpace<T, DR> getRegisterSpace(
-			TraceThread thread, boolean createIfAbsent) {
+	public DBTraceAddressSnapRangePropertyMapSpace<T, DR> getRegisterSpace(TraceThread thread,
+			boolean createIfAbsent) {
 		return getForRegisterSpace(thread, 0, createIfAbsent);
 	}
 
 	@Override
-	public DBTraceAddressSnapRangePropertyMapSpace<T, DR> getRegisterSpace(
-			TraceStackFrame frame, boolean createIfAbsent) {
+	public DBTraceAddressSnapRangePropertyMapSpace<T, DR> getRegisterSpace(TraceStackFrame frame,
+			boolean createIfAbsent) {
 		return getForRegisterSpace(frame, createIfAbsent);
 	}
 
@@ -235,7 +232,7 @@ public class DBTraceAddressSnapRangePropertyMap<T, DR extends AbstractDBTraceAdd
 	@Override
 	public AddressSetView getAddressSetView(Lifespan span, Predicate<T> predicate) {
 		return new UnionAddressSetView(
-			Collections2.transform(memSpacesView, m -> m.getAddressSetView(span, predicate)));
+			memSpaces.values().stream().map(m -> m.getAddressSetView(span, predicate)).toList());
 	}
 
 	@Override

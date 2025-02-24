@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,25 +16,40 @@
 package ghidra.app.plugin.core.debug.gui.memory;
 
 import java.awt.BorderLayout;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.lang.invoke.MethodHandles;
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.*;
+import java.util.concurrent.*;
+
+import javax.swing.*;
 
 import org.apache.commons.lang3.StringUtils;
 
+import docking.ActionContext;
 import docking.action.DockingAction;
 import docking.action.ToggleDockingAction;
 import docking.menu.MultiStateDockingAction;
 import docking.widgets.fieldpanel.support.ViewerPosition;
+import generic.theme.GThemeDefaults.Colors;
 import ghidra.app.plugin.core.byteviewer.*;
-import ghidra.app.plugin.core.debug.DebuggerCoordinates;
-import ghidra.app.plugin.core.debug.gui.DebuggerLocationLabel;
-import ghidra.app.plugin.core.debug.gui.DebuggerResources;
+import ghidra.app.plugin.core.debug.gui.*;
 import ghidra.app.plugin.core.debug.gui.DebuggerResources.FollowsCurrentThreadAction;
 import ghidra.app.plugin.core.debug.gui.action.*;
 import ghidra.app.plugin.core.debug.gui.action.AutoReadMemorySpec.AutoReadMemorySpecConfigFieldCodec;
 import ghidra.app.plugin.core.format.ByteBlock;
-import ghidra.app.services.DebuggerTraceManagerService;
+import ghidra.app.plugin.core.format.ByteBlockAccessException;
+import ghidra.app.services.*;
+import ghidra.app.services.DebuggerControlService.ControlModeChangeListener;
+import ghidra.debug.api.action.GoToInput;
+import ghidra.debug.api.action.LocationTrackingSpec;
+import ghidra.debug.api.tracemgr.DebuggerCoordinates;
+import ghidra.features.base.memsearch.bytesource.AddressableByteSource;
+import ghidra.features.base.memsearch.bytesource.EmptyByteSource;
 import ghidra.framework.options.SaveState;
 import ghidra.framework.plugintool.*;
 import ghidra.framework.plugintool.annotation.AutoConfigStateField;
@@ -47,10 +62,10 @@ import ghidra.program.model.mem.MemoryBlock;
 import ghidra.program.util.ProgramLocation;
 import ghidra.program.util.ProgramSelection;
 import ghidra.trace.model.Trace;
-import ghidra.trace.model.Trace.TraceMemoryBytesChangeType;
 import ghidra.trace.model.TraceDomainObjectListener;
 import ghidra.trace.model.program.TraceProgramView;
 import ghidra.trace.util.TraceAddressSpace;
+import ghidra.trace.util.TraceEvents;
 import ghidra.util.Swing;
 
 public class DebuggerMemoryBytesProvider extends ProgramByteViewerComponentProvider {
@@ -63,7 +78,7 @@ public class DebuggerMemoryBytesProvider extends ProgramByteViewerComponentProvi
 		if (!Objects.equals(a.getView(), b.getView())) {
 			return false; // Subsumes trace
 		}
-		if (!Objects.equals(a.getRecorder(), b.getRecorder())) {
+		if (!Objects.equals(a.getTarget(), b.getTarget())) {
 			return false; // For capture memory action
 		}
 		if (!Objects.equals(a.getTime(), b.getTime())) {
@@ -80,7 +95,7 @@ public class DebuggerMemoryBytesProvider extends ProgramByteViewerComponentProvi
 
 	protected class ListenerForChanges extends TraceDomainObjectListener {
 		public ListenerForChanges() {
-			listenFor(TraceMemoryBytesChangeType.CHANGED, this::bytesChanged);
+			listenFor(TraceEvents.BYTES_CHANGED, this::bytesChanged);
 		}
 
 		private void bytesChanged(TraceAddressSpace space) {
@@ -98,12 +113,17 @@ public class DebuggerMemoryBytesProvider extends ProgramByteViewerComponentProvi
 		}
 
 		@Override
+		protected GoToInput getDefaultInput() {
+			return trackingTrait.getDefaultGoToInput(currentLocation);
+		}
+
+		@Override
 		protected boolean goToAddress(Address address) {
 			TraceProgramView view = current.getView();
 			if (view == null) {
 				return false;
 			}
-			return goTo(view, new ProgramLocation(view, address));
+			return DebuggerMemoryBytesProvider.this.goTo(view, new ProgramLocation(view, address));
 		}
 	}
 
@@ -121,6 +141,9 @@ public class DebuggerMemoryBytesProvider extends ProgramByteViewerComponentProvi
 		@Override
 		protected void specChanged(LocationTrackingSpec spec) {
 			updateTitle();
+			trackingLabel.setText("");
+			trackingLabel.setToolTipText("");
+			trackingLabel.setForeground(Colors.FOREGROUND);
 		}
 	}
 
@@ -144,6 +167,50 @@ public class DebuggerMemoryBytesProvider extends ProgramByteViewerComponentProvi
 		}
 	}
 
+	protected class ForBytesClipboardProvider extends ByteViewerClipboardProvider {
+		protected class PasteIntoTargetCommand extends PasteByteStringCommand
+				implements PasteIntoTargetMixin {
+			protected PasteIntoTargetCommand(String string) {
+				super(string);
+			}
+
+			@Override
+			protected boolean hasEnoughSpace(Program program, Address address, int byteCount) {
+				return doHasEnoughSpace(program, address, byteCount);
+			}
+
+			@Override
+			protected boolean pasteBytes(Program program, byte[] bytes) {
+				return doPasteBytes(tool, controlService, consoleService, current, currentLocation,
+					bytes);
+			}
+		}
+
+		protected ForBytesClipboardProvider() {
+			super(DebuggerMemoryBytesProvider.this, DebuggerMemoryBytesProvider.this.tool);
+		}
+
+		@Override
+		public boolean canPaste(DataFlavor[] availableFlavors) {
+			if (controlService == null) {
+				return false;
+			}
+			Trace trace = current.getTrace();
+			if (trace == null) {
+				return false;
+			}
+			if (!controlService.getCurrentMode(trace).canEdit(current)) {
+				return false;
+			}
+			return super.canPaste(availableFlavors);
+		}
+
+		@Override
+		protected boolean pasteByteString(String string) {
+			return tool.execute(new PasteIntoTargetCommand(string), currentProgram);
+		}
+	}
+
 	private final AutoReadMemorySpec defaultReadMemorySpec =
 		AutoReadMemorySpec.fromConfigName(VisibleROOnceAutoReadMemorySpec.CONFIG_NAME);
 
@@ -151,6 +218,10 @@ public class DebuggerMemoryBytesProvider extends ProgramByteViewerComponentProvi
 
 	@AutoServiceConsumed
 	private DebuggerTraceManagerService traceManager;
+	@AutoServiceConsumed
+	private DebuggerConsoleService consoleService;
+	//@AutoServiceConsumed via method
+	private DebuggerControlService controlService;
 	@SuppressWarnings("unused")
 	private final AutoService.Wiring autoServiceWiring;
 
@@ -165,6 +236,7 @@ public class DebuggerMemoryBytesProvider extends ProgramByteViewerComponentProvi
 	protected ForMemoryBytesReadsMemoryTrait readsMemTrait;
 
 	protected final DebuggerLocationLabel locationLabel = new DebuggerLocationLabel();
+	protected final JLabel trackingLabel = new JLabel();
 
 	@AutoConfigStateField
 	protected boolean followsCurrentThread = true;
@@ -173,6 +245,12 @@ public class DebuggerMemoryBytesProvider extends ProgramByteViewerComponentProvi
 	// TODO: followsCurrentSnap?
 
 	private final ListenerForChanges listenerForChanges = new ListenerForChanges();
+	private final ControlModeChangeListener controlModeChangeListener = (trace, mode) -> {
+		if (trace == getCurrent().getTrace()) {
+			// for Paste action
+			contextChanged();
+		}
+	};
 
 	DebuggerCoordinates current = DebuggerCoordinates.NOWHERE;
 	private DebuggerCoordinates previous = DebuggerCoordinates.NOWHERE;
@@ -191,14 +269,34 @@ public class DebuggerMemoryBytesProvider extends ProgramByteViewerComponentProvi
 		autoServiceWiring = AutoService.wireServicesConsumed(plugin, this);
 		createActions();
 		addDisplayListener(readsMemTrait.getDisplayListener());
-		decorationComponent.add(locationLabel, BorderLayout.NORTH);
+
+		JPanel northPanel = new JPanel(new BorderLayout());
+		northPanel.add(locationLabel);
+		northPanel.add(trackingLabel, BorderLayout.EAST);
+		decorationComponent.add(northPanel, BorderLayout.NORTH);
 
 		goToTrait.goToCoordinates(current);
 		trackingTrait.goToCoordinates(current);
 		readsMemTrait.goToCoordinates(current);
 		locationLabel.goToCoordinates(current);
 
+		if (isConnected) {
+			setTitle(DebuggerResources.TITLE_PROVIDER_MEMORY_BYTES);
+		}
+		else {
+			setTitle("[" + DebuggerResources.TITLE_PROVIDER_MEMORY_BYTES + "]");
+		}
+		updateTitle(); // Actually, the subtitle
 		setHelpLocation(DebuggerResources.HELP_PROVIDER_MEMORY_BYTES);
+
+		trackingLabel.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseClicked(MouseEvent e) {
+				if (e.getClickCount() == 2 && e.getButton() == MouseEvent.BUTTON1) {
+					doGoToTracked();
+				}
+			}
+		});
 	}
 
 	@Override
@@ -222,23 +320,83 @@ public class DebuggerMemoryBytesProvider extends ProgramByteViewerComponentProvi
 		};
 	}
 
+	/**
+	 * Override where edits are allowed and direct sets through the control service.
+	 */
+	class TargetByteBlock extends MemoryByteBlock {
+		protected TargetByteBlock(Program program, Memory memory, MemoryBlock block) {
+			super(program, memory, block);
+		}
+
+		/**
+		 * {@inheritDoc}
+		 * 
+		 * <p>
+		 * Overridden to ignore existing instructions. Let them be clobbered!
+		 */
+		@Override
+		protected boolean editAllowed(Address addr, long length) {
+			return controlService != null;
+		}
+
+		protected ByteBuffer alloc(int size) {
+			return ByteBuffer.allocate(size)
+					.order(isBigEndian()
+							? ByteOrder.BIG_ENDIAN
+							: ByteOrder.LITTLE_ENDIAN);
+		}
+
+		protected void doSet(Address address, ByteBuffer buffer) throws ByteBlockAccessException {
+			checkEditsAllowed(address, buffer.capacity());
+			try {
+				controlService.createStateEditor(current)
+						.setVariable(address, buffer.array())
+						.get(1, TimeUnit.SECONDS);
+			}
+			catch (InterruptedException | ExecutionException | TimeoutException e) {
+				throw new ByteBlockAccessException("Could not set target memory", e);
+			}
+		}
+
+		@Override
+		public void setByte(BigInteger index, byte value) throws ByteBlockAccessException {
+			doSet(getAddress(index), alloc(Byte.BYTES).put(value));
+		}
+
+		@Override
+		public void setShort(BigInteger index, short value) throws ByteBlockAccessException {
+			doSet(getAddress(index), alloc(Short.BYTES).putShort(value));
+		}
+
+		@Override
+		public void setInt(BigInteger index, int value) throws ByteBlockAccessException {
+			doSet(getAddress(index), alloc(Integer.BYTES).putInt(value));
+		}
+
+		@Override
+		public void setLong(BigInteger index, long value) throws ByteBlockAccessException {
+			doSet(getAddress(index), alloc(Long.BYTES).putLong(value));
+		}
+	}
+
+	class TargetByteBlockSet extends ProgramByteBlockSet {
+		protected TargetByteBlockSet(ByteBlockChangeManager changeManager) {
+			super(DebuggerMemoryBytesProvider.this, DebuggerMemoryBytesProvider.this.program,
+				changeManager);
+		}
+
+		@Override
+		protected MemoryByteBlock newMemoryByteBlock(Memory memory, MemoryBlock memBlock) {
+			return new TargetByteBlock(program, memory, memBlock);
+		}
+	}
+
 	@Override
 	protected ProgramByteBlockSet newByteBlockSet(ByteBlockChangeManager changeManager) {
 		if (program == null) {
 			return null;
 		}
-		// A bit of work to get it to ignore existing instructions. Let them be clobbered!
-		return new ProgramByteBlockSet(this, program, changeManager) {
-			@Override
-			protected MemoryByteBlock newMemoryByteBlock(Memory memory, MemoryBlock memBlock) {
-				return new MemoryByteBlock(program, memory, memBlock) {
-					@Override
-					protected boolean editAllowed(Address addr, long length) {
-						return true;
-					}
-				};
-			}
-		};
+		return new TargetByteBlockSet(changeManager);
 	}
 
 	/**
@@ -308,6 +466,35 @@ public class DebuggerMemoryBytesProvider extends ProgramByteViewerComponentProvi
 		setSubTitle(computeSubTitle());
 	}
 
+	@Override
+	public Icon getIcon() {
+		if (isMainViewer()) {
+			return getBaseIcon();
+		}
+		return super.getIcon();
+	}
+
+	@Override
+	protected ByteViewerActionContext newByteViewerActionContext() {
+		return new DebuggerMemoryBytesActionContext(this);
+	}
+
+	@Override
+	protected ByteViewerClipboardProvider newClipboardProvider() {
+		return new ForBytesClipboardProvider();
+	}
+
+	@AutoServiceConsumed
+	private void setControlService(DebuggerControlService controlService) {
+		if (this.controlService != null) {
+			this.controlService.removeModeChangeListener(controlModeChangeListener);
+		}
+		this.controlService = controlService;
+		if (this.controlService != null) {
+			this.controlService.addModeChangeListener(controlModeChangeListener);
+		}
+	}
+
 	protected void createActions() {
 		initTraits();
 
@@ -347,9 +534,17 @@ public class DebuggerMemoryBytesProvider extends ProgramByteViewerComponentProvi
 
 	@Override
 	public boolean goTo(Program gotoProgram, ProgramLocation location) {
-		boolean result = super.goTo(gotoProgram, location);
-		locationLabel.goToAddress(location == null ? null : location.getAddress());
-		return result;
+		if (location == null) {
+			return false;
+		}
+		if (blockSet == null || blockSet.getByteBlockInfo(location.getAddress()) == null) {
+			return false;
+		}
+		if (!super.goTo(gotoProgram, location)) {
+			return false;
+		}
+		locationLabel.goToAddress(location.getAddress());
+		return true;
 	}
 
 	protected void removeOldListeners() {
@@ -383,6 +578,9 @@ public class DebuggerMemoryBytesProvider extends ProgramByteViewerComponentProvi
 		current = coordinates;
 		addNewListeners();
 		doSetProgram(current.getView());
+		// NB. Also avoid a stale location being reported to the history service.
+		setLocation(null);
+		setSelection(null, false);
 		goToTrait.goToCoordinates(coordinates);
 		trackingTrait.goToCoordinates(coordinates);
 		readsMemTrait.goToCoordinates(coordinates);
@@ -394,6 +592,10 @@ public class DebuggerMemoryBytesProvider extends ProgramByteViewerComponentProvi
 	public void coordinatesActivated(DebuggerCoordinates coordinates) {
 		DebuggerCoordinates adjusted = adjustCoordinates(coordinates);
 		goToCoordinates(adjusted);
+		if (adjusted.getTrace() == null) {
+			trackingLabel.setText("");
+			trackingLabel.setForeground(Colors.FOREGROUND);
+		}
 	}
 
 	public void traceClosed(Trace trace) {
@@ -434,6 +636,18 @@ public class DebuggerMemoryBytesProvider extends ProgramByteViewerComponentProvi
 		return readsMemTrait.getAutoSpec();
 	}
 
+	protected void goToAndUpdateTrackingLabel(TraceProgramView curView, ProgramLocation loc) {
+		String labelText = trackingTrait.computeLabelText();
+		trackingLabel.setText(labelText);
+		trackingLabel.setToolTipText(labelText);
+		if (goTo(curView, loc)) {
+			trackingLabel.setForeground(Colors.FOREGROUND);
+		}
+		else {
+			trackingLabel.setForeground(Colors.ERROR);
+		}
+	}
+
 	protected void doGoToTracked() {
 		if (editModeAction.isSelected()) {
 			return;
@@ -444,7 +658,11 @@ public class DebuggerMemoryBytesProvider extends ProgramByteViewerComponentProvi
 		}
 		TraceProgramView curView = current.getView();
 		Swing.runIfSwingOrRunLater(() -> {
-			goTo(curView, loc);
+			if (curView != current.getView()) {
+				// Trace changed before Swing scheduled us
+				return;
+			}
+			goToAndUpdateTrackingLabel(curView, loc);
 		});
 	}
 
@@ -473,6 +691,10 @@ public class DebuggerMemoryBytesProvider extends ProgramByteViewerComponentProvi
 	@Override
 	protected void writeConfigState(SaveState saveState) {
 		super.writeConfigState(saveState);
+
+		CONFIG_STATE_HANDLER.writeConfigState(this, saveState);
+		trackingTrait.writeConfigState(saveState);
+		readsMemTrait.writeConfigState(saveState);
 	}
 
 	@Override
@@ -481,6 +703,7 @@ public class DebuggerMemoryBytesProvider extends ProgramByteViewerComponentProvi
 
 		CONFIG_STATE_HANDLER.readConfigState(this, saveState);
 		trackingTrait.readConfigState(saveState);
+		readsMemTrait.readConfigState(saveState);
 
 		if (isMainViewer()) {
 			followsCurrentThread = true;
@@ -489,7 +712,6 @@ public class DebuggerMemoryBytesProvider extends ProgramByteViewerComponentProvi
 			actionFollowsCurrentThread.setSelected(followsCurrentThread);
 			updateBorder();
 		}
-		// TODO: actionAutoReadMemory
 	}
 
 	@Override
@@ -518,6 +740,14 @@ public class DebuggerMemoryBytesProvider extends ProgramByteViewerComponentProvi
 	}
 
 	@Override
+	public ActionContext getActionContext(MouseEvent event) {
+		if (event == null || event.getSource() != locationLabel) {
+			return super.getActionContext(event);
+		}
+		return locationLabel.getActionContext(this, event);
+	}
+
+	@Override
 	public void cloneWindow() {
 		final DebuggerMemoryBytesProvider newProvider = myPlugin.createNewDisconnectedProvider();
 		final ViewerPosition vp = panel.getViewerPosition();
@@ -530,5 +760,18 @@ public class DebuggerMemoryBytesProvider extends ProgramByteViewerComponentProvi
 			newProvider.setLocation(currentLocation);
 			newProvider.panel.setViewerPosition(vp);
 		});
+	}
+
+	@Override
+	public AddressableByteSource getByteSource() {
+		if (current == DebuggerCoordinates.NOWHERE) {
+			return EmptyByteSource.INSTANCE;
+		}
+		return new DebuggerByteSource(tool, current.getView(), current.getTarget(), readsMemTrait);
+	}
+
+	/* testing */
+	CompletableFuture<?> getLastAutoRead() {
+		return readsMemTrait.getLastRead();
 	}
 }

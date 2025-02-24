@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,16 +15,15 @@
  */
 package ghidra.framework.data;
 
-import ghidra.framework.model.DomainFolder;
-import ghidra.framework.model.Project;
-import ghidra.framework.store.local.LocalFileSystem;
-import ghidra.test.AbstractGhidraHeadedIntegrationTest;
-import ghidra.util.InvalidNameException;
-
 import java.io.File;
 import java.io.IOException;
 
 import org.junit.*;
+
+import ghidra.framework.model.DomainFolder;
+import ghidra.framework.store.local.LocalFileSystem;
+import ghidra.test.AbstractGhidraHeadedIntegrationTest;
+import ghidra.util.InvalidNameException;
 
 public class IndexedFileSystemFolderTest extends AbstractGhidraHeadedIntegrationTest {
 
@@ -32,7 +31,7 @@ public class IndexedFileSystemFolderTest extends AbstractGhidraHeadedIntegration
 	private File privateProjectDir;
 	private File sharedProjectDir;
 	private DomainFolder root;
-	private Project project;
+
 	private LocalFileSystem sharedFS;
 	private LocalFileSystem privateFS;
 
@@ -52,8 +51,8 @@ public class IndexedFileSystemFolderTest extends AbstractGhidraHeadedIntegration
 			true, false, false);
 		sharedFS = LocalFileSystem.getLocalFileSystem(sharedProjectDir.getAbsolutePath(), true,
 			true, false, false);
-		ProjectFileManager projectFileManager = new ProjectFileManager(privateFS, sharedFS);
-		root = projectFileManager.getRootFolder();
+		DefaultProjectData projectData = new DefaultProjectData(privateFS, sharedFS);
+		root = projectData.getRootFolder();
 	}
 
 	@After
@@ -68,8 +67,8 @@ public class IndexedFileSystemFolderTest extends AbstractGhidraHeadedIntegration
 	private void deleteAll(File file) {
 		if (file.isDirectory()) {
 			File[] files = file.listFiles();
-			for (int i = 0; i < files.length; i++) {
-				deleteAll(files[i]);
+			for (File file2 : files) {
+				deleteAll(file2);
 			}
 		}
 		file.delete();
@@ -84,7 +83,7 @@ public class IndexedFileSystemFolderTest extends AbstractGhidraHeadedIntegration
 	/**
 	 * Tests issue where DomainFolder.getFolder("") returns
 	 * a malformed folder that will fail when used later.
-	 * <p>
+	 * 
 	 * @throws Exception
 	 */
 	@Test

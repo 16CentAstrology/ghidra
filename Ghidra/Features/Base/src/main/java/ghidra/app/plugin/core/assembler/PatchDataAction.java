@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,13 +21,13 @@ import java.awt.event.KeyListener;
 
 import javax.swing.*;
 
+import db.Transaction;
 import docking.action.KeyBindingData;
 import docking.action.MenuData;
 import docking.widgets.fieldpanel.FieldPanel;
 import docking.widgets.fieldpanel.support.FieldLocation;
 import generic.theme.GThemeDefaults.Colors;
 import ghidra.framework.plugintool.Plugin;
-import ghidra.program.database.util.ProgramTransaction;
 import ghidra.program.model.address.*;
 import ghidra.program.model.data.DataType;
 import ghidra.program.model.data.DataTypeEncodeException;
@@ -73,14 +73,7 @@ public class PatchDataAction extends AbstractPatchAction {
 
 	@Override
 	protected boolean isApplicableToUnit(CodeUnit cu) {
-		if (!(cu instanceof Data)) {
-			return false;
-		}
-		Data data = (Data) cu;
-		if (!data.getBaseDataType().isEncodable()) {
-			return false;
-		}
-		return true;
+		return cu instanceof Data data && data.getBaseDataType().isEncodable();
 	}
 
 	protected Data getData() {
@@ -113,6 +106,23 @@ public class PatchDataAction extends AbstractPatchAction {
 		input.setCaretPosition(repr.length());
 	}
 
+	protected void applyPatch(AddressRange rng, byte[] encoded)
+			throws MemoryAccessException, CodeUnitInsertionException {
+		Program program = getProgram();
+		Address address = getAddress();
+		Data data = getData();
+		DataType dt = data.getBaseDataType();
+
+		int oldLength = data.getLength();
+		if (encoded.length != oldLength) {
+			program.getListing().clearCodeUnits(address, rng.getMaxAddress(), false);
+		}
+		program.getMemory().setBytes(address, encoded);
+		if (encoded.length != oldLength) {
+			program.getListing().createData(address, dt, encoded.length);
+		}
+	}
+
 	@Override
 	public void accept() {
 		Program program = getProgram();
@@ -133,17 +143,9 @@ public class PatchDataAction extends AbstractPatchAction {
 			tool.setStatusInfo(e.getMessage(), true);
 			return;
 		}
-		try (ProgramTransaction trans =
-			ProgramTransaction.open(program, "Patch Data @" + address + ": " + input.getText())) {
-			int oldLength = data.getLength();
-			if (encoded.length != oldLength) {
-				program.getListing().clearCodeUnits(address, rng.getMaxAddress(), false);
-			}
-			program.getMemory().setBytes(address, encoded);
-			if (encoded.length != oldLength) {
-				program.getListing().createData(address, dt, encoded.length);
-			}
-			trans.commit();
+		try (Transaction tx =
+			program.openTransaction("Patch Data @" + address + ": " + input.getText())) {
+			applyPatch(rng, encoded);
 			hide();
 		}
 		catch (MemoryAccessException e) {

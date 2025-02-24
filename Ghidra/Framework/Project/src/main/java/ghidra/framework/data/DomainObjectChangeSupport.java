@@ -65,7 +65,7 @@ class DomainObjectChangeSupport {
 		this.timer =
 			GhidraTimerFactory.getGhidraTimer(timeInterval, timeInterval, this::sendEventNow);
 		timer.setInitialDelay(25);
-		timer.setDelay(500);
+		timer.setDelay(timeInterval);
 		timer.setRepeats(true);
 	}
 
@@ -190,7 +190,7 @@ class DomainObjectChangeSupport {
 
 		Runnable errorTask = () -> {
 			List<DomainObjectChangeRecord> records =
-				Arrays.asList(new DomainObjectChangeRecord(DomainObject.DO_OBJECT_ERROR, null, t));
+				Arrays.asList(new DomainObjectChangeRecord(DomainObjectEvent.ERROR, null, t));
 			DomainObjectChangedEvent ev = new DomainObjectChangedEvent(src, records);
 			for (DomainObjectListener l : listenersCopy) {
 				try {

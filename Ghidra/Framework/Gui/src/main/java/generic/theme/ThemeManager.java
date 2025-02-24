@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,10 +16,10 @@
 package generic.theme;
 
 import java.awt.*;
+import java.util.List;
 import java.util.Set;
 
-import javax.swing.Icon;
-import javax.swing.LookAndFeel;
+import javax.swing.*;
 import javax.swing.plaf.ComponentUI;
 
 import generic.theme.builtin.*;
@@ -41,13 +41,13 @@ import utility.function.Callback;
  * The basic idea is that all the colors, fonts, and icons used in an application should be
  * accessed indirectly via an "id" string. Then the actual color, font, or icon can be changed
  * without changing the source code. The default mapping of the id strings to a value is defined
- * in <name>.theme.properties files which are dynamically discovered by searching the module's
+ * in {@code <name>.theme.properties} files which are dynamically discovered by searching the module's
  * data directory. Also, these files can optionally define a dark default value for an id which
  * would replace the standard default value in the event that the current theme specifies that it
  * is a dark theme. Themes are used to specify the application's {@link LookAndFeel}, whether or
  * not it is dark, and any customized values for colors, fonts, or icons. There are several
  * "built-in" themes, one for each supported {@link LookAndFeel}, but additional themes can
- * be defined and stored in the users application home directory as a <name>.theme file.
+ * be defined and stored in the users application home directory as a {@code <name>.theme} file.
  * <P>
  * Clients that just need to access the colors, fonts, and icons from the theme can use the
  * convenience methods in the {@link Gui} class.  Clients that need to directly manipulate the
@@ -62,20 +62,26 @@ public abstract class ThemeManager {
 	static final Font DEFAULT_FONT = new Font("Dialog", Font.PLAIN, 12);
 	static final Color DEFAULT_COLOR = Color.CYAN;
 
+	private static final int MIN_FONT_SIZE = 3;
+
 	protected static ThemeManager INSTANCE;
 
 	protected GTheme activeTheme = getDefaultTheme();
+	protected LafType activeLafType = activeTheme.getLookAndFeelType();
+	protected boolean useDarkDefaults = activeTheme.useDarkDefaults();
 
+	// this use our normalized ids (e.g., 'laf.')
 	protected GThemeValueMap javaDefaults = new GThemeValueMap();
-	protected GThemeValueMap systemValues = new GThemeValueMap();
 	protected GThemeValueMap currentValues = new GThemeValueMap();
 
-	protected ThemeDefaultsProvider themeDefaultsProvider;
+	protected ApplicationThemeDefaults applicationDefaults;
 
 	// these notifications are only when the user is manipulating theme values, so rare and at
 	// user speed, so using copy on read
 	private WeakSet<ThemeListener> themeListeners =
 		WeakDataStructureFactory.createCopyOnReadWeakSet();
+
+	private boolean isUpdating;
 
 	public static ThemeManager getInstance() {
 		return INSTANCE;
@@ -86,36 +92,55 @@ public abstract class ThemeManager {
 			// default behavior is only install to INSTANCE if first time
 			INSTANCE = this;
 		}
-		themeDefaultsProvider = getThemeDefaultsProvider();
+
+		applicationDefaults = loadApplicationDefaults();
 	}
 
-	protected ThemeDefaultsProvider getThemeDefaultsProvider() {
-		return new ApplicationThemeDefaultsProvider();
+	protected ApplicationThemeDefaults loadApplicationDefaults() {
+		return new PropertyFileThemeDefaults();
 	}
 
 	protected void installInGui() {
 		Gui.setThemeManager(this);
 	}
 
+	/**
+	 * This method is called to create the internal set of theme value used by the application. To
+	 * do this, we use a layered approach to install values, with the last values added overwriting
+	 * any pre-existing values with the same key.  The values are added in the following order:
+	 * <pre>
+	 * java defaults -> light values -> dark values -> look and feel values -> property file values -> theme values
+	 * </pre>
+	 * <p>
+	 * At the point this method is called, this is the state of these various values:
+	 * <ul>
+	 *     <li>The 'javaValues' are normalized in the form of 'laf.font.TextArea'
+	 *     </li>
+	 *     <li>The 'applicationDefaults' contains values loaded from the {@code theme.properties}
+	 *     files:
+	 *     <pre>
+	 *     font.listing.base
+	 *     font.monospaced
+	 *     [color]Viewport.background = color.bg
+	 *     [laf.font]TextArea.font = font.monospaced
+	 *     [laf.boolean]Button.rollover = true
+	 *     </pre>
+	 *     </li>
+	 *     <li>The 'activeTheme' values are those loaded by the current theme, which has any changes
+	 *     made to the default values
+	 *     </li>
+	 * </ul>
+	 */
 	protected void buildCurrentValues() {
 		GThemeValueMap map = new GThemeValueMap();
-
 		map.load(javaDefaults);
-		map.load(systemValues);
-		map.load(themeDefaultsProvider.getDefaults());
-		if (activeTheme.useDarkDefaults()) {
-			map.load(themeDefaultsProvider.getDarkDefaults());
+		map.load(applicationDefaults.getLightValues());
+		if (useDarkDefaults) {
+			map.load(applicationDefaults.getDarkValues());
 		}
-		map.load(themeDefaultsProvider.getLookAndFeelDefaults(getLookAndFeelType()));
+		map.load(applicationDefaults.getLookAndFeelValues(getLookAndFeelType()));
 		map.load(activeTheme);
 		currentValues = map;
-	}
-
-	/**
-	 * Reloads the defaults from all the discoverable theme.property files.
-	 */
-	public void reloadApplicationDefaults() {
-		throw new UnsupportedOperationException();
 	}
 
 	/**
@@ -195,6 +220,19 @@ public abstract class ThemeManager {
 	}
 
 	/**
+	 * Sets the current {@link LookAndFeel}. This is used by theme editors to allow users to
+	 * see the effects of changing LookAndFeels when configuring a theme. Setting this different
+	 * from the activeTheme's LookAndFeel setting means that the current theme is in an unsaved
+	 * state and causes the {@link #hasThemeChanges()} method to return true.
+	 * @param lafType the {@link LafType} to set the LookAndFeel to
+	 * @param useDarkDefaults true if the application should used dark defaults with this
+	 * LookAndFeel
+	 */
+	public void setLookAndFeel(LafType lafType, boolean useDarkDefaults) {
+		throw new UnsupportedOperationException();
+	}
+
+	/**
 	 * Adds the given theme to set of all themes.
 	 * @param newTheme the theme to add
 	 */
@@ -223,7 +261,7 @@ public abstract class ThemeManager {
 	 * Returns a set of all known themes that are supported on the current platform.
 	 * @return a set of all known themes that are supported on the current platform.
 	 */
-	public Set<GTheme> getSupportedThemes() {
+	public List<GTheme> getSupportedThemes() {
 		throw new UnsupportedOperationException();
 	}
 
@@ -240,7 +278,7 @@ public abstract class ThemeManager {
 	 * @return the {@link LafType} for the currently active {@link LookAndFeel}
 	 */
 	public LafType getLookAndFeelType() {
-		return activeTheme.getLookAndFeelType();
+		return activeLafType;
 	}
 
 	/**
@@ -270,12 +308,11 @@ public abstract class ThemeManager {
 	public GThemeValueMap getThemeValues() {
 		GThemeValueMap map = new GThemeValueMap();
 		map.load(javaDefaults);
-		map.load(systemValues);
-		map.load(themeDefaultsProvider.getDefaults());
-		if (activeTheme.useDarkDefaults()) {
-			map.load(themeDefaultsProvider.getDarkDefaults());
+		map.load(applicationDefaults.getLightValues());
+		if (useDarkDefaults) {
+			map.load(applicationDefaults.getDarkValues());
 		}
-		map.load(themeDefaultsProvider.getLookAndFeelDefaults(getLookAndFeelType()));
+		map.load(applicationDefaults.getLookAndFeelValues(getLookAndFeelType()));
 		map.load(activeTheme);
 		return map;
 	}
@@ -315,7 +352,7 @@ public abstract class ThemeManager {
 		FontValue font = currentValues.getFont(id);
 
 		if (font == null) {
-			error("No color value registered for: '" + id + "'");
+			error("No font value registered for: '" + id + "'");
 			return DEFAULT_FONT;
 		}
 		return font.get(currentValues);
@@ -418,9 +455,9 @@ public abstract class ThemeManager {
 	 * theme.properties files
 	 */
 	public GThemeValueMap getApplicationDarkDefaults() {
-		GThemeValueMap map = new GThemeValueMap(themeDefaultsProvider.getDefaults());
-		map.load(themeDefaultsProvider.getDarkDefaults());
-		map.load(themeDefaultsProvider.getLookAndFeelDefaults(getLookAndFeelType()));
+		GThemeValueMap map = new GThemeValueMap(applicationDefaults.getLightValues());
+		map.load(applicationDefaults.getDarkValues());
+		map.load(applicationDefaults.getLookAndFeelValues(getLookAndFeelType()));
 		return map;
 	}
 
@@ -431,7 +468,8 @@ public abstract class ThemeManager {
 	 * theme.properties files
 	 */
 	public GThemeValueMap getApplicationLightDefaults() {
-		GThemeValueMap map = new GThemeValueMap(themeDefaultsProvider.getDefaults());
+		GThemeValueMap map = new GThemeValueMap(applicationDefaults.getLightValues());
+		map.load(applicationDefaults.getLookAndFeelValues(getLookAndFeelType()));
 		return map;
 	}
 
@@ -442,22 +480,40 @@ public abstract class ThemeManager {
 	 */
 	public GThemeValueMap getDefaults() {
 		GThemeValueMap currentDefaults = new GThemeValueMap(javaDefaults);
-		currentDefaults.load(systemValues);
-		currentDefaults.load(themeDefaultsProvider.getDefaults());
-		if (activeTheme.useDarkDefaults()) {
-			currentDefaults.load(themeDefaultsProvider.getDarkDefaults());
+		currentDefaults.load(applicationDefaults.getLightValues());
+		if (useDarkDefaults) {
+			currentDefaults.load(applicationDefaults.getDarkValues());
 		}
-		currentDefaults.load(themeDefaultsProvider.getLookAndFeelDefaults(getLookAndFeelType()));
+		currentDefaults.load(applicationDefaults.getLookAndFeelValues(getLookAndFeelType()));
 		return currentDefaults;
 	}
 
 	/**
 	 * Returns true if the given UI object is using the Aqua Look and Feel.
-	 * @param UI the UI to examine.
+	 * @param UI the UI to examine.  (This parameter is ignored)
 	 * @return true if the UI is using Aqua
+	 * @deprecated use {@link #isUsingAquaUI()}
 	 */
+	@Deprecated(since = "11.3", forRemoval = true)
 	public boolean isUsingAquaUI(ComponentUI UI) {
 		return getLookAndFeelType() == LafType.MAC;
+	}
+
+	/**
+	 * Returns true if the current UI is using the Aqua Look and Feel.
+	 * @return true if the UI is using Aqua
+	 */
+	public boolean isUsingAquaUI() {
+		return getLookAndFeelType() == LafType.MAC;
+	}
+
+	/**
+	 * Returns true if the current UI is the FlatLaf Dark or FlatLaf Light Look and Feel.
+	 * @return true if the current UI is the FlatLaf Dark or FlatLaf Light Look and Feel 
+	 */
+	public boolean isUsingFlatUI() {
+		return getLookAndFeelType() == LafType.FLAT_DARK ||
+			getLookAndFeelType() == LafType.FLAT_LIGHT;
 	}
 
 	/**
@@ -490,6 +546,16 @@ public abstract class ThemeManager {
 	 * @return true if there are any unsaved changes to the current theme.
 	 */
 	public boolean hasThemeChanges() {
+		return false;
+	}
+
+	/**
+	 * Returns true if any theme values have changed.  This does not take into account the current
+	 * Look and Feel.   Use {@link #hasThemeChanges()} to also account for changes to the Look and
+	 * Feel.
+	 * @return true if any theme values have changed
+	 */
+	public boolean hasThemeValueChanges() {
 		return false;
 	}
 
@@ -531,11 +597,36 @@ public abstract class ThemeManager {
 	}
 
 	/**
+	 * Binds the component to the font identified by the given font id. Whenever the font for
+	 * the font id changes, the component will updated with the new font.
+	 * <p>
+	 * This method is fairly niche and should not be called by most clients.  Instead, call
+	 * {@link #registerFont(Component, String)}.
+	 *
+	 * @param component the component to set/update the font
+	 * @param fontId the id of the font to register with the given component
+	 * @param fontStyle the font style
+	 */
+	public void registerFont(Component component, String fontId, int fontStyle) {
+		// do nothing
+	}
+
+	/**
+	 * Removes the component and font id binding made in a previous call to 
+	 * {@link #registerFont(Component, String)}.
+	 * @param component the component to remove
+	 * @param fontId the id of the font previously registered
+	 */
+	public void unRegisterFont(JComponent component, String fontId) {
+		// do nothing
+	}
+
+	/**
 	 * Returns true if the current theme use dark default values.
 	 * @return true if the current theme use dark default values.
 	 */
 	public boolean isDarkTheme() {
-		return activeTheme.useDarkDefaults();
+		return useDarkDefaults;
 	}
 
 	/**
@@ -544,15 +635,28 @@ public abstract class ThemeManager {
 	 */
 	public static GTheme getDefaultTheme() {
 		OperatingSystem OS = Platform.CURRENT_PLATFORM.getOperatingSystem();
-		switch (OS) {
-			case MAC_OS_X:
-				return new MacTheme();
-			case WINDOWS:
-				return new WindowsTheme();
-			case LINUX:
-			case UNSUPPORTED:
-			default:
-				return new NimbusTheme();
+		return switch (OS) {
+			case MAC_OS_X -> new MacTheme();
+			case WINDOWS -> new WindowsTheme();
+			default -> new FlatLightTheme();
+		};
+	}
+
+	/**
+	 * Returns true if the theme system is in the process of updating
+	 * @return true if the theme system is in the process of updating
+	 */
+	public boolean isUpdatingTheme() {
+		return isUpdating;
+	}
+
+	protected void update(Callback callback) {
+		isUpdating = true;
+		try {
+			callback.call();
+		}
+		finally {
+			isUpdating = false;
 		}
 	}
 
@@ -563,7 +667,7 @@ public abstract class ThemeManager {
 	}
 
 	protected void error(String message) {
-		Throwable t = ReflectionUtilities.createThrowableWithStackOlderThan();
+		Throwable t = ReflectionUtilities.createThrowableWithStackOlderThan(ThemeManager.class);
 		StackTraceElement[] trace = t.getStackTrace();
 		StackTraceElement[] filtered = ReflectionUtilities.filterStackTrace(trace, "java.",
 			"theme.Gui", "theme.ThemeManager", "theme.GColor");
@@ -571,4 +675,44 @@ public abstract class ThemeManager {
 		Msg.error(this, message, t);
 	}
 
+	/**
+	 * Adjust the size of all fonts by the given amount.
+	 * @param amount the number to add to the current font size;
+	 */
+	public void adjustFonts(int amount) {
+		List<FontValue> fonts = currentValues.getFonts();
+		for (FontValue fontValue : fonts) {
+			Font directFont = fontValue.getRawValue();
+			if (directFont == null) {
+				continue;  // indirect fonts will be handled when its referenced font is handled
+			}
+			int currentSize = directFont.getSize();
+			int newSize = Math.max(MIN_FONT_SIZE, currentSize += amount);
+			setFont(fontValue.getId(), directFont.deriveFont((float) newSize));
+		}
+	}
+
+	/**
+	 * Sets application's blinking cursor state. This will affect all JTextFields, JTextAreas, 
+	 * JTextPanes via {@link UIDefaults}. Custom components can also respect this setting by
+	 * either adding a {@link ThemeListener} or overriding {@link JComponent#updateUI()}
+	 * <P> NOTE: This method is a bit odd here as it doesn't really apply to a theme. But it
+	 * requires manipulation of the look and feel which is managed by the theme. If other 
+	 * application level properties  come along and also require changing the UIDefaults, 
+	 * perhaps a more general solution might be to add a way for clients to register a callback
+	 * so that they get a chance to change the UIDefaults map as the look and feel is loaded.
+	 * @param b true for blinking text cursors, false for non-blinking text cursors
+	 */
+	protected void setBlinkingCursors(boolean b) {
+		// do nothing
+	}
+
+	/**
+	 * Returns true if the application should allow blinking cursors, false otherwise. Custom
+	 * components can use this method to determine if they should have a blinking cursor or not.
+	 * @return true if the application should allow blinking cursors, false otherwise.
+	 */
+	protected boolean isBlinkingCursors() {
+		return true;
+	}
 }

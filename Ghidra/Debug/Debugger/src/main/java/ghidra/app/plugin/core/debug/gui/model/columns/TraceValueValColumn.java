@@ -54,6 +54,9 @@ public class TraceValueValColumn extends AbstractDynamicTableColumn<ValueRow, Va
 				setToolTipText(row.getToolTip());
 				setForeground(
 					getForegroundFor(data.getTable(), row.isModified(), data.isSelected()));
+				if (row.isCurrent()) {
+					setBold();
+				}
 			}
 			catch (TraceClosedException e) {
 				setText("ERROR: Trace Closed");
@@ -75,8 +78,8 @@ public class TraceValueValColumn extends AbstractDynamicTableColumn<ValueRow, Va
 		}
 	}
 
-	private Color diffColor = DebuggerResources.DEFAULT_COLOR_VALUE_CHANGED;
-	private Color diffColorSel = DebuggerResources.DEFAULT_COLOR_VALUE_CHANGED_SEL;
+	private Color diffColor = DebuggerResources.COLOR_VALUE_CHANGED;
+	private Color diffColorSel = DebuggerResources.COLOR_VALUE_CHANGED_SEL;
 	private final ValRenderer renderer = new ValRenderer();
 
 	@Override

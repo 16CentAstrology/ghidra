@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -37,6 +37,7 @@ import ghidra.framework.ApplicationConfiguration;
 import ghidra.program.model.data.*;
 import ghidra.program.model.data.Composite;
 import ghidra.program.model.data.Enum;
+import ghidra.program.model.data.StandAloneDataTypeManager.ArchiveWarning;
 import ghidra.util.*;
 import ghidra.util.classfinder.ClassSearcher;
 import ghidra.util.exception.*;
@@ -63,8 +64,27 @@ public class DataTypeArchiveTransformer implements GhidraLaunchable {
 		FileDataTypeManager newFileArchive = null;
 		try {
 			monitor.initialize(100);
+
 			oldFileArchive = FileDataTypeManager.openFileArchive(oldFile, false);
+			ArchiveWarning warning = oldFileArchive.getWarning();
+			if (warning == ArchiveWarning.LANGUAGE_UPGRADE_REQURED) {
+				throw new IOException("Archive requires language upgrade: " + oldFile);
+			}
+			if (warning != ArchiveWarning.NONE) {
+				throw new IOException("Archive language error occured: " + oldFile,
+					oldFileArchive.getWarningDetail());
+			}
+
 			newFileArchive = FileDataTypeManager.openFileArchive(newFile, true);
+			warning = newFileArchive.getWarning();
+			if (warning == ArchiveWarning.LANGUAGE_UPGRADE_REQURED) {
+				throw new IOException("Archive requires language upgrade: " + newFile);
+			}
+			if (warning != ArchiveWarning.NONE) {
+				throw new IOException("Archive language error occured: " + newFile,
+					newFileArchive.getWarningDetail());
+			}
+
 			UniversalID oldUniversalID = oldFileArchive.getUniversalID();
 			UniversalID newUniversalID = newFileArchive.getUniversalID();
 			Msg.info(DataTypeArchiveTransformer.class, "Old file ID = " + oldUniversalID);
@@ -157,7 +177,7 @@ public class DataTypeArchiveTransformer implements GhidraLaunchable {
 			// anonymous data types that matched by matching components.
 			Iterator<DataType> allDataTypes = newFileArchive.getAllDataTypes();
 			while (allDataTypes.hasNext()) {
-				monitor.checkCanceled();
+				monitor.checkCancelled();
 				DataType newDataType = allDataTypes.next();
 				if (isAnonymousType(newDataType)) {
 					// Skip anonymous types, they are matched as components of composites or
@@ -193,7 +213,7 @@ public class DataTypeArchiveTransformer implements GhidraLaunchable {
 
 		Iterator<DataType> allDataTypes = newFileArchive.getAllDataTypes();
 		while (allDataTypes.hasNext()) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			DataType newDataType = allDataTypes.next();
 			if (newDataType instanceof DataTypeDB) {
 				((DataTypeDB) newDataType).setUniversalID(UniversalIdGenerator.nextID());
@@ -209,7 +229,7 @@ public class DataTypeArchiveTransformer implements GhidraLaunchable {
 		// old archive.
 		Iterator<DataType> allDataTypes = newFileArchive.getAllDataTypes();
 		while (allDataTypes.hasNext()) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			DataType newDataType = allDataTypes.next();
 			if (newDataType instanceof Enum && isAnonymousType(newDataType)) {
 
@@ -677,7 +697,7 @@ public class DataTypeArchiveTransformer implements GhidraLaunchable {
 		try {
 			Iterator<DataType> allDataTypes = newFileArchive.getAllDataTypes();
 			while (allDataTypes.hasNext()) {
-				monitor.checkCanceled();
+				monitor.checkCancelled();
 				DataType newDataType = allDataTypes.next();
 				fixDataTypeTimestamp(newDataType, oldFileArchive, newFileArchive);
 //				monitor.incrementProgress(1);
@@ -695,7 +715,7 @@ public class DataTypeArchiveTransformer implements GhidraLaunchable {
 		UniversalID universalID = newDataType.getUniversalID();
 		SourceArchive sourceArchive = newDataType.getSourceArchive();
 		if (sourceArchive == newFileArchive.getLocalSourceArchive()) {
-			// Use the the old file archive as the source archive since local.
+			// Use the old file archive as the source archive since local.
 			sourceArchive = oldFileArchive.getLocalSourceArchive();
 		}
 		DataType oldDataType;
@@ -739,12 +759,10 @@ public class DataTypeArchiveTransformer implements GhidraLaunchable {
 
 		FileDataTypeManager destinationFileArchive =
 			FileDataTypeManager.openFileArchive(destinationFile, false);
-		if (destinationFileArchive != null) {
-			UniversalID destinationUniversalID = destinationFileArchive.getUniversalID();
-			destinationFileArchive.close();
-			Msg.info(DataTypeArchiveTransformer.class,
-				"Resulting file ID = " + destinationUniversalID.getValue());
-		}
+		UniversalID destinationUniversalID = destinationFileArchive.getUniversalID();
+		destinationFileArchive.close();
+		Msg.info(DataTypeArchiveTransformer.class,
+			"Resulting file ID = " + destinationUniversalID.getValue());
 	}
 
 	static File myOldFile = null;

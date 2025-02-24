@@ -23,14 +23,15 @@ import java.util.List;
 import javax.swing.*;
 
 import generic.theme.GColor;
-import generic.theme.GThemeDefaults.Colors.Java;
+import generic.theme.GThemeDefaults.Colors;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressRange;
 
 public class MemviewPanel extends JPanel implements MouseListener, MouseMotionListener {
 	private static final long serialVersionUID = 1L;
 
-	private Color ARROW_COLOR = new GColor("color.debugger.plugin.plugin.memview.arrow");
+	private static final Color ARROW_COLOR =
+		new GColor("color.debugger.plugin.plugin.memview.arrow");
 
 	private MemviewProvider provider;
 	private MemviewMap amap;
@@ -63,12 +64,18 @@ public class MemviewPanel extends JPanel implements MouseListener, MouseMotionLi
 		this.provider = provider;
 		setPreferredSize(new Dimension(barWidth, barHeight));
 		setSize(getPreferredSize());
-		setBorder(BorderFactory.createLineBorder(Java.BORDER, 1));
+		setBorder(BorderFactory.createLineBorder(Colors.BORDER, 1));
 		setFocusable(true);
 
 		addMouseListener(this);
 		addMouseMotionListener(this);
 		ToolTipManager.sharedInstance().registerComponent(this);
+
+		// This panel takes focus since it is a custom widget. Focusable components need to
+		// have their accessible name set.
+		String viewName = "Memory View";
+		setName(viewName);
+		getAccessibleContext().setAccessibleName(viewName);
 	}
 
 	@Override

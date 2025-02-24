@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,23 +15,20 @@
  */
 package ghidra.trace.database.guest;
 
-import java.util.Collection;
-import java.util.List;
+import java.util.*;
 
-import ghidra.dbg.target.TargetObject;
-import ghidra.dbg.target.TargetRegister;
-import ghidra.dbg.target.schema.TargetObjectSchema;
-import ghidra.dbg.util.PathMatcher;
-import ghidra.dbg.util.PathPredicates.Align;
-import ghidra.dbg.util.PathUtils;
 import ghidra.program.model.address.*;
 import ghidra.program.model.lang.Language;
 import ghidra.program.model.lang.Register;
 import ghidra.program.model.symbol.SourceType;
 import ghidra.trace.database.guest.DBTraceGuestPlatform.DBTraceGuestLanguage;
 import ghidra.trace.model.guest.TracePlatform;
+import ghidra.trace.model.memory.TraceObjectRegister;
 import ghidra.trace.model.symbol.*;
 import ghidra.trace.model.target.TraceObject;
+import ghidra.trace.model.target.path.*;
+import ghidra.trace.model.target.path.PathFilter.Align;
+import ghidra.trace.model.target.schema.TraceObjectSchema;
 import ghidra.trace.util.TraceRegisterUtils;
 import ghidra.util.LockHold;
 import ghidra.util.exception.DuplicateNameException;
@@ -80,63 +77,71 @@ public interface InternalTracePlatform extends TracePlatform {
 		return result;
 	}
 
+	default List<String> listRegNames(Register register) {
+		Set<String> result = new LinkedHashSet<>();
+		result.add(register.getName());
+		result.add(register.getName().toUpperCase());
+		result.add(register.getName().toLowerCase());
+		for (String alias : register.getAliases()) {
+			result.add(alias);
+			result.add(alias.toUpperCase());
+			result.add(alias.toLowerCase());
+		}
+		return List.copyOf(result);
+	}
+
 	@Override
-	default String getConventionalRegisterObjectName(Register register) {
+	default Collection<String> getConventionalRegisterObjectNames(Register register) {
 		Address pmin = mapGuestToHost(register.getAddress());
 		if (pmin == null) {
-			return register.getName();
+			return listRegNames(register);
 		}
 		TraceSymbolManager symbolManager = getTrace().getSymbolManager();
 		TraceNamespaceSymbol nsRegMap = symbolManager.namespaces().getGlobalNamed(regMap(register));
-		Collection<? extends TraceLabelSymbol> labels = symbolManager.labels()
+		Collection<String> labels = symbolManager.labels()
 				.getAt(0, null, pmin, false)
 				.stream()
 				.filter(s -> s.getParentNamespace() == nsRegMap)
+				.map(TraceSymbol::getName)
 				.toList();
-		if (labels.isEmpty()) {
-			return register.getName();
+		if (!labels.isEmpty()) {
+			return labels;
 		}
-		// primary is listed first, so take it
-		return labels.iterator().next().getName();
+		return listRegNames(register);
 	}
 
 	@Override
-	default PathMatcher getConventionalRegisterPath(TargetObjectSchema schema, List<String> path,
-			String name) {
-		PathMatcher matcher = schema.searchFor(TargetRegister.class, path, true);
-		if (matcher.isEmpty()) {
-			return matcher;
+	default PathFilter getConventionalRegisterPath(TraceObjectSchema schema, KeyPath path,
+			Collection<String> names) {
+		PathFilter filter = schema.searchFor(TraceObjectRegister.class, path, true);
+		if (filter.isNone()) {
+			return PathFilter.NONE;
 		}
-		return matcher.applyKeys(Align.RIGHT, List.of(name));
+		return PathMatcher.any(names.stream()
+				.flatMap(n -> filter.applyKeys(Align.RIGHT, List.of(n)).getPatterns().stream()));
 	}
 
 	@Override
-	default PathMatcher getConventionalRegisterPath(TargetObjectSchema schema, List<String> path,
+	default PathFilter getConventionalRegisterPath(TraceObjectSchema schema, KeyPath path,
 			Register register) {
 		return getConventionalRegisterPath(schema, path,
-			getConventionalRegisterObjectName(register));
+			getConventionalRegisterObjectNames(register));
 	}
 
 	@Override
-	default PathMatcher getConventionalRegisterPath(TraceObject container, Register register) {
-		return getConventionalRegisterPath(container.getTargetSchema(),
-			container.getCanonicalPath().getKeyList(), register);
+	default PathFilter getConventionalRegisterPath(TraceObject container, Register register) {
+		return getConventionalRegisterPath(container.getSchema(),
+			container.getCanonicalPath(), register);
 	}
 
 	@Override
-	default PathMatcher getConventionalRegisterPath(TargetObject container, Register register) {
-		return getConventionalRegisterPath(container.getSchema(), container.getPath(), register);
-	}
-
-	@Override
-	default PathMatcher getConventionalRegisterPath(AddressSpace space, Register register) {
-		List<String> path = PathUtils.parse(space.getName());
-		TargetObjectSchema rootSchema = getTrace().getObjectManager().getRootSchema();
+	default PathFilter getConventionalRegisterPath(AddressSpace space, Register register) {
+		KeyPath path = KeyPath.parse(space.getName());
+		TraceObjectSchema rootSchema = getTrace().getObjectManager().getRootSchema();
 		if (rootSchema == null) {
 			return null;
 		}
-		TargetObjectSchema schema = rootSchema
-				.getSuccessorSchema(path);
+		TraceObjectSchema schema = rootSchema.getSuccessorSchema(path);
 		return getConventionalRegisterPath(schema, path, register);
 	}
 
@@ -155,6 +160,11 @@ public interface InternalTracePlatform extends TracePlatform {
 			TraceNamespaceSymbol nsRegMap = namespaces.getGlobalNamed(regMap);
 			if (nsRegMap == null) {
 				nsRegMap = namespaces.add(regMap, globals, SourceType.USER_DEFINED);
+			}
+			TraceLabelSymbol exists = symbolManager.labels()
+					.getChildWithNameAt(objectName, getIntKey(), null, hostAddr, nsRegMap);
+			if (exists != null) {
+				return exists;
 			}
 			return symbolManager.labels()
 					.create(0, null, hostAddr, objectName, nsRegMap, SourceType.USER_DEFINED);

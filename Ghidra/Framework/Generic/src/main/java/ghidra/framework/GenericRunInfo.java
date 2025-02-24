@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,8 +15,7 @@
  */
 package ghidra.framework;
 
-import java.io.File;
-import java.io.FileFilter;
+import java.io.*;
 import java.util.*;
 
 import org.apache.logging.log4j.LogManager;
@@ -24,6 +23,8 @@ import org.apache.logging.log4j.Logger;
 
 import ghidra.framework.preferences.Preferences;
 import util.CollectionUtils;
+import utility.application.ApplicationLayout;
+import utility.application.ApplicationUtilities;
 
 public class GenericRunInfo {
 
@@ -34,18 +35,31 @@ public class GenericRunInfo {
 
 	/**
 	 * Get all of the applications's settings directories 
-	 * (<tt>.<i>application_name_version</i></tt>) for various versions in descending order by the 
-	 * modification time. In other words, <tt>list.get(0)</tt> will be the directory 
+	 * ({@code .<i>application_name_version</i>}) for various versions in descending order by the 
+	 * modification time. In other words, {@code list.get(0)} will be the directory 
 	 * with the most recent modification time. If two directories have the same time then the 
 	 * directories will simply be sorted based on their pathnames as a string.
 	 * <p>
 	 * <b>Note: </b>This method ignores Test directories 
 	 */
 	private static List<File> getUserSettingsDirsByTime() {
-		File userDataDirectory = Application.getUserSettingsDirectory();
-		File userDataDirParentFile = userDataDirectory.getParentFile();
+		ApplicationLayout layout = Application.getApplicationLayout();
+		File userSettingsDirectory = Application.getUserSettingsDirectory();
 
-		List<File> appDirs = collectAllApplicationDirectories(userDataDirParentFile);
+		List<File> appDirs =
+			collectAllApplicationDirectories(userSettingsDirectory.getParentFile());
+
+		// Search "legacy" user setting directory locations in case the user has upgraded from an
+		// older version
+		try {
+			File legacyUserSettingsDirectory = ApplicationUtilities.getLegacyUserSettingsDir(
+				layout.getApplicationProperties(), layout.getApplicationInstallationDir());
+			appDirs.addAll(
+				collectAllApplicationDirectories(legacyUserSettingsDirectory.getParentFile()));
+		}
+		catch (FileNotFoundException e) {
+			// ignore
+		}
 
 		Comparator<File> modifyTimeComparator = (f1, f2) -> {
 
@@ -80,8 +94,7 @@ public class GenericRunInfo {
 
 	private static List<File> collectAllApplicationDirectories(File dataDirectoryParentDir) {
 
-		String settingsDirPrefix =
-			"." + Application.getName().replaceAll("\\s", "").toLowerCase();
+		String settingsDirPrefix = "." + Application.getName().replaceAll("\\s", "").toLowerCase();
 		FileFilter userDirFilter = f -> {
 			String name = f.getName();
 			return f.isDirectory() && name.startsWith(settingsDirPrefix) &&
@@ -121,6 +134,45 @@ public class GenericRunInfo {
 			}
 
 			return file;
+		}
+		return null;
+	}
+
+	/**
+	 * Searches previous Application Settings directories 
+	 * ({@link #getUserSettingsDirsByTime()}) to find a settings directory containing
+	 * files that match the given file filter.  This is 
+	 * useful for loading previous directories of saved settings files of a particular type.
+	 * 
+	 * <p>Note: this method will ignore any test versions of settings directories.
+	 * 
+	 * @param dirName the name of a settings subdir; must be relative to a settings directory
+	 * @param filter the file filter for the files of interest
+	 * @return the most recent file matching that name and containing at least one file
+	 * of the given type, in a previous version's settings directory.
+	 */
+	public static File getPreviousApplicationSettingsDir(String dirName, FileFilter filter) {
+
+		List<File> settingsDirs = getPreviousApplicationSettingsDirsByTime();
+		for (File dir : settingsDirs) {
+			String dirPath = dir.getPath();
+			if (dirPath.endsWith("Test")) {
+				continue; // Ignore any test directories.
+			}
+
+			String altFilePath = dirPath + File.separatorChar + dirName;
+
+			File altSettingsDir = new File(altFilePath);
+			if (!altSettingsDir.exists()) {
+				continue;
+			}
+			if (!altSettingsDir.isDirectory()) {
+				continue;
+			}
+			File[] listFiles = altSettingsDir.listFiles(filter);
+			if (listFiles != null && listFiles.length > 0) {
+				return altSettingsDir;
+			}
 		}
 		return null;
 	}

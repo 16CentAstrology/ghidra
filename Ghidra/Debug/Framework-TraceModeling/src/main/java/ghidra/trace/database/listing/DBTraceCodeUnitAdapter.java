@@ -15,13 +15,13 @@
  */
 package ghidra.trace.database.listing;
 
-import static ghidra.lifecycle.Unfinished.TODO;
+import static ghidra.lifecycle.Unfinished.*;
 
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.Map.Entry;
 
-import com.google.common.collect.Iterators;
+import org.apache.commons.collections4.IteratorUtils;
 
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressRangeImpl;
@@ -50,7 +50,7 @@ import ghidra.util.exception.NoValueException;
  * This behaves somewhat like a mixin, allowing it to be used on code units as well as data
  * components, e.g., fields of a struct data unit.
  */
-public interface DBTraceCodeUnitAdapter extends TraceCodeUnit, MemBufferAdapter {
+public interface DBTraceCodeUnitAdapter extends TraceCodeUnit, MemBufferMixin {
 
 	@Override
 	DBTrace getTrace();
@@ -196,7 +196,7 @@ public interface DBTraceCodeUnitAdapter extends TraceCodeUnit, MemBufferAdapter 
 	@Override
 	default Iterator<String> propertyNames() {
 		Lifespan span = Lifespan.at(getStartSnap());
-		return Iterators.transform(Iterators.filter(
+		return IteratorUtils.transformedIterator(IteratorUtils.filteredIterator(
 			getTrace().getInternalAddressPropertyManager().getAllProperties().entrySet().iterator(),
 			e -> e.getValue().getAddressSetView(span).contains(getAddress())), Entry::getKey);
 	}
@@ -224,11 +224,9 @@ public interface DBTraceCodeUnitAdapter extends TraceCodeUnit, MemBufferAdapter 
 	@Override
 	default Symbol[] getSymbols() {
 		try (LockHold hold = getTrace().lockRead()) {
-			Collection<? extends TraceSymbol> at =
-				getTrace().getSymbolManager()
-						.labelsAndFunctions()
-						.getAt(getStartSnap(), getThread(),
-							getAddress(), true);
+			Collection<? extends TraceSymbol> at = getTrace().getSymbolManager()
+					.labels()
+					.getAt(getStartSnap(), getThread(), getAddress(), true);
 			return at.toArray(new TraceSymbol[at.size()]);
 		}
 	}
@@ -236,11 +234,9 @@ public interface DBTraceCodeUnitAdapter extends TraceCodeUnit, MemBufferAdapter 
 	@Override
 	default Symbol getPrimarySymbol() {
 		try (LockHold hold = getTrace().lockRead()) {
-			Collection<? extends TraceSymbol> at =
-				getTrace().getSymbolManager()
-						.labelsAndFunctions()
-						.getAt(getStartSnap(), getThread(),
-							getAddress(), true);
+			Collection<? extends TraceSymbol> at = getTrace().getSymbolManager()
+					.labels()
+					.getAt(getStartSnap(), getThread(), getAddress(), true);
 			if (at.isEmpty()) {
 				return null;
 			}
@@ -280,11 +276,6 @@ public interface DBTraceCodeUnitAdapter extends TraceCodeUnit, MemBufferAdapter 
 	@Override
 	default String[] getCommentAsArray(int commentType) {
 		return DBTraceCommentAdapter.arrayFromComment(getComment(commentType));
-	}
-
-	@Override
-	default boolean isSuccessor(CodeUnit codeUnit) {
-		return getMaxAddress().isSuccessor(codeUnit.getMinAddress());
 	}
 
 	@Override

@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -431,18 +431,24 @@ public class ResourceManager {
 	 * @return the name
 	 */
 	public static String getIconName(Icon icon) {
-		String iconName = icon.toString();
-
 		if (icon instanceof FileBasedIcon) {
 			return ((FileBasedIcon) icon).getFilename();
 		}
 		if (icon instanceof ImageIcon) {
-			iconName = ((ImageIcon) icon).getDescription();
+			return ((ImageIcon) icon).getDescription();
 		}
-		if (icon instanceof GIcon) {
+		if (icon instanceof GIcon gIcon) {
+			Icon delegateIcon = gIcon.getDelegate();
+			String name = getIconName(delegateIcon);
+			if (name != null) {
+				return name;
+			}
 			return ((GIcon) icon).getId();
 		}
-		return iconName;
+		if (icon instanceof TranslateIcon) {
+			return getIconName(((TranslateIcon) icon).getBaseIcon());
+		}
+		return icon.toString();
 	}
 
 	/**
@@ -485,7 +491,6 @@ public class ResourceManager {
 	 * found from the given path. This differs from {@link #loadImage(String)} in that
 	 * loadImage will return the default Icon if one can't be found. Further, loadImage will cache
 	 * even the default value, while findIcon only caches resolved icons.
-	 * <p>
 	 * 
 	 * @param path the icon to load, e.g., "images/home.gif"
 	 * @return the ImageIcon if it exists or null
@@ -520,10 +525,12 @@ public class ResourceManager {
 		ImageIcon icon = iconMap.get(iconPath);
 		if (icon == null) {
 			icon = doLoadIcon(iconPath);
-			iconMap.put(iconPath, icon == null ? DEFAULT_ICON : icon);
+			if (icon != null) {
+				iconMap.put(iconPath, icon);
+			}
 		}
 
-		return icon == DEFAULT_ICON ? null : icon;
+		return icon;
 	}
 
 	/**
@@ -537,20 +544,19 @@ public class ResourceManager {
 		ImageIcon icon = iconMap.get(iconPath);
 		if (icon == null) {
 			icon = doLoadIcon(iconPath);
-			iconMap.put(iconPath, icon == null ? DEFAULT_ICON : icon);
+			if (icon != null) {
+				iconMap.put(iconPath, icon);
+			}
 		}
 		return icon == null ? new UnresolvedIcon(iconPath, DEFAULT_ICON) : icon;
 	}
 
-	public static Set<Icon> getLoadedUrlIcons() {
-		Set<Icon> icons = new HashSet<>();
-		for (Icon icon : iconMap.values()) {
-			if (icon instanceof UrlImageIcon) {
-				icons.add(icon);
-			}
-		}
-
-		return icons;
+	/**
+	 * Returns a list of all loaded icons.
+	 * @return a list of all loaded icons
+	 */
+	public static Set<Icon> getLoadedIcons() {
+		return new HashSet<>(iconMap.values());
 	}
 
 	private static UrlImageIcon doLoadIcon(String path) {
@@ -603,7 +609,7 @@ public class ResourceManager {
 	/**
 	 * Load the images specified by filenames; substitutes the default bomb icon
 	 * if problems occur trying to load an individual file.
-	 * <p>
+	 * 
 	 * @param filenames vararg list of string filenames (ie. "images/home.gif")
 	 * @return list of ImageIcons with each image, problem / missing images replaced with
 	 * the default icon.
@@ -644,8 +650,7 @@ public class ResourceManager {
 		if (url != null) {
 			return new UrlImageIcon(BOMB, url);
 		}
-		Msg.error(ResourceManager.class,
-			"Could not find default icon: " + BOMB);
+		Msg.error(ResourceManager.class, "Could not find default icon: " + BOMB);
 		return getImageIcon(new ColorIcon3D(Color.RED, 16, 16));
 	}
 

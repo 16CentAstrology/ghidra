@@ -163,7 +163,7 @@ public class VariableUtilities {
 	/**
 	 * Determine the appropriate data type for an automatic parameter
 	 * @param function function whose auto param datatype is to be determined
-	 * @param returnDataType function's return datatype
+	 * @param returnDataType function's formal return datatype
 	 * @param storage variable storage for an auto-parameter (isAutoStorage should be true)
 	 * @return auto-parameter data type
 	 */
@@ -243,7 +243,7 @@ public class VariableUtilities {
 			}
 			if (dtLen < storageSize && storage.isRegisterStorage()) {
 				// TODO: this could be expanded to handle other storage
-				return new VariableStorage(storage.getProgram(),
+				return new VariableStorage(storage.getProgramArchitecture(),
 					shrinkRegister(storage.getRegister(), storageSize - dtLen));
 			}
 			throw new InvalidInputException(
@@ -372,6 +372,17 @@ public class VariableUtilities {
 	 */
 	public static VariableStorage resizeStorage(VariableStorage curStorage, DataType dataType,
 			boolean alignStack, Function function) throws InvalidInputException {
+
+		if (dataType instanceof TypeDef td) {
+			dataType = td.getBaseDataType();
+		}
+		if (dataType instanceof VoidDataType) {
+			return VariableStorage.VOID_STORAGE;
+		}
+		if (dataType instanceof AbstractFloatDataType) {
+			return curStorage; // do not constrain or attempt resize of float storage
+		}
+
 		if (!curStorage.isValid()) {
 			return curStorage;
 		}
@@ -380,15 +391,9 @@ public class VariableUtilities {
 		if (curSize == newSize) {
 			return curStorage;
 		}
+
 		if (curSize == 0 || curStorage.isUniqueStorage() || curStorage.isHashStorage()) {
 			throw new InvalidInputException("Storage can't be resized: " + curStorage.toString());
-		}
-
-		if (dataType instanceof TypeDef) {
-			dataType = ((TypeDef) dataType).getBaseDataType();
-		}
-		if (dataType instanceof AbstractFloatDataType) {
-			return curStorage; // do not constrain or attempt resize of float storage
 		}
 
 		if (newSize > curSize) {
@@ -609,7 +614,7 @@ public class VariableUtilities {
 		}
 
 		if (conflicts != null) {
-			generateConflictException(newStorage, conflicts, 4);
+			generateConflictException(var, newStorage, conflicts, 4);
 		}
 	}
 
@@ -617,8 +622,8 @@ public class VariableUtilities {
 	 * Check for variable storage conflict and optionally remove conflicting variables.
 	 * @param existingVariables variables to check (may contain null entries)
 	 * @param var function variable
-	 * @param conflictHandler variable conflict handler
 	 * @param newStorage variable storage
+	 * @param conflictHandler variable conflict handler
 	 * @throws VariableSizeException if another variable conflicts
 	 */
 	public static void checkVariableConflict(List<? extends Variable> existingVariables,
@@ -648,7 +653,7 @@ public class VariableUtilities {
 
 		if (conflicts != null) {
 			if (conflictHandler == null || !conflictHandler.resolveConflicts(conflicts)) {
-				generateConflictException(newStorage, conflicts, 4);
+				generateConflictException(var, newStorage, conflicts, 4);
 			}
 		}
 	}
@@ -662,18 +667,33 @@ public class VariableUtilities {
 		boolean resolveConflicts(List<Variable> conflicts);
 	}
 
-	private static void generateConflictException(VariableStorage newStorage,
+	private static void appendVariableStorageDetails(Variable var, VariableStorage storage,
+			StringBuilder msg) {
+		if (var != null) {
+			msg.append(var.getName());
+			msg.append("{");
+			msg.append(storage);
+			msg.append("}");
+		}
+		else {
+			msg.append(storage);
+		}
+	}
+
+	private static void generateConflictException(Variable var, VariableStorage newStorage,
 			List<Variable> conflicts, int maxConflictVarDetails) throws VariableSizeException {
 
 		maxConflictVarDetails = Math.min(conflicts.size(), maxConflictVarDetails);
 
-		StringBuffer msg = new StringBuffer();
-		msg.append("Variable storage conflict between " + newStorage + " and: ");
+		StringBuilder msg = new StringBuilder("Variable storage conflict between ");
+		appendVariableStorageDetails(var, newStorage, msg);
+		msg.append(" and ");
 		for (int i = 0; i < maxConflictVarDetails; i++) {
 			if (i != 0) {
 				msg.append(", ");
 			}
-			msg.append(conflicts.get(i).getVariableStorage().toString());
+			Variable v = conflicts.get(i);
+			appendVariableStorageDetails(v, v.getVariableStorage(), msg);
 		}
 		if (maxConflictVarDetails < conflicts.size()) {
 			msg.append(" ... {");
@@ -721,7 +741,7 @@ public class VariableUtilities {
 	@Deprecated
 	public static ParameterImpl getThisParameter(Function function, PrototypeModel convention) {
 		if (convention != null &&
-			convention.getGenericCallingConvention() == GenericCallingConvention.thiscall) {
+			CompilerSpec.CALLING_CONVENTION_thiscall.equals(convention.getName())) {
 
 			DataType dt = findOrCreateClassStruct(function);
 			if (dt == null) {
@@ -750,17 +770,37 @@ public class VariableUtilities {
 	 * Create an empty placeholder class structure whose category is derived from
 	 * the function's class namespace.  NOTE: The structure will not be added to the data
 	 * type manager.
+	 * The structure is created in the program's preferred category, or in the root category
+	 * if a preferred category has not been set.  If a colliding data-type matching the class name
+	 * and category already exists, null is returned.
 	 * @param classNamespace class namespace
 	 * @param dataTypeManager data type manager's whose data organization should be applied.
-	 * @return new class structure
+	 * @return new class structure (or null if there is a collision)
 	 */
 	private static Structure createPlaceholderClassStruct(GhidraClass classNamespace,
 			DataTypeManager dataTypeManager) {
 
 		Namespace classParentNamespace = classNamespace.getParentNamespace();
+		CategoryPath prefRoot = null;
+		if (dataTypeManager instanceof ProgramBasedDataTypeManager) {
+			prefRoot = ((ProgramBasedDataTypeManager) dataTypeManager).getProgram()
+					.getPreferredRootNamespaceCategoryPath();
+		}
+		if (prefRoot == null) {
+			prefRoot = CategoryPath.ROOT;
+		}
 		CategoryPath category =
-			DataTypeUtilities.getDataTypeCategoryPath(CategoryPath.ROOT, classParentNamespace);
+			DataTypeUtilities.getDataTypeCategoryPath(prefRoot, classParentNamespace);
 
+		DataType existingDT = dataTypeManager.getDataType(category, classNamespace.getName());
+		if (existingDT != null) {
+			// If a data-type already exists in the parent, try to create in the child
+			category = DataTypeUtilities.getDataTypeCategoryPath(prefRoot, classNamespace);
+			existingDT = dataTypeManager.getDataType(category, classNamespace.getName());
+			if (existingDT != null) {	// If this also already exists
+				return null;			// Don't create a placeholder
+			}
+		}
 		StructureDataType structDT =
 			new StructureDataType(category, classNamespace.getName(), 0, dataTypeManager);
 		structDT.setDescription("PlaceHolder Class Structure");
@@ -781,6 +821,9 @@ public class VariableUtilities {
 	 * and returned.  A newly instantiated structure will not be added to the data type manager
 	 * and may refer to a non-existing category path which corresponds to the class-parent's 
 	 * namespace.
+	 * 
+	 * If an unrelated data-type already exists matching the class name and category,
+	 * null is returned.
 	 * 
 	 * @param classNamespace class namespace
 	 * @param dataTypeManager data type manager which should be searched and whose
@@ -810,6 +853,9 @@ public class VariableUtilities {
 	 * and returned.  A newly instantiated structure will not be added to the data type manager
 	 * and may refer to a non-existing category path which corresponds to the class-parent's 
 	 * namespace.
+	 * 
+	 * If the function is not part of a class, or if an unrelated data-type already exists with
+	 * the class's name and category, null is returned.
 	 * 
 	 * @param function function's whose class namespace is the basis for the structure
 	 * @return new or existing structure whose name matches the function's class namespace or

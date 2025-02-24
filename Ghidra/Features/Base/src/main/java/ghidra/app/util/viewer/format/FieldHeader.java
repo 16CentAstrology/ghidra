@@ -40,15 +40,6 @@ public class FieldHeader extends JTabbedPane implements ChangeListener {
 
 	private FormatManager formatManager;
 	private FormatModelListener formatListener = new FormatModelListener() {
-		@Override
-		public void formatModelAdded(FieldFormatModel formatModel) {
-			createTabs();
-		}
-
-		@Override
-		public void formatModelRemoved(FieldFormatModel formatModel) {
-			createTabs();
-		}
 
 		@Override
 		public void formatModelChanged(FieldFormatModel formatModel) {
@@ -227,7 +218,7 @@ public class FieldHeader extends JTabbedPane implements ChangeListener {
 //		try {
 //			ClassSearcher.setXmlRestoreFile(GenericRunInfo.getUserDataDirPath() +
 //				File.separatorChar + "TestClasses.xml");
-//			ClassSearcher.search(false, TaskMonitorAdapter.DUMMY_MONITOR);
+//			ClassSearcher.search(false, TaskMonitor.DUMMY);
 //		}
 //		catch (CancelledException e) {
 //			// can't happen--dummy monitor

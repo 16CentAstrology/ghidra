@@ -5,9 +5,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,17 +18,16 @@ package ghidra.app.util.cparser.CPP;
 
 import java.util.*;
 
+import generic.expressions.ExpressionEvaluator;
 import ghidra.app.util.cparser.CPP.PreProcessor.PPToken;
 import ghidra.program.model.data.*;
-import ghidra.program.util.AddressEvaluator;
 import ghidra.util.Msg;
 
-/**
- * 
- */
 public class DefineTable {
 	private static final String VARARG_ELLIPSIS = "...";
 
+	// the macro substitution could be done on a very large string, not just
+	// a single line, Don't want it to go out of control replacing things
 	private static final int ARBITRARY_MAX_REPLACEMENTS = 900000;
 
 	// Hastable for storing #defs
@@ -42,9 +41,6 @@ public class DefineTable {
 
 	private final static String VALUE = "value";
 
-	/**
-	 * 
-	 */
 	public DefineTable() {
 		super();
 		// TODO Auto-generated constructor stub
@@ -274,22 +270,31 @@ public class DefineTable {
 	 * @param pos position within string to start expanding
 	 * @return string with all substitutions applied
 	 */
-	private String macroSub(String image, int pos, ArrayList<String> sublist) {
+	private String macroSub(String image, int pos, ArrayList<String> initialList) {
 		int replaceCount = 0;
 
 		StringBuffer buf = new StringBuffer(image);
 		int lastReplPos = pos;
+
+		boolean initialListSupplied = initialList != null;  // initial list passed in
+		ArrayList<String> sublist = new ArrayList<String>();
+		if (initialList != null) {
+			sublist.addAll(initialList);
+		}
 
 		// don't replace an infinite number of times.  Fail safe for possible ininite loop
 		while (pos < buf.length() && replaceCount < ARBITRARY_MAX_REPLACEMENTS) {
 			// clear list of used macros when move past replacement area
 			if (pos == lastReplPos) {
 				sublist = new ArrayList<String>(); // ok to clear list of used macro names
+				if (initialList != null) {
+					sublist.addAll(initialList); // add back in initialList of nonreplacement names
+				}
 			}
 			String defName = getDefineAt(buf, pos);
 			if (shouldReplace(buf, defName, pos)) {
 				// stop recursion on the same replacement string
-				int replPos = replace(buf, defName, pos, sublist);
+				int replPos = replace(buf, defName, pos, sublist, initialListSupplied);
 
 				if (replPos == -1) {
 					// if no replacement string, move on
@@ -341,7 +346,8 @@ public class DefineTable {
 		return true;
 	}
 
-	int replace(StringBuffer buf, String currKey, int fromIndex, ArrayList<String> sublist) {
+	int replace(StringBuffer buf, String currKey, int fromIndex, ArrayList<String> sublist,
+			boolean initialList) {
 		String replacementString = null;
 
 		if (sublist == null) {
@@ -375,7 +381,10 @@ public class DefineTable {
 		Vector<PPToken> argv = getArgs(currKey);
 		int replacedSubpieceLen = currKey.length();
 		if (argv == null && sublist.contains(currKey)) {
-			System.err.println("DONT Replace " + currKey + " in: " + buf);
+			if (!initialList) {
+				// stop recursion of replacement
+				System.err.println("DONT Replace " + currKey + " in: " + buf);
+			}
 			return -1;
 		}
 		if (argv != null) {
@@ -437,11 +446,11 @@ public class DefineTable {
 						argValue + " args processed : " + argsfound);
 				return replString;
 			}
-			
+
 			// Handle "..." varargs
 			//    if last argument is ellipsis, then is varargs, replace the rest of the params
 			String curArgName = argv.elementAt(index).image;
-			if (index == argv.size()-1 && VARARG_ELLIPSIS.equals(curArgName)) {
+			if (index == argv.size() - 1 && VARARG_ELLIPSIS.equals(curArgName)) {
 				isVarArg = true;
 				//   Replace __VA_ARGS__ with the rest of params
 				curArgName = "__VA_ARGS__";
@@ -512,14 +521,14 @@ public class DefineTable {
 			startpos = end;
 		}
 		buf.append(substString.substring(startpos));
-		
+
 		// Handle __VA_OPT__(<repl>)
 		//    if varargs and no more params, replace with ""
 		//    if varargs and has vararg params, replace with <repl>
 		if (isVarArg) {
 			replace_VaOpt(buf, hadVarArgs);
 		}
-		
+
 		substString = buf.toString();
 		return substString;
 	}
@@ -530,28 +539,29 @@ public class DefineTable {
 	 * @param buf string buffer to replace __VA_OPT__(value) within
 	 * @param hadVarArgs
 	 */
-	private void replace_VaOpt(StringBuffer buf, boolean hadVarArgs) {		
+	private void replace_VaOpt(StringBuffer buf, boolean hadVarArgs) {
 		int optIdx = buf.indexOf("__VA_OPT__");
 		if (optIdx < 0) {
 			return;
 		}
-		
-		int lparen = buf.indexOf("(", optIdx+1);
+
+		int lparen = buf.indexOf("(", optIdx + 1);
 		if (lparen < 0) {
 			return;
 		}
-		
-		int rparen = buf.indexOf(")",lparen+1);
+
+		int rparen = buf.indexOf(")", lparen + 1);
 		if (rparen < 0) {
 			return;
 		}
-		
+
 		// get in between string.
-		String replarg = buf.substring(lparen+1, rparen);
+		String replarg = buf.substring(lparen + 1, rparen);
 		if (hadVarArgs) {
-			buf.replace(optIdx, rparen+1, replarg);
-		} else {
-			buf.replace(optIdx, rparen+1, "");
+			buf.replace(optIdx, rparen + 1, replarg);
+		}
+		else {
+			buf.replace(optIdx, rparen + 1, "");
 		}
 	}
 
@@ -613,7 +623,20 @@ public class DefineTable {
 	 * @return
 	 */
 	public String expand(String image, boolean join) {
-		image = macroSub(image, 0, null);
+		return expand(image, join, null);
+	}
+
+	/**
+	 * do the final expansion of "##" concats in the define strings that protect normal macro substitution.
+	 * 
+	 * @param image
+	 * @param join
+	 * @param list of defines not to re-replace, stops recursive replacement on a define
+	 * @return
+	 */
+	public String expand(String image, boolean join, ArrayList<String> list) {
+
+		image = macroSub(image, 0, list);
 
 		// get rid of ## constructs
 		if (join) {
@@ -678,13 +701,13 @@ public class DefineTable {
 		Iterator<String> iter = getDefineNames();
 		while (iter.hasNext()) {
 			String defName = iter.next();
-			
+
 			String strValue = expandDefine(defName);
 			if (strValue == null) {
 				// couldn't expand, must have been a macro
 				continue;
 			}
-			
+
 			// strip off any casting/parentheses
 			strValue = stripCast(strValue);
 
@@ -693,7 +716,7 @@ public class DefineTable {
 
 			if (lvalue == null) {
 				try {
-					lvalue = AddressEvaluator.evaluateToLong(strValue);
+					lvalue = ExpressionEvaluator.evaluateToLong(strValue);
 				}
 				catch (Exception exc) {
 					// ignore didn't parse well
@@ -711,44 +734,47 @@ public class DefineTable {
 		dtMgr.endTransaction(transactionID, true);
 	}
 
-	public void populateDefineEquate(DataTypeManager openDTMgrs[], DataTypeManager dtMgr, String category, String prefix, String defName, long value) {
+	public void populateDefineEquate(DataTypeManager openDTMgrs[], DataTypeManager dtMgr,
+			String category, String prefix, String defName, long value) {
 		String enumName = prefix + defName;
 
+		// Start the Enum at 8, then resize to fit the value
 		EnumDataType enuum = new EnumDataType(enumName, 8);
 		enuum.add(defName, value);
+		enuum.setLength(enuum.getMinimumPossibleLength());
 
 		String defPath = getDefinitionPath(defName);
 		String currentCategoryName = getFileName(defPath);
 		CategoryPath path = getCategory(currentCategoryName);
 		path = new CategoryPath(path, category);
 		enuum.setCategoryPath(path);
-		
+
 		DataType dt = resolveDataType(openDTMgrs, path, enuum);
 
 		dtMgr.addDataType(dt, DataTypeConflictHandler.DEFAULT_HANDLER);
 	}
-	
-    private DataType resolveDataType(DataTypeManager openDTMgrs[], CategoryPath path, DataType dt) {
-    	if (openDTMgrs == null) {
-    		return dt;
-    	}
-        // If the exact data type exists in any open DTMgr, use the open DTmgr type
-        // instead
 
-        for (int i = 0; i < openDTMgrs.length; i++) {
-            // look for the data type by name
-            //    equivalent, return it
-            // look for the data type by category
-            //    equivalent, return it
-        	DataType candidateDT = openDTMgrs[i].getDataType(dt.getCategoryPath(), dt.getName());
-        	
-        	if (candidateDT != null && candidateDT.isEquivalent(candidateDT)) {
-        		return candidateDT;
-        	}
-        }
+	private DataType resolveDataType(DataTypeManager openDTMgrs[], CategoryPath path, DataType dt) {
+		if (openDTMgrs == null) {
+			return dt;
+		}
+		// If the exact data type exists in any open DTMgr, use the open DTmgr type
+		// instead
 
-        return dt;
-    }
+		for (int i = 0; i < openDTMgrs.length; i++) {
+			// look for the data type by name
+			//    equivalent, return it
+			// look for the data type by category
+			//    equivalent, return it
+			DataType candidateDT = openDTMgrs[i].getDataType(dt.getCategoryPath(), dt.getName());
+
+			if (candidateDT != null && candidateDT.isEquivalent(candidateDT)) {
+				return candidateDT;
+			}
+		}
+
+		return dt;
+	}
 
 	public String expandDefine(String defName) {
 		// don't worry about macros
@@ -760,9 +786,13 @@ public class DefineTable {
 		// check if this is a numeric expression that could be simplified
 		//
 		String strValue = getValue(defName);
-		String strExpanded = expand(strValue, true);
+
+		ArrayList<String> list = new ArrayList<>();
+		list.add(defName);
+
+		String strExpanded = expand(strValue, true, list);
 		strValue = strExpanded;
-		
+
 		return strValue;
 	}
 

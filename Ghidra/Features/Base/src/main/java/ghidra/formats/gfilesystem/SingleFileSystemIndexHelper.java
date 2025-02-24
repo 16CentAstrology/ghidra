@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -32,7 +32,7 @@ public class SingleFileSystemIndexHelper {
 	 * Creates a new instance.
 	 *
 	 * A "root" directory GFile will be auto-created for the filesystem.
-	 * <p>
+	 * 
 	 * @param fs the {@link GFileSystem} that this index will be for.
 	 * @param fsFSRL the {@link FSRLRoot fsrl} of the filesystem itself.
 	 * (this parameter is explicitly passed here so there is no possibility of trying to call
@@ -49,7 +49,7 @@ public class SingleFileSystemIndexHelper {
 		// used as the owner of the new GFileImpl instances.
 		this.rootDir = GFileImpl.fromFSRL(fs, null, fsFSRL.withPath("/"), true, -1);
 		this.payloadFile = GFileImpl.fromFSRL(fs, rootDir,
-			rootDir.getFSRL().withPath(payloadFilename).withMD5(payloadMD5), false, length);
+			rootDir.getFSRL().appendPath(payloadFilename).withMD5(payloadMD5), false, length);
 	}
 
 	/**
@@ -115,7 +115,7 @@ public class SingleFileSystemIndexHelper {
 	}
 
 	/**
-	 * Mirror's {@link GFileSystem#getListing(GFile)} interface.
+	 * Mirrors {@link GFileSystem#getListing(GFile)} interface.
 	 *
 	 * @param directory {@link GFile} directory to get the list of child files that have been
 	 * added to this index, null means root directory.
@@ -126,28 +126,43 @@ public class SingleFileSystemIndexHelper {
 		if (isClosed()) {
 			throw new IOException("Invalid state, index already closed");
 		}
-		if (directory == null || rootDir.equals(directory)) {
-			return Arrays.asList(payloadFile);
-		}
-		return Collections.emptyList();
+		return directory == null || rootDir.equals(directory) ? List.of(payloadFile) : List.of();
 	}
 
 	/**
-	 * Mirror's {@link GFileSystem#lookup(String)} interface.
-	 *
+	 * Mirrors {@link GFileSystem#lookup(String)} interface.
+	 * 
 	 * @param path path and filename of a file to find (either "/" for root or the payload file's
 	 * path).
+	 * @return {@link GFile} instance or null if requested path is not the same as the payload file.
+	 */
+	public GFile lookup(String path) {
+		return lookup(null, path, null);
+	}
+
+	/**
+	 * Mirrors {@link GFileSystem#lookup(String)} interface.
+	 * 
+	 * @param baseDir starting directory 
+	 * @param path path and filename of a file to find (either "/" for root or the payload file's
+	 * path).
+	 * @param nameComp optional {@link Comparator} that compares file names.  Suggested values are 
+	 * {@code String::compareTo} or {@code String::compareToIgnoreCase} or {@code null}.
 	 * @return {@link GFile} instance or null if requested path is not the same as
 	 * the payload file.
 	 */
-	public GFile lookup(String path) {
+	public GFile lookup(GFile baseDir, String path, Comparator<String> nameComp) {
+		if (baseDir != null && !baseDir.equals(rootDir)) {
+			return null;
+		}
 		if (path == null || path.equals("/")) {
 			return rootDir;
 		}
-		else if (path.equals(payloadFile.getFSRL().getPath())) {
-			return payloadFile;
-		}
-		return null;
+		nameComp = Objects.requireNonNullElse(nameComp, String::compareTo);
+		// compare the FSRL path ("/payloadname") as well just the payloadname (to be compatible
+		// with existing data that have malformed fsrls without a leading slash in the path) 
+		return nameComp.compare(path, payloadFile.getFSRL().getPath()) == 0 ||
+			nameComp.compare(path, payloadFile.getFSRL().getName()) == 0 ? payloadFile : null;
 	}
 
 	@Override

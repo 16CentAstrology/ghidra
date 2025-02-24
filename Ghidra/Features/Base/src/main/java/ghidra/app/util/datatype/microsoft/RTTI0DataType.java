@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,8 +15,7 @@
  */
 package ghidra.app.util.datatype.microsoft;
 
-import static ghidra.app.util.datatype.microsoft.MSDataTypeUtils.getAbsoluteAddress;
-import static ghidra.app.util.datatype.microsoft.MSDataTypeUtils.is64Bit;
+import static ghidra.app.util.datatype.microsoft.MSDataTypeUtils.*;
 
 import ghidra.docking.settings.Settings;
 import ghidra.docking.settings.SettingsImpl;
@@ -31,7 +30,6 @@ import ghidra.util.Msg;
  * The RTTI0 data type represents a TypeDescriptor structure.
  * <p>
  * Fields for this RunTimeTypeInformation structure can be found on http://www.openrce.org
- * <p>
  * <pre>
  * struct TypeDescriptor {
  *     Pointer vfTablePointer;
@@ -111,7 +109,7 @@ public class RTTI0DataType extends RTTIDataType {
 		Address nameAddress = start.add(nameOffset);
 		MemoryBufferImpl nameBuf = new MemoryBufferImpl(buf.getMemory(), nameAddress, 1024);
 		DataTypeInstance dti =
-			DataTypeInstance.getDataTypeInstance(new TerminatedStringDataType(), nameBuf);
+			DataTypeInstance.getDataTypeInstance(new TerminatedStringDataType(), nameBuf, false);
 
 		if (dti != null) {
 			comps[2] = new ReadOnlyDataTypeComponent(dti.getDataType(), this, dti.getLength(), 2,
@@ -178,7 +176,8 @@ public class RTTI0DataType extends RTTIDataType {
 		WrappedMemBuffer nameBuf = null;
 		try {
 			nameBuf = new WrappedMemBuffer(buf, getNameOffset(buf.getMemory().getProgram()));
-			dti = DataTypeInstance.getDataTypeInstance(new TerminatedStringDataType(), nameBuf);
+			dti = DataTypeInstance.getDataTypeInstance(new TerminatedStringDataType(), nameBuf,
+				false);
 		}
 		catch (AddressOutOfBoundsException e) {
 			// ignore

@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -20,7 +20,8 @@ import java.util.List;
 
 import ghidra.program.database.function.OverlappingFunctionException;
 import ghidra.program.model.address.*;
-import ghidra.program.model.data.*;
+import ghidra.program.model.data.DataType;
+import ghidra.program.model.data.DataTypeManager;
 import ghidra.program.model.lang.*;
 import ghidra.program.model.mem.MemBuffer;
 import ghidra.program.model.symbol.Namespace;
@@ -36,6 +37,14 @@ import ghidra.util.task.TaskMonitor;
  */
 
 public interface Listing {
+
+	/**
+	 * The name of the default tree in the display.
+	 * 
+	 * @see #removeTree(String)
+	 */
+	public static final String DEFAULT_TREE_NAME = "Program Tree";
+
 	/**
 	 * get the code unit that starts at the given address.
 	 *
@@ -167,7 +176,7 @@ public interface Listing {
 	 *            PLATE_COMMENT, or REPEATABLE_COMMENT
 	 * @param address the address of the comment.
 	 * @return the comment string of the appropriate type or null if no comment
-	 *         of that type exists for this codeunit
+	 *         of that type exists for this code unit
 	 * @throws IllegalArgumentException if type is not one of the types of
 	 *             comments supported
 	 */
@@ -200,7 +209,6 @@ public interface Listing {
 	 * to the <code>next</code> method. An initial call to the <code>previous</code>
 	 * method would return the code unit with an address less than the specified
 	 * address.
-	 * <p>
 	 *
 	 * @param addr the start address of the iterator.
 	 * @param forward true means get iterator in forward direction
@@ -276,7 +284,6 @@ public interface Listing {
 	 * to the <code>next</code> method. An initial call to the <code>previous</code>
 	 * method would return the instruction with an address less than the
 	 * specified address.
-	 * <p>
 	 *
 	 * @param addr the initial position of the iterator
 	 * @param forward true means get iterator in forward direction
@@ -350,7 +357,6 @@ public interface Listing {
 	 * first Data that would be returned by an initial call to the <code>next</code>
 	 * method. An initial call to the <code>previous</code> method would return the
 	 * Data with an address less than the specified address.
-	 * <p>
 	 *
 	 * @param addr the initial position of the iterator
 	 * @param forward true means get iterator in forward direction
@@ -429,7 +435,6 @@ public interface Listing {
 	 * call to the <code>next</code> method. An initial call to the
 	 * <code>previous</code> method would return the defined Data with an address
 	 * less than the specified address.
-	 * <p>
 	 *
 	 * @param addr the initial position of the iterator
 	 * @param forward true means get iterator in forward direction
@@ -593,17 +598,22 @@ public interface Listing {
 	 * changes will result in a <code>ContextChangeException</code>
 	 *
 	 * @param addr the address at which to create an instruction
-	 * @param prototype the InstructionPrototype the describes the type of
-	 *            instruction to create.
-	 * @param memBuf buffer that provides the bytes that make up the
-	 *            instruction.
+	 * @param prototype the InstructionPrototype that describes the type of instruction to create.
+	 * @param memBuf buffer that provides the bytes that make up the instruction.
 	 * @param context the processor context at this location.
-	 * @return the newly created instruction.
-	 * @exception CodeUnitInsertionException thrown if the new Instruction would
-	 *                overlap and existing Instruction or defined data.
+	 * @param length instruction byte-length (must be in the range 0..prototype.getLength()).
+	 * If smaller than the prototype length it must have a value no greater than 7, otherwise
+	 * an error will be thrown.  A value of 0 or greater-than-or-equal the prototype length
+	 * will be ignored and not impose and override length.  The length value must be a multiple 
+	 * of the {@link Language#getInstructionAlignment() instruction alignment} .
+	 * @return the newly created instruction.  
+	 * @throws CodeUnitInsertionException thrown if the new Instruction would overlap and 
+	 * existing {@link CodeUnit} or the specified {@code length} is unsupported.
+	 * @throws IllegalArgumentException if a negative {@code length} is specified.
 	 */
 	public Instruction createInstruction(Address addr, InstructionPrototype prototype,
-			MemBuffer memBuf, ProcessorContextView context) throws CodeUnitInsertionException;
+			MemBuffer memBuf, ProcessorContextView context, int length)
+			throws CodeUnitInsertionException;
 
 	/**
 	 * Creates a complete set of instructions. A preliminary pass will be made
@@ -650,8 +660,7 @@ public interface Listing {
 	 * @exception CodeUnitInsertionException thrown if the new Instruction would
 	 *                overlap and existing Instruction or defined data.
 	 */
-	public Data createData(Address addr, DataType dataType)
-			throws CodeUnitInsertionException;
+	public Data createData(Address addr, DataType dataType) throws CodeUnitInsertionException;
 
 	/**
 	 * Clears any code units in the given range returning everything to "db"s,
@@ -694,7 +703,7 @@ public interface Listing {
 	 * Clears the comments in the given range.
 	 * 
 	 * @param startAddr the start address of the range to be cleared
-	 * @param endAddr the end address of the range to be cleard
+	 * @param endAddr the end address of the range to be cleared
 	 */
 	public void clearComments(Address startAddr, Address endAddr);
 
@@ -702,7 +711,7 @@ public interface Listing {
 	 * Clears the properties in the given range.
 	 * 
 	 * @param startAddr the start address of the range to be cleared
-	 * @param endAddr the end address of the range to be cleard
+	 * @param endAddr the end address of the range to be cleared
 	 * @param monitor task monitor for cancelling operation.
 	 * @throws CancelledException if the operation was cancelled.
 	 */
@@ -722,7 +731,6 @@ public interface Listing {
 
 	/**
 	 * Returns the fragment containing the given address.
-	 * <P>
 	 * 
 	 * @param treeName name of the tree to search
 	 * @param addr the address that is contained within a fragment.
@@ -733,7 +741,6 @@ public interface Listing {
 
 	/**
 	 * Returns the module with the given name.
-	 * <P>
 	 * 
 	 * @param treeName name of the tree to search
 	 * @param name the name of the module to find.
@@ -744,7 +751,6 @@ public interface Listing {
 
 	/**
 	 * Returns the fragment with the given name.
-	 * <P>
 	 * 
 	 * @param treeName name of the tree to search
 	 * @param name the name of the fragment to find.

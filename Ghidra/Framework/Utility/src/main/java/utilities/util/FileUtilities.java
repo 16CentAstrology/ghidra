@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -298,7 +298,6 @@ public final class FileUtilities {
 	 * <p>
 	 * Takes into account race conditions with external threads/processes
 	 * creating the same directory at the same time.
-	 * <p>
 	 *
 	 * @param dir The directory to create.
 	 * @return True If the directory exists when this method completes; otherwise, false.
@@ -347,7 +346,7 @@ public final class FileUtilities {
 	 * <p>
 	 * Takes into account race conditions with external threads/processes
 	 * creating the same directory at the same time.
-	 * <p>
+	 * 
 	 * @param dir The directory to create.
 	 * @return a reference to the same {@link File} instance that was passed in.
 	 * @throws IOException if there was a failure when creating the directory (ie. the
@@ -368,7 +367,6 @@ public final class FileUtilities {
 	 * <p>
 	 * Uses {@link #createDir(File)} to create new directories (which handles
 	 * race conditions if other processes are also trying to create the same directory).
-	 * <p>
 	 *
 	 * @param dir directory path to be created
 	 * @return a reference to the same {@link File} instance that was passed in.
@@ -432,7 +430,7 @@ public final class FileUtilities {
 		monitor.initialize(files.length);
 
 		for (int i = 0; i < files.length; i++) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			if (files[i].isDirectory()) {
 				// use a dummy monitor as not to ruin our progress
 				if (!doDeleteDir(files[i], monitor)) {
@@ -467,7 +465,7 @@ public final class FileUtilities {
 		}
 
 		for (File file : files) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			if (file.isDirectory()) {
 				// use a dummy monitor as not to ruin our progress
 				if (!doDeleteDir(file, monitor)) {
@@ -534,7 +532,7 @@ public final class FileUtilities {
 		monitor.initialize(originalDirFiles.length);
 
 		for (File file : originalDirFiles) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			monitor.setMessage("Copying " + file.getAbsolutePath());
 			File destinationFile = new File(copyDir, file.getName());
 			if (file.isDirectory()) {
@@ -571,7 +569,7 @@ public final class FileUtilities {
 
 		int copiedFilesCount = 0;
 		for (File file : originalDirFiles) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			monitor.setMessage("Copying " + file.getAbsolutePath());
 			File destinationFile = new File(copyDir, file.getName());
 			if (file.isDirectory()) {
@@ -681,7 +679,7 @@ public final class FileUtilities {
 	 * Returns all of the lines in the file without any newline characters.
 	 * <p>
 	 * The file is treated as UTF-8 encoded.
-	 * <p>
+	 * 
 	 * @param file The text file to read in
 	 * @return a list of file lines
 	 * @throws IOException if an error occurs reading the file
@@ -717,7 +715,7 @@ public final class FileUtilities {
 	 * Returns all of the lines in the BufferedReader without any newline characters.
 	 * <p>
 	 * The file is treated as UTF-8 encoded.
-	 * <p>
+	 * 
 	 * @param url the input stream from which to read
 	 * @return a list of file lines
 	 * @throws IOException thrown if there was a problem accessing the files
@@ -731,7 +729,6 @@ public final class FileUtilities {
 
 	/**
 	 * Returns all of the lines in the given {@link InputStream} without any newline characters.
-	 * <p>
 	 *
 	 * @param is the input stream from which to read
 	 * @return a {@link List} of strings representing the text lines of the file
@@ -745,7 +742,7 @@ public final class FileUtilities {
 	 * Returns all of the text in the given {@link InputStream}.
 	 * <p>
 	 * EOL characters are normalized to simple '\n's.
-	 * <p>
+	 * 
 	 * @param is the input stream from which to read
 	 * @return the content as a String
 	 * @throws IOException if there are any issues reading the file
@@ -764,7 +761,7 @@ public final class FileUtilities {
 	 * Returns all of the text in the given {@link File}.
 	 * <p>
 	 * See {@link #getText(InputStream)}
-	 * <p>
+	 * 
 	 * @param f the file to read
 	 * @return the content as a String
 	 * @throws IOException if there are any issues reading the file or file is too large.
@@ -850,7 +847,7 @@ public final class FileUtilities {
 	 *
 	 * @param potentialParentFile The file that may be the parent
 	 * @param otherFile The file that may be the child
-	 * @return boolean true if otherFile's path is within potentialParentFile's path.
+	 * @return boolean true if otherFile's path is within potentialParentFile's path
 	 */
 	public static boolean isPathContainedWithin(File potentialParentFile, File otherFile) {
 		try {
@@ -869,6 +866,20 @@ public final class FileUtilities {
 		catch (IOException e) {
 			return false;
 		}
+	}
+
+	/**
+	 * Returns true if any of the given <code>potentialParents</code> is the parent path of or has
+	 * the same path as the given <code>otherFile</code>.
+	 *
+	 * @param potentialParents The files that may be the parent
+	 * @param otherFile The file that may be the child
+	 * @return boolean true if otherFile's path is within any of the potentialParents' paths 
+	 */
+	public static boolean isPathContainedWithin(Collection<ResourceFile> potentialParents,
+			ResourceFile otherFile) {
+
+		return potentialParents.stream().anyMatch(parent -> parent.containsPath(otherFile));
 	}
 
 	/**
@@ -1061,7 +1072,7 @@ public final class FileUtilities {
 	 * <p>
 	 * Querying a filepath that does not exist will result in a 'success' and the caller will
 	 * receive the non-existent File instance back.
-	 * <p>
+	 * 
 	 * @param caseSensitiveFile {@link File} to enforce case-sensitive-ness of the name portion
 	 * @return the same {@link File} instance if it points to a file on the filesystem with
 	 * the same case, or a NULL if the case does not match.
@@ -1100,7 +1111,7 @@ public final class FileUtilities {
 	 * If no file is found that matches, the original File instance is returned.
 	 * <p>
 	 * See also {@link #existsAndIsCaseDependent(ResourceFile)}.
-	 * <p>
+	 * 
 	 * @param f File instance
 	 * @return File instance pointing to a case-insensitive match of the File parameter
 	 */
@@ -1144,7 +1155,6 @@ public final class FileUtilities {
 	 * Returns the size of the given file as a human readable String.
 	 * <p>
 	 * See {@link #formatLength(long)}
-	 * <p>
 	 *
 	 * @param file the file for which to get size
 	 * @return the pretty string
@@ -1173,29 +1183,6 @@ public final class FileUtilities {
 		}
 
 		return formatter.format((length / 1000000f)) + "MB";
-	}
-
-	/**
-	 * Creates a temporary directory using the given prefix
-	 * @param prefix the prefix
-	 * @return the temp file
-	 */
-	public static File createTempDirectory(String prefix) {
-		try {
-			File temp = File.createTempFile(prefix, Long.toString(System.currentTimeMillis()));
-			if (!temp.delete()) {
-				throw new IOException("Could not delete temp file: " + temp.getAbsolutePath());
-			}
-			if (!createDir(temp)) {
-				throw new IOException("Could not create temp directory: " + temp.getAbsolutePath());
-			}
-			return temp;
-		}
-		catch (IOException e) {
-			Msg.error(FileUtilities.class, "Error creating temporary directory", e);
-		}
-
-		return null;
 	}
 
 	/**
@@ -1250,14 +1237,56 @@ public final class FileUtilities {
 	 * @param consumer the consumer of each child in the given directory
 	 * @throws IOException if there is any problem reading the directory contents
 	 */
-	public static void forEachFile(Path path, Consumer<Stream<Path>> consumer) throws IOException {
-
+	public static void forEachFile(Path path, Consumer<Path> consumer) throws IOException {
 		if (!Files.isDirectory(path)) {
 			return;
 		}
 
 		try (Stream<Path> pathStream = Files.list(path)) {
-			consumer.accept(pathStream);
+			pathStream.forEach(consumer);
 		}
 	}
+
+	/**
+	 * A convenience method to list the contents of the given directory path and pass each to the
+	 * given consumer.  If the given path does not represent a directory, nothing will happen.
+	 * 
+	 * @param resourceFile the directory
+	 * @param consumer the consumer of each child in the given directory
+	 */
+	public static void forEachFile(File resourceFile, Consumer<File> consumer) {
+		if (!resourceFile.isDirectory()) {
+			return;
+		}
+
+		File[] files = resourceFile.listFiles();
+		if (files == null) {
+			return;
+		}
+		for (File child : files) {
+			consumer.accept(child);
+		}
+	}
+
+	/**
+	 * A convenience method to list the contents of the given directory path and pass each to the
+	 * given consumer.  If the given path does not represent a directory, nothing will happen.
+	 * 
+	 * @param resourceFile the directory
+	 * @param consumer the consumer of each child in the given directory
+	 */
+	public static void forEachFile(ResourceFile resourceFile, Consumer<ResourceFile> consumer) {
+		if (!resourceFile.isDirectory()) {
+			return;
+		}
+
+		ResourceFile[] files = resourceFile.listFiles();
+		if (files == null) {
+			return;
+		}
+		for (ResourceFile child : files) {
+			consumer.accept(child);
+		}
+	}
+
 }

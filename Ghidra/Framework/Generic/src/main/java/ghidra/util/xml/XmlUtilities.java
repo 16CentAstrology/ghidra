@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -87,19 +87,21 @@ public class XmlUtilities {
 	 * @return the encoded XML string
 	 */
 	public static String escapeElementEntities(String xml) {
-		StringBuffer buffer = new StringBuffer();
-		for (int i = 0; i < xml.length(); i++) {
-			char next = xml.charAt(i);
-			if ((next < ' ') && (next != 0x09) && (next != 0x0A) && (next != 0x0D)) {
+		StringBuilder buffer = new StringBuilder();
+		for (int offset = 0; offset < xml.length();) {
+			int codePoint = xml.codePointAt(offset);
+			offset += Character.charCount(codePoint);
+
+			if ((codePoint < ' ') && (codePoint != 0x09) && (codePoint != 0x0A) && (codePoint != 0x0D)) {
 				continue;
 			}
-			if (next >= 0x7F) {
+			if (codePoint >= 0x7F) {
 				buffer.append("&#x");
-				buffer.append(Integer.toString(next, 16).toUpperCase());
+				buffer.append(Integer.toString(codePoint, 16).toUpperCase());
 				buffer.append(";");
 				continue;
 			}
-			switch (next) {
+			switch (codePoint) {
 				case '<':
 					buffer.append(LESS_THAN);
 					break;
@@ -115,11 +117,8 @@ public class XmlUtilities {
 				case '&':
 					buffer.append(AMPERSAND);
 					break;
-// Why was 7F deleted
-//				case 0x7F:
-//					break;
 				default:
-					buffer.append(next);
+					buffer.appendCodePoint(codePoint);
 					break;
 			}
 		}
@@ -137,10 +136,10 @@ public class XmlUtilities {
 	public static String unEscapeElementEntities(String escapedXMLString) {
 
 		Matcher matcher = HEX_DIGIT_PATTERN.matcher(escapedXMLString);
-		StringBuffer buffy = new StringBuffer();
+		StringBuilder buffy = new StringBuilder();
 		while (matcher.find()) {
-			int intValue = Integer.parseInt(matcher.group(1), 16);
-			matcher.appendReplacement(buffy, Character.toString((char) intValue));
+			int codePoint = Integer.parseInt(matcher.group(1), 16);
+			matcher.appendReplacement(buffy, Character.toString(codePoint));
 		}
 		matcher.appendTail(buffy);
 
@@ -189,7 +188,6 @@ public class XmlUtilities {
 
 	/**
 	 * Convert a String into a JDOM {@link Element}.
-	 * <p>
 	 * 
 	 * @param s
 	 * @return
@@ -207,7 +205,6 @@ public class XmlUtilities {
 
 	/**
 	 * Writes a JDOM XML {@link Document} to a {@link File}.
-	 * <p>
 	 * 
 	 * @param doc JDOM XML {@link Document} to write.
 	 * @param dest {@link File} to write to.
@@ -223,7 +220,6 @@ public class XmlUtilities {
 	/**
 	 * Writes a JDOM XML {@link Document} to a {@link File}, with a prettier
 	 * format than {@link #writeDocToFile(Document, File)}.
-	 * <p>
 	 * 
 	 * @param doc JDOM XML {@link Document} to write.
 	 * @param dest {@link File} to write to.
@@ -239,7 +235,6 @@ public class XmlUtilities {
 
 	/**
 	 * Read a File and convert to jdom xml doc.
-	 * <p>
 	 * 
 	 * @param f {@link File} to read
 	 * @return JDOM {@link Document}
@@ -257,7 +252,6 @@ public class XmlUtilities {
 
 	/**
 	 * Read a File and convert to jdom xml doc.
-	 * <p>
 	 * 
 	 * @param f {@link ResourceFile} to read
 	 * @return JDOM {@link Document}
@@ -324,7 +318,6 @@ public class XmlUtilities {
 	/**
 	 * Parses the optional specified string as a decimal number, returning its
 	 * integer value.
-	 * <p>
 	 * 
 	 * @param intStr string with integer digits, or empty or null
 	 * @param defaultValue value to return if intStr is missing
@@ -340,7 +333,6 @@ public class XmlUtilities {
 	/**
 	 * Parses the optional specified string as a decimal number, returning its
 	 * integer value, or defaultValue if the string is null.
-	 * <p>
 	 * 
 	 * @param intStr string with integer digits, or null.
 	 * @param defaultValue value to return if intStr is null.
@@ -366,7 +358,6 @@ public class XmlUtilities {
 	/**
 	 * Parses the specified string as a decimal number, returning its integer
 	 * value.
-	 * <p>
 	 * 
 	 * @param intStr String with integer digits
 	 * @param minValue minimum value allowed (inclusive)
@@ -391,7 +382,6 @@ public class XmlUtilities {
 	/**
 	 * Parses the required attribute as a decimal number, returning its integer
 	 * value.
-	 * <p>
 	 * 
 	 * @param ele JDom element that contains the attribute
 	 * @param attrName the name of the xml attribute to parse
@@ -415,7 +405,6 @@ public class XmlUtilities {
 	/**
 	 * Parses an optional attribute as a decimal number, returning its integer
 	 * value, or the defaultValue if the attribute is null.
-	 * <p>
 	 * 
 	 * @param ele JDOM element that contains the attribute.
 	 * @param attrName the name of the xml attribute to parse.
@@ -475,7 +464,6 @@ public class XmlUtilities {
 	 * Note, using {@link Long#MIN_VALUE} and/or {@link Long#MAX_VALUE} as lower
 	 * and upper bounds is problematic and should be avoided as the range check
 	 * will become a NO-OP and always succeed.
-	 * <p>
 	 * 
 	 * @param longStr String with integer digits
 	 * @param minValue minimum value allowed (inclusive)
@@ -504,7 +492,6 @@ public class XmlUtilities {
 	 * Note, using {@link Long#MIN_VALUE} and/or {@link Long#MAX_VALUE} as lower
 	 * and upper bounds is problematic and should be avoided as the range check
 	 * will become a NO-OP and always succeed.
-	 * <p>
 	 * 
 	 * @param ele JDom element that contains the attribute
 	 * @param attrName the name of the xml attribute to parse
@@ -532,7 +519,6 @@ public class XmlUtilities {
 	 * Note, using {@link Long#MIN_VALUE} and/or {@link Long#MAX_VALUE} as lower
 	 * and upper bounds is problematic and should be avoided as the range check
 	 * will become a NO-OP and always succeed.
-	 * <p>
 	 * 
 	 * @param ele JDom element that contains the attribute.
 	 * @param attrName the name of the xml attribute to parse.
@@ -607,7 +593,6 @@ public class XmlUtilities {
 	/**
 	 * Throws an {@link IOException} with a verbose explanation if the requested
 	 * attribute is not present or is empty.
-	 * <p>
 	 * 
 	 * @param ele JDOM {@link Element} that contains the attribute
 	 * @param attrName the attribute name

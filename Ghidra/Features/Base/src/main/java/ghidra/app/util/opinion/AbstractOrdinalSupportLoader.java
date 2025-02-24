@@ -20,15 +20,18 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 
+import generic.jar.ResourceFile;
 import ghidra.app.util.Option;
+import ghidra.app.util.OptionUtils;
 import ghidra.app.util.bin.ByteProvider;
 import ghidra.app.util.importer.MessageLog;
+import ghidra.formats.gfilesystem.*;
 import ghidra.framework.model.DomainObject;
+import ghidra.framework.model.Project;
 import ghidra.framework.options.Options;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.symbol.*;
-import ghidra.util.Msg;
 import ghidra.util.exception.*;
 import ghidra.util.task.TaskMonitor;
 
@@ -73,76 +76,82 @@ public abstract class AbstractOrdinalSupportLoader extends AbstractLibrarySuppor
 	}
 
 	@Override
-	protected boolean shouldLoadLibrary(String libName, File libFile,
-			ByteProvider provider, LoadSpec loadSpec, MessageLog log) throws IOException {
-
-		if (!super.shouldLoadLibrary(libName, libFile, provider, loadSpec, log)) {
-			return false;
-		}
-
-		int size = loadSpec.getLanguageCompilerSpec().getLanguageDescription().getSize();
-
-		if (!LibraryLookupTable.hasFileAndPathAndTimeStampMatch(libFile, size) &&
-			LibraryLookupTable.libraryLookupTableFileExists(libName, size)) {
-			log.appendMsg("WARNING! Using existing exports file for " + libName +
-				" which may not be an exact match");
-		}
-
-		return true;
-	}
-
-	@Override
-	protected boolean processLibrary(Program lib, String libName, File libFile,
-			ByteProvider provider, LoadSpec loadSpec, List<Option> options, MessageLog log,
-			TaskMonitor monitor)
+	protected void processLibrary(Program lib, String libName, FSRL libFsrl, ByteProvider provider,
+			LoadSpec loadSpec, List<Option> options, MessageLog log, TaskMonitor monitor)
 			throws IOException, CancelledException {
 		int size = loadSpec.getLanguageCompilerSpec().getLanguageDescription().getSize();
+		ResourceFile existingExportsFile = LibraryLookupTable.getExistingExportsFile(libName, size);
 
-		// Create exports file
-		if (!LibraryLookupTable.libraryLookupTableFileExists(libName, size) ||
-			!LibraryLookupTable.hasFileAndPathAndTimeStampMatch(libFile, size)) {
-			try {
-				// Need to write correct library exports file (LibrarySymbolTable)
-				// for use with related imports
-				LibraryLookupTable.createFile(lib, true, monitor);
-			}
-			catch (IOException e) {
-				log.appendMsg("Unable to create exports file for " + libFile);
-				Msg.error(this, "Unable to create exports file for " + libFile, e);
-			}
+		if (!shouldPerformOrdinalLookup(options)) {
+			return;
 		}
 
-		return isLoadLocalLibraries(options) || isLoadSystemLibraries(options);
+		// Create exports file if necessary
+		if (existingExportsFile == null) {
+			try {
+				ResourceFile newExportsFile = LibraryLookupTable.createFile(lib, true, monitor);
+				log.appendMsg("Created exports file: " + newExportsFile);
+			}
+			catch (IOException e) {
+				log.appendMsg("Unable to create exports file for " + libFsrl);
+			}
+		}
+		else {
+			log.appendMsg("Using existing exports file: " + existingExportsFile);
+			File localLibFile = getLocalFile(libFsrl);
+			if (localLibFile != null &&
+				!LibraryLookupTable.hasFileAndPathAndTimeStampMatch(localLibFile, size)) {
+				log.appendMsg("WARNING: Existing exports file may not be an exact match.");
+			}
+		}
+	}
+
+	/**
+	 * If the given {@link FSRL} is from a {@link LocalFileSystem}, its corresponding local
+	 * {@link File} is returned
+	 * 
+	 * @param fsrl A {@link FSRL}
+	 * @return The given {@link FSRL}'s corresponding local {@link File}, or null if it doesn't 
+	 *   have one
+	 */
+	private File getLocalFile(FSRL fsrl) {
+		try {
+			return FileSystemService.getInstance().getLocalFS().getLocalFile(fsrl);
+		}
+		catch (IOException e) {
+			// fall thru
+		}
+		return null;
 	}
 
 	@Override
-	protected void postLoadProgramFixups(List<LoadedProgram> loadedPrograms, List<Option> options,
-			MessageLog messageLog, TaskMonitor monitor) throws CancelledException, IOException {
+	protected void postLoadProgramFixups(List<Loaded<Program>> loadedPrograms, Project project,
+			List<Option> options, MessageLog messageLog, TaskMonitor monitor)
+			throws CancelledException, IOException {
 		monitor.initialize(loadedPrograms.size());
 
 		if (shouldPerformOrdinalLookup(options)) {
-			for (LoadedProgram loadedProgram : loadedPrograms) {
-				monitor.checkCanceled();
-
-				Program p = loadedProgram.program();
-				int id = p.startTransaction("Ordinal fixups");
-				boolean success = false;
+			for (Loaded<Program> loadedProgram : loadedPrograms) {
+				monitor.checkCancelled();
+				Program program = loadedProgram.getDomainObject();
+				int id = program.startTransaction("Ordinal fixups");
 				try {
-					applyLibrarySymbols(p, messageLog, monitor);
-					applyImports(p, messageLog, monitor);
-					success = true;
+					applyLibrarySymbols(program, messageLog, monitor);
+					applyImports(program, messageLog, monitor);
 				}
 				finally {
-					p.endTransaction(id, success);
-					if (p.canSave() && p.isChanged()) {
-						p.save("Ordinal fixups", monitor);
-					}
+					program.endTransaction(id, true); // More efficient to commit when program will be discarded
 				}
 			}
 		}
-		LibraryLookupTable.cleanup();
 
-		super.postLoadProgramFixups(loadedPrograms, options, messageLog, monitor);
+		super.postLoadProgramFixups(loadedPrograms, project, options, messageLog, monitor);
+	}
+
+	@Override
+	protected void postLoadCleanup(boolean success) {
+		super.postLoadCleanup(success);
+		LibraryLookupTable.cleanup();
 	}
 
 	/**
@@ -152,16 +161,8 @@ public abstract class AbstractOrdinalSupportLoader extends AbstractLibrarySuppor
 	 * @return True if ordinal lookup should be performed; otherwise, false
 	 */
 	private boolean shouldPerformOrdinalLookup(List<Option> options) {
-		boolean performOrdinalLookup = ORDINAL_LOOKUP_OPTION_DEFAULT;
-		if (options != null) {
-			for (Option option : options) {
-				String optName = option.getName();
-				if (optName.equals(ORDINAL_LOOKUP_OPTION_NAME)) {
-					performOrdinalLookup = (Boolean) option.getValue();
-				}
-			}
-		}
-		return performOrdinalLookup;
+		return OptionUtils.getOption(ORDINAL_LOOKUP_OPTION_NAME, options,
+			ORDINAL_LOOKUP_OPTION_DEFAULT);
 	}
 
 	/**
@@ -196,7 +197,7 @@ public abstract class AbstractOrdinalSupportLoader extends AbstractLibrarySuppor
 		SymbolIterator iter =
 			program.getSymbolTable().getSymbolIterator(SymbolUtilities.ORDINAL_PREFIX + "*", true);
 		while (iter.hasNext()) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			Symbol ordSym = iter.next();
 			if (!ordSym.getAddress().isMemoryAddress()) {
 				continue;

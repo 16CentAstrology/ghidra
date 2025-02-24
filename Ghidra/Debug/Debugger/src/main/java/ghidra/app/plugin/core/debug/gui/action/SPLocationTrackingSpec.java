@@ -17,8 +17,8 @@ package ghidra.app.plugin.core.debug.gui.action;
 
 import javax.swing.Icon;
 
-import ghidra.app.plugin.core.debug.DebuggerCoordinates;
 import ghidra.app.plugin.core.debug.gui.DebuggerResources.TrackLocationAction;
+import ghidra.debug.api.tracemgr.DebuggerCoordinates;
 import ghidra.program.model.address.AddressSpace;
 import ghidra.program.model.lang.Register;
 import ghidra.trace.model.guest.TracePlatform;
@@ -44,6 +44,11 @@ public enum SPLocationTrackingSpec implements RegisterLocationTrackingSpec {
 	}
 
 	@Override
+	public String getLocationLabel() {
+		return "sp";
+	}
+
+	@Override
 	public Register computeRegister(DebuggerCoordinates coordinates) {
 		TracePlatform platform = coordinates.getPlatform();
 		if (platform == null) {
@@ -55,5 +60,10 @@ public enum SPLocationTrackingSpec implements RegisterLocationTrackingSpec {
 	@Override
 	public AddressSpace computeDefaultAddressSpace(DebuggerCoordinates coordinates) {
 		return coordinates.getTrace().getBaseLanguage().getDefaultDataSpace();
+	}
+
+	@Override
+	public boolean shouldDisassemble() {
+		return false;
 	}
 }

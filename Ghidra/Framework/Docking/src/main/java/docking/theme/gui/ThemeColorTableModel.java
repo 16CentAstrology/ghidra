@@ -16,6 +16,7 @@
 package docking.theme.gui;
 
 import java.awt.*;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.function.Supplier;
@@ -37,26 +38,36 @@ import ghidra.util.table.column.GColumnRenderer;
  * Table model for theme colors
  */
 public class ThemeColorTableModel extends GDynamicColumnTableModel<ColorValue, Object> {
-	private List<ColorValue> colors;
+	protected List<ColorValue> colors;
 	private GThemeValueMap currentValues;
 	private GThemeValueMap themeValues;
 	private GThemeValueMap defaultValues;
 	private GThemeValueMap lightDefaultValues;
 	private GThemeValueMap darkDefaultValues;
-	private ThemeManager themeManager;
+	private GThemeValuesCache valuesCache;
+	private boolean showSystemValues;
 
-	public ThemeColorTableModel(ThemeManager themeManager) {
+	public ThemeColorTableModel(GThemeValuesCache valuesProvider) {
 		super(new ServiceProviderStub());
-		this.themeManager = themeManager;
+		this.valuesCache = valuesProvider;
 		load();
 	}
 
+	public void setShowSystemValues(boolean show) {
+		this.showSystemValues = show;
+	}
+
+	public boolean isShowingSystemValues() {
+		return showSystemValues;
+	}
+
 	/**
-	 * Reloads the just the current values shown in the table. Called whenever a color changes.
-	 */
+		 * Reloads the just the current values shown in the table. Called whenever a color changes.
+		 */
 	public void reloadCurrent() {
-		currentValues = themeManager.getCurrentValues();
+		currentValues = valuesCache.getCurrentValues();
 		colors = currentValues.getColors();
+		filter();
 		fireTableDataChanged();
 	}
 
@@ -74,13 +85,34 @@ public class ThemeColorTableModel extends GDynamicColumnTableModel<ColorValue, O
 	}
 
 	private void load() {
-		currentValues = themeManager.getCurrentValues();
+		currentValues = valuesCache.getCurrentValues();
 		colors = currentValues.getColors();
-		themeValues = themeManager.getThemeValues();
-		defaultValues = themeManager.getDefaults();
-		lightDefaultValues = themeManager.getApplicationLightDefaults();
-		darkDefaultValues = themeManager.getApplicationDarkDefaults();
+		themeValues = valuesCache.getThemeValues();
+		defaultValues = valuesCache.getDefaultValues();
+		lightDefaultValues = valuesCache.getLightValues();
+		darkDefaultValues = valuesCache.getDarkValues();
 
+		filter();
+	}
+
+	protected void filter() {
+
+		List<ColorValue> filtered = new ArrayList<>();
+
+		for (ColorValue colorValue : colors) {
+			String id = colorValue.getId();
+			if (showSystemValues) {
+				filtered.add(colorValue);
+				continue;
+			}
+
+			if (!Gui.isSystemId(id)) {
+				filtered.add(colorValue);
+			}
+
+		}
+
+		colors = filtered;
 	}
 
 	@Override
@@ -110,7 +142,7 @@ public class ThemeColorTableModel extends GDynamicColumnTableModel<ColorValue, O
 		return null;
 	}
 
-	class IdColumn extends AbstractDynamicTableColumn<ColorValue, String, Object> {
+	private class IdColumn extends AbstractDynamicTableColumn<ColorValue, String, Object> {
 
 		@Override
 		public String getColumnName() {
@@ -129,7 +161,8 @@ public class ThemeColorTableModel extends GDynamicColumnTableModel<ColorValue, O
 		}
 	}
 
-	class ValueColumn extends AbstractDynamicTableColumn<ColorValue, ResolvedColor, Object> {
+	private class ValueColumn
+			extends AbstractDynamicTableColumn<ColorValue, ResolvedColor, Object> {
 		private ThemeColorRenderer renderer;
 		private String name;
 		private Supplier<GThemeValueMap> valueSupplier;
@@ -166,6 +199,7 @@ public class ThemeColorTableModel extends GDynamicColumnTableModel<ColorValue, O
 			return renderer;
 		}
 
+		@Override
 		public Comparator<ResolvedColor> getComparator() {
 			return (v1, v2) -> {
 				if (v1 == null && v2 == null) {
@@ -190,8 +224,9 @@ public class ThemeColorTableModel extends GDynamicColumnTableModel<ColorValue, O
 
 	private class ThemeColorRenderer extends AbstractGColumnRenderer<ResolvedColor> {
 
-		public ThemeColorRenderer() {
-			setFont(Gui.getFont("font.monospaced"));
+		@Override
+		protected Font getDefaultFont() {
+			return fixedWidthFont;
 		}
 
 		@Override
@@ -201,6 +236,11 @@ public class ThemeColorTableModel extends GDynamicColumnTableModel<ColorValue, O
 
 			String text = getValueText(resolved);
 			Color color = resolved == null ? GThemeDefaults.Colors.BACKGROUND : resolved.color();
+
+			String webName = WebColors.toWebColorName(color);
+			String hex = WebColors.toString(color, false);
+			String toolTipText = (webName == null ? "" : webName.toLowerCase()) + " " + hex;
+			label.setToolTipText(toolTipText);
 			label.setText(text);
 			label.setIcon(new SwatchIcon(color, label.getForeground()));
 			label.setOpaque(true);
@@ -230,7 +270,7 @@ public class ThemeColorTableModel extends GDynamicColumnTableModel<ColorValue, O
 
 	}
 
-	static class SwatchIcon implements Icon {
+	private static class SwatchIcon implements Icon {
 		private Color color;
 		private Color border;
 
@@ -258,6 +298,6 @@ public class ThemeColorTableModel extends GDynamicColumnTableModel<ColorValue, O
 		}
 	}
 
-	record ResolvedColor(String id, String refId, Color color) {/**/}
-
+	private record ResolvedColor(String id, String refId, Color color) {
+		/**/ }
 }

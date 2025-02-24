@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,8 +19,8 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import ghidra.app.services.MapEntry;
-import ghidra.app.services.MapProposal;
+import ghidra.debug.api.modules.MapEntry;
+import ghidra.debug.api.modules.MapProposal;
 import ghidra.program.model.address.AddressRange;
 import ghidra.program.model.listing.Program;
 import ghidra.trace.model.Trace;
@@ -63,6 +63,9 @@ public abstract class AbstractMapProposal<T, P, E extends MapEntry<T, P>>
 		}
 
 		protected double computeLengthScore() {
+			if (fromRange == null) {
+				return 0;
+			}
 			long fLen = fromRange.getLength();
 			long tLen = toRange.getLength();
 			for (int bitsmatched = 64; bitsmatched > 0; bitsmatched--) {

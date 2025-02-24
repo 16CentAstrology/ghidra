@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -22,11 +22,10 @@ import ghidra.app.plugin.core.datamgr.archive.DomainFileArchive;
 import ghidra.framework.model.DomainFile;
 import ghidra.framework.model.DomainObject;
 import ghidra.program.model.listing.Program;
-import ghidra.util.HTMLUtilities;
 import resources.MultiIcon;
 import resources.icons.TranslateIcon;
 
-public class DomainFileArchiveNode extends ArchiveNode {
+public abstract class DomainFileArchiveNode extends ArchiveNode {
 
 	//@formatter:off
 	private static Icon CHECKED_OUT_ICON = new GIcon("icon.plugin.datatypes.tree.node.archive.file.checked.out");
@@ -47,7 +46,7 @@ public class DomainFileArchiveNode extends ArchiveNode {
 
 	private String domainFileInfoString;
 
-	public DomainFileArchiveNode(DomainFileArchive archive, ArrayPointerFilterState filterState) {
+	public DomainFileArchiveNode(DomainFileArchive archive, DtFilterState filterState) {
 		super(archive, filterState);
 
 		updateDomainFileInfo();
@@ -98,13 +97,7 @@ public class DomainFileArchiveNode extends ArchiveNode {
 	}
 
 	@Override
-	public String getToolTip() {
-		DomainFile file = ((DomainFileArchive) archive).getDomainFile();
-		if (file != null) {
-			return "<html>" + HTMLUtilities.escapeHTML(file.getPathname());
-		}
-		return "[Unsaved New Domain File Archive]";
-	}
+	public abstract String getToolTip();
 
 	@Override
 	public boolean canDelete() {
@@ -115,12 +108,12 @@ public class DomainFileArchiveNode extends ArchiveNode {
 	public Icon getIcon(boolean expanded) {
 
 		Icon baseIcon = archive.getIcon(expanded);
-		BackgroundIcon bgIcon = new BackgroundIcon(24, 16, isVersioned);
+		DtBackgroundIcon bgIcon = new DtBackgroundIcon(isVersioned);
 		MultiIcon multiIcon = new MultiIcon(bgIcon);
 		multiIcon.addIcon(baseIcon);
 
 		if (isReadOnly) {
-			multiIcon.addIcon(new TranslateIcon(READ_ONLY_ICON, 6, 6));
+			multiIcon.addIcon(new TranslateIcon(READ_ONLY_ICON, 14, 3));
 		}
 		else if (isHijacked) {
 			multiIcon.addIcon(new TranslateIcon(HIJACKED_ICON, 8, -4));
@@ -136,6 +129,8 @@ public class DomainFileArchiveNode extends ArchiveNode {
 				multiIcon.addIcon(new TranslateIcon(CHECKED_OUT_ICON, 8, -4));
 			}
 		}
+
+		// TODO: add program architecture state
 
 		return multiIcon;
 	}

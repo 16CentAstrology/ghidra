@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -294,7 +294,7 @@ public class ShowInstructionInfoPluginTest extends AbstractGhidraHeadedIntegrati
 	@Test
 	public void testUpdates() throws Exception {
 		// display a provider, clear the instruction, 
-		// make sure the the provider is cleared, etc. 
+		// make sure that the provider is cleared, etc. 
 
 		changeLocationToAddress("01000000");
 
@@ -376,7 +376,7 @@ public class ShowInstructionInfoPluginTest extends AbstractGhidraHeadedIntegrati
 		final GoToService goToService = tool.getService(GoToService.class);
 		runSwing(() -> goToService.goTo(new AddressFieldLocation(program, address)));
 
-		waitForPostedSwingRunnables();
+		waitForSwing();
 		cbp.updateNow();
 
 		ListingActionContext context =
@@ -398,9 +398,9 @@ public class ShowInstructionInfoPluginTest extends AbstractGhidraHeadedIntegrati
 	 * Tests the addresses of the table models of the "Instruction Info" dialog.
 	 * The method will fail the current test if the result is not as 
 	 * expected by the caller of this method.  For example, if 
-	 * <tt>expectedSame</tt> is true, then the method expects the values to
+	 * {@code expectedSame} is true, then the method expects the values to
 	 * be the same when compared with the given address and will fail if 
-	 * they are not.  If <tt>expectedSame</tt> is false, then the method will
+	 * they are not.  If {@code expectedSame} is false, then the method will
 	 * fail if the test values are the same.
 	 * 
 	 * @param instructionAddress The address to compare against the address

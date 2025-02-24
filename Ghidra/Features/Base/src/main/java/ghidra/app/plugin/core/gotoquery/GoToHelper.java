@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package ghidra.app.plugin.core.gotoquery;
+
+import static ghidra.framework.main.DataTreeDialogType.*;
 
 import java.util.Stack;
 
@@ -212,8 +214,8 @@ public class GoToHelper {
 				AddressArrayTableModel model = new AddressArrayTableModel("Goto: ", tool, program,
 					externalLinkageAddresses, null);
 				TableService service = tool.getService(TableService.class);
-				service.showTable("Goto " + externalSym.getName(true) + " linkage location", "Goto",
-					model, "Go To", nav);
+				service.showTable("Goto " + externalSym.getName(true) + " linkage location",
+					"Go To Results", model, "Go To", nav);
 				return true;
 			}
 			tool.setStatusInfo(
@@ -437,7 +439,7 @@ public class GoToHelper {
 		}
 
 		DataTreeDialog dialog = new DataTreeDialog(null,
-			"Choose External Program (" + extProgName + ")", DataTreeDialog.OPEN);
+			"Choose External Program (" + extProgName + ")", OPEN);
 		dialog.setSearchText(extProgName);
 		dialog.setHelpLocation(new HelpLocation("ReferencesPlugin", "ChooseExternalProgram"));
 		tool.showDialog(dialog);
@@ -449,7 +451,7 @@ public class GoToHelper {
 		ExternalManager externalManager = program.getExternalManager();
 		String externalLibraryPath = externalManager.getExternalLibraryPath(extProgName);
 		if (!pathName.equals(externalLibraryPath)) {
-			Command cmd = new SetExternalNameCmd(extProgName, domainFile.getPathname());
+			Command<Program> cmd = new SetExternalNameCmd(extProgName, domainFile.getPathname());
 			tool.execute(cmd, program);
 		}
 	}

@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -20,8 +20,6 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.function.Consumer;
-
-import com.google.common.cache.RemovalNotification;
 
 import ghidra.framework.store.LockException;
 import ghidra.program.database.mem.*;
@@ -49,22 +47,25 @@ public abstract class AbstractDBTraceProgramViewMemory
 	protected boolean forceFullView = false;
 	protected long snap;
 
-	protected LiveMemoryHandler memoryWriteRedirect;
+	private static final int CACHE_PAGE_COUNT = 3;
+	protected final ByteCache cache = new ByteCache(CACHE_PAGE_COUNT) {
+		@Override
+		protected int doLoad(Address address, ByteBuffer buf) throws MemoryAccessException {
+			DBTraceMemorySpace space =
+				program.trace.getMemoryManager().getMemorySpace(address.getAddressSpace(), false);
+			if (space == null) {
+				int len = buf.remaining();
+				buf.position(buf.limit());
+				return len;
+			}
+			return space.getViewBytes(program.snap, address, buf);
+		}
+	};
 
 	public AbstractDBTraceProgramViewMemory(DBTraceProgramView program) {
 		this.program = program;
 		this.memoryManager = program.trace.getMemoryManager();
 		setSnap(program.snap);
-	}
-
-	protected void regionBlockRemoved(
-			RemovalNotification<TraceMemoryRegion, DBTraceProgramViewMemoryRegionBlock> rn) {
-		// Nothing
-	}
-
-	protected void spaceBlockRemoved(
-			RemovalNotification<AddressSpace, DBTraceProgramViewMemorySpaceBlock> rn) {
-		// Nothing
 	}
 
 	protected abstract void recomputeAddressSet();
@@ -160,16 +161,6 @@ public abstract class AbstractDBTraceProgramViewMemory
 	}
 
 	@Override
-	public void setLiveMemoryHandler(LiveMemoryHandler handler) {
-		this.memoryWriteRedirect = handler;
-	}
-
-	@Override
-	public LiveMemoryHandler getLiveMemoryHandler() {
-		return null;
-	}
-
-	@Override
 	public MemoryBlock createInitializedBlock(String name, Address start, InputStream is,
 			long length, TaskMonitor monitor, boolean overlay)
 			throws LockException, MemoryConflictException, AddressOverflowException,
@@ -257,7 +248,7 @@ public abstract class AbstractDBTraceProgramViewMemory
 	}
 
 	@Override
-	public MemoryBlock convertToInitialized(MemoryBlock unitializedBlock, byte initialValue)
+	public MemoryBlock convertToInitialized(MemoryBlock uninitializedBlock, byte initialValue)
 			throws LockException, MemoryBlockException, NotFoundException {
 		throw new UnsupportedOperationException();
 	}
@@ -313,32 +304,29 @@ public abstract class AbstractDBTraceProgramViewMemory
 
 	@Override
 	public byte getByte(Address addr) throws MemoryAccessException {
-		MemoryBlock block = getBlock(addr);
-		if (block == null) {
-			return 0; // Memory assumed initialized to 0
+		try (LockHold hold = program.trace.lockRead()) {
+			return cache.read(addr);
 		}
-		return block.getByte(addr);
 	}
 
 	@Override
-	public int getBytes(Address addr, byte[] dest, int destIndex, int size)
-			throws MemoryAccessException {
-		MemoryBlock block = getBlock(addr);
-		if (block == null) {
-			int avail = MathUtilities.unsignedMin(Math.max(0, size),
-				addr.getAddressSpace().getMaxAddress().subtract(addr));
-			Arrays.fill(dest, destIndex, avail, (byte) 0);
-			return avail;
+	public int getBytes(Address addr, byte[] b, int off, int len) throws MemoryAccessException {
+		try (LockHold hold = program.trace.lockRead()) {
+			if (cache.canCache(addr, len)) {
+				return cache.read(addr, ByteBuffer.wrap(b, off, len));
+			}
+			AddressSpace as = addr.getAddressSpace();
+			DBTraceMemorySpace space = program.trace.getMemoryManager().getMemorySpace(as, false);
+			if (space == null) {
+				throw new MemoryAccessException("Space does not exist");
+			}
+			len = MathUtilities.unsignedMin(len, as.getMaxAddress().subtract(addr) + 1);
+			return space.getViewBytes(program.snap, addr, ByteBuffer.wrap(b, off, len));
 		}
-		return block.getBytes(addr, dest, destIndex, size);
 	}
 
 	@Override
 	public void setByte(Address addr, byte value) throws MemoryAccessException {
-		if (memoryWriteRedirect != null) {
-			memoryWriteRedirect.putByte(addr, value);
-			return;
-		}
 		DBTraceMemorySpace space = memoryManager.getMemorySpace(addr.getAddressSpace(), true);
 		if (space.putBytes(snap, addr, ByteBuffer.wrap(new byte[] { value })) != 1) {
 			throw new MemoryAccessException();
@@ -348,10 +336,6 @@ public abstract class AbstractDBTraceProgramViewMemory
 	@Override
 	public void setBytes(Address addr, byte[] source, int sIndex, int size)
 			throws MemoryAccessException {
-		if (memoryWriteRedirect != null) {
-			memoryWriteRedirect.putBytes(addr, source, sIndex, size);
-			return;
-		}
 		DBTraceMemorySpace space = memoryManager.getMemorySpace(addr.getAddressSpace(), true);
 		if (space.putBytes(snap, addr, ByteBuffer.wrap(source, sIndex, size)) != size) {
 			throw new MemoryAccessException();

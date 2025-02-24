@@ -20,12 +20,11 @@ import java.awt.Point;
 import javax.swing.*;
 
 import docking.ActionContext;
-import docking.DialogComponentProvider;
+import docking.ReusableDialogComponentProvider;
 import docking.action.*;
 import docking.tool.ToolConstants;
 import docking.widgets.OptionDialog;
 import generic.theme.GIcon;
-import generic.theme.GThemeDefaults.Colors;
 import ghidra.app.util.GenericHelpTopics;
 import ghidra.framework.main.AppInfo;
 import ghidra.framework.plugintool.PluginConfigurationModel;
@@ -34,7 +33,7 @@ import ghidra.framework.plugintool.util.PluginPackage;
 import ghidra.util.HelpLocation;
 import resources.Icons;
 
-public class ManagePluginsDialog extends DialogComponentProvider {
+public class ManagePluginsDialog extends ReusableDialogComponentProvider {
 
 	private PluginTool tool;
 	private boolean isNewTool;
@@ -56,7 +55,6 @@ public class ManagePluginsDialog extends DialogComponentProvider {
 		this.pluginConfigurationModel = pluginConfigurationModel;
 		pluginComponent = new PluginManagerComponent(tool, pluginConfigurationModel);
 		JScrollPane scrollPane = new JScrollPane(pluginComponent);
-		scrollPane.getViewport().setBackground(Colors.BACKGROUND);
 		scrollPane.getViewport().setViewPosition(new Point(0, 0));
 		addWorkPanel(scrollPane);
 		createActions(addSaveActions);

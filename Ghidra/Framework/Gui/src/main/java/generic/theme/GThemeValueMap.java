@@ -15,6 +15,8 @@
  */
 package generic.theme;
 
+import java.awt.Color;
+import java.awt.Font;
 import java.io.File;
 import java.net.URL;
 import java.util.*;
@@ -31,6 +33,7 @@ public class GThemeValueMap {
 	protected Map<String, ColorValue> colorMap = new HashMap<>();
 	protected Map<String, FontValue> fontMap = new HashMap<>();
 	protected Map<String, IconValue> iconMap = new HashMap<>();
+	protected Map<String, JavaPropertyValue> propertyMap = new HashMap<>();
 
 	/**
 	 * Constructs a new empty map.
@@ -87,6 +90,19 @@ public class GThemeValueMap {
 	}
 
 	/**
+	 * Adds the given property value to this map. If a property value already exists in the map with
+	 * the same id, it will be replaced.
+	 * @param value the {@link JavaPropertyValue} to store in the map.
+	 * @return the previous value for the icon key or null if no previous value existed.
+	 */
+	public JavaPropertyValue addProperty(JavaPropertyValue value) {
+		if (value != null) {
+			return propertyMap.put(value.getId(), value);
+		}
+		return null;
+	}
+
+	/**
 	 * Returns the current {@link ColorValue} for the given id or null if none exists.
 	 * @param id the id to look up a color for
 	 * @return the current {@link ColorValue} for the given id or null if none exists.
@@ -114,7 +130,16 @@ public class GThemeValueMap {
 	}
 
 	/**
-	 * Loads all the values from the given map into this map, replacing values with the 
+	 * Returns the current {@link JavaPropertyValue} for the given id or null if none exists.
+	 * @param id the id to look up a icon for
+	 * @return the current {@link JavaPropertyValue} for the given id or null if none exists.
+	 */
+	public JavaPropertyValue getProperty(String id) {
+		return propertyMap.get(id);
+	}
+
+	/**
+	 * Loads all the values from the given map into this map, replacing values with the
 	 * same ids.
 	 * @param valueMap the map whose values are to be loaded into this map
 	 */
@@ -125,6 +150,7 @@ public class GThemeValueMap {
 		valueMap.colorMap.values().forEach(v -> addColor(v));
 		valueMap.fontMap.values().forEach(v -> addFont(v));
 		valueMap.iconMap.values().forEach(v -> addIcon(v));
+		valueMap.propertyMap.values().forEach(v -> addProperty(v));
 	}
 
 	/**
@@ -149,6 +175,14 @@ public class GThemeValueMap {
 	 */
 	public List<IconValue> getIcons() {
 		return new ArrayList<>(iconMap.values());
+	}
+
+	/**
+	 * Returns a list of all the {@link JavaPropertyValue}s stored in this map.
+	 * @return a list of all the {@link JavaPropertyValue}s stored in this map.
+	 */
+	public List<JavaPropertyValue> getProperties() {
+		return new ArrayList<>(propertyMap.values());
 	}
 
 	/**
@@ -179,11 +213,20 @@ public class GThemeValueMap {
 	}
 
 	/**
-	 * Returns the total number of color, font, and icon values stored in this map
-	 * @return the total number of color, font, and icon values stored in this map
+	 * Returns true if an {@link JavaPropertyValue} exists in this map for the given id.
+	 * @param id the id to check
+	 * @return true if an {@link JavaPropertyValue} exists in this map for the given id
+	 */
+	public boolean containsProperty(String id) {
+		return propertyMap.containsKey(id);
+	}
+
+	/**
+	 * Returns the total number of color, font, icon and property values stored in this map
+	 * @return the total number of color, font, icon and property values stored in this map
 	 */
 	public Object size() {
-		return colorMap.size() + fontMap.size() + iconMap.size();
+		return colorMap.size() + fontMap.size() + iconMap.size() + propertyMap.size();
 	}
 
 	/**
@@ -193,14 +236,16 @@ public class GThemeValueMap {
 		colorMap.clear();
 		fontMap.clear();
 		iconMap.clear();
+		propertyMap.clear();
 	}
 
 	/**
-	 * Returns true if there are not color, font, or icon values in this map
-	 * @return true if there are not color, font, or icon values in this map
+	 * Returns true if there are not color, font, icon or property values in this map
+	 * @return true if there are not color, font, icon or property values in this map
 	 */
 	public boolean isEmpty() {
-		return colorMap.isEmpty() && fontMap.isEmpty() && iconMap.isEmpty();
+		return colorMap.isEmpty() && fontMap.isEmpty() && iconMap.isEmpty() &&
+			propertyMap.isEmpty();
 	}
 
 	/**
@@ -228,9 +273,17 @@ public class GThemeValueMap {
 	}
 
 	/**
+	 * removes any {@link JavaPropertyValue} with the given id from this map.
+	 * @param id the id to remove
+	 */
+	public void removeProperty(String id) {
+		propertyMap.remove(id);
+	}
+
+	/**
 	 * Returns a new {@link GThemeValueMap} that is only populated by values that don't exist
 	 * in the give map.
-	 * @param base the set of values (usually the default set) to compare against to determine 
+	 * @param base the set of values (usually the default set) to compare against to determine
 	 * what values are changed.
 	 * @return a new {@link GThemeValueMap} that is only populated by values that don't exist
 	 * in the give map
@@ -252,13 +305,18 @@ public class GThemeValueMap {
 				map.addIcon(icon);
 			}
 		}
+		for (JavaPropertyValue property : propertyMap.values()) {
+			if (!property.equals(base.getProperty(property.getId()))) {
+				map.addProperty(property);
+			}
+		}
 		return map;
 	}
 
 	/**
 	 * Gets the set of icon (.png, .gif) files that are used by IconValues that came from files
-	 * versus resources in the classpath. These are the icon files that need to be included
-	 * when exporting this set of values to a zip file.
+	 * versus resources in the classpath. These are the icon files that need to be included when
+	 * exporting this set of values to a zip file.
 	 * @return the set of icon (.png, .gif) files that are used by IconValues that came from files
 	 * versus resources in the classpath
 	 */
@@ -266,18 +324,24 @@ public class GThemeValueMap {
 		Set<File> files = new HashSet<>();
 		for (IconValue iconValue : iconMap.values()) {
 			Icon icon = iconValue.getRawValue();
-			if (icon instanceof UrlImageIcon urlIcon) {
-				String originalPath = urlIcon.getOriginalPath();
-				if (originalPath.startsWith(ResourceManager.EXTERNAL_ICON_PREFIX)) {
-					URL url = urlIcon.getUrl();
-					String filePath = url.getFile();
-					if (filePath != null) {
-						File iconFile = new File(filePath);
-						if (iconFile.exists()) {
-							files.add(iconFile);
-						}
-					}
-				}
+			if (!(icon instanceof UrlImageIcon urlIcon)) {
+				continue;
+			}
+
+			String originalPath = urlIcon.getOriginalPath();
+			if (!originalPath.startsWith(ResourceManager.EXTERNAL_ICON_PREFIX)) {
+				continue;
+			}
+
+			URL url = urlIcon.getUrl();
+			String filePath = url.getFile();
+			if (filePath == null) {
+				continue;
+			}
+
+			File iconFile = new File(filePath);
+			if (iconFile.exists()) {
+				files.add(iconFile);
 			}
 		}
 		return files;
@@ -285,7 +349,7 @@ public class GThemeValueMap {
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(colorMap, fontMap, iconMap);
+		return Objects.hash(colorMap, fontMap, iconMap, propertyMap);
 	}
 
 	@Override
@@ -300,8 +364,10 @@ public class GThemeValueMap {
 			return false;
 		}
 		GThemeValueMap other = (GThemeValueMap) obj;
-		return Objects.equals(colorMap, other.colorMap) && Objects.equals(fontMap, other.fontMap) &&
-			Objects.equals(iconMap, other.iconMap);
+		return Objects.equals(colorMap, other.colorMap) &&
+			Objects.equals(fontMap, other.fontMap) &&
+			Objects.equals(iconMap, other.iconMap) &&
+			Objects.equals(propertyMap, other.propertyMap);
 	}
 
 	public void checkForUnresolvedReferences() {
@@ -315,6 +381,100 @@ public class GThemeValueMap {
 		for (IconValue iconValue : iconMap.values()) {
 			iconValue.get(this);
 		}
+		for (JavaPropertyValue propertyValue : propertyMap.values()) {
+			propertyValue.get(this);
+		}
 	}
 
+	/**
+	 * Returns the set of all color ids in this map
+	 * @return  the set of all color ids in this map
+	 */
+	public Set<String> getColorIds() {
+		return colorMap.keySet();
+	}
+
+	/**
+	 * Returns the set of all font ids in this map
+	 * @return  the set of all font ids in this map
+	 */
+	public Set<String> getFontIds() {
+		return fontMap.keySet();
+	}
+
+	/**
+	 * Returns the set of all icon ids in this map
+	 * @return  the set of all icon ids in this map
+	 */
+	public Set<String> getIconIds() {
+		return iconMap.keySet();
+	}
+
+	/**
+	 * Returns the set of all Java property ids in this map
+	 * @return  the set of all Java property ids in this map
+	 */
+	public Set<String> getPropertyIds() {
+		return propertyMap.keySet();
+	}
+
+	/**
+	 * Returns the resolved color, following indirections as needed to get the color ultimately
+	 * assigned to the given id.
+	 * @param id the id for which to get a color
+	 * @return the resolved color, following indirections as needed to get the color ultimately
+	 * assigned to the given id.
+	 */
+	public Color getResolvedColor(String id) {
+		ColorValue colorValue = colorMap.get(id);
+		if (colorValue != null) {
+			return colorValue.get(this);
+		}
+		return null;
+	}
+
+	/**
+	 * Returns the resolved font, following indirections as needed to get the font ultimately
+	 * assigned to the given id.
+	 * @param id the id for which to get a font
+	 * @return the resolved font, following indirections as needed to get the font ultimately
+	 * assigned to the given id
+	 */
+	public Font getResolvedFont(String id) {
+		FontValue fontValue = fontMap.get(id);
+		if (fontValue != null) {
+			return fontValue.get(this);
+		}
+		return null;
+	}
+
+	/**
+	 * Returns the resolved icon, following indirections as needed to get the icon ultimately
+	 * assigned to the given id.
+	 * @param id the id for which to get an icon
+	 * @return the resolved icon, following indirections as needed to get the icon ultimately
+	 * assigned to the given id
+	 */
+	public Icon getResolvedIcon(String id) {
+		IconValue iconValue = iconMap.get(id);
+		if (iconValue != null) {
+			return iconValue.get(this);
+		}
+		return null;
+	}
+
+	/**
+	 * Returns the resolved property, following indirections as needed to get the property
+	 * ultimately assigned to the given id.
+	 * @param id the id for which to get an property
+	 * @return the resolved property, following indirections as needed to get the property
+	 * ultimately assigned to the given id
+	 */
+	public Object getResolvedProperty(String id) {
+		JavaPropertyValue propertyValue = propertyMap.get(id);
+		if (propertyValue != null) {
+			return propertyValue.get(this);
+		}
+		return null;
+	}
 }

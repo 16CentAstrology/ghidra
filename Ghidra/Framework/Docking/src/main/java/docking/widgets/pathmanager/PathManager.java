@@ -25,11 +25,11 @@ import javax.swing.*;
 import javax.swing.event.TableModelListener;
 import javax.swing.table.TableColumn;
 
+import docking.widgets.button.GButton;
 import docking.widgets.filechooser.GhidraFileChooser;
 import docking.widgets.filechooser.GhidraFileChooserMode;
 import docking.widgets.table.*;
 import generic.jar.ResourceFile;
-import generic.theme.GThemeDefaults.Colors.Tables;
 import generic.util.Path;
 import ghidra.framework.options.SaveState;
 import ghidra.framework.preferences.Preferences;
@@ -53,8 +53,7 @@ public class PathManager {
 	private JButton downButton;
 	private JButton addButton;
 	private JButton removeButton;
-	private GhidraFileChooser fileChooser;
-	private String preferenceForLastSelectedDir = Preferences.LAST_IMPORT_DIRECTORY;
+	private String preferenceForLastSelectedDir = Preferences.LAST_PATH_DIRECTORY;
 	private String title = "Select File";
 	private GhidraFileChooserMode fileChooserMode = GhidraFileChooserMode.FILES_ONLY;
 	private boolean allowMultiFileSelection;
@@ -97,7 +96,6 @@ public class PathManager {
 		fileChooserMode = selectionMode;
 		allowMultiFileSelection = allowMultiSelection;
 		this.filter = filter;
-		this.fileChooser = null;
 	}
 
 	/**
@@ -162,26 +160,26 @@ public class PathManager {
 		panel = new JPanel(new BorderLayout(5, 5));
 
 		if (allowOrdering) {
-			upButton = new JButton(Icons.UP_ICON);
+			upButton = new GButton(Icons.UP_ICON);
 			upButton.setName("UpArrow");
 			upButton.setToolTipText("Move the selected path up in list");
 			upButton.addActionListener(e -> up());
 			upButton.setFocusable(false);
 
-			downButton = new JButton(Icons.DOWN_ICON);
+			downButton = new GButton(Icons.DOWN_ICON);
 			downButton.setName("DownArrow");
 			downButton.setToolTipText("Move the selected path down in list");
 			downButton.addActionListener(e -> down());
 			downButton.setFocusable(false);
 		}
 
-		addButton = new JButton(Icons.ADD_ICON);
+		addButton = new GButton(Icons.ADD_ICON);
 		addButton.setName("AddPath");
 		addButton.setToolTipText("Display file chooser to select files to add");
 		addButton.addActionListener(e -> add());
 		addButton.setFocusable(false);
 
-		removeButton = new JButton(Icons.DELETE_ICON);
+		removeButton = new GButton(Icons.DELETE_ICON);
 		removeButton.setName("RemovePath");
 		removeButton.setToolTipText("Remove selected path(s) from list");
 		removeButton.addActionListener(e -> remove());
@@ -233,8 +231,7 @@ public class PathManager {
 				if (column == PathManagerModel.COLUMN_PATH) {
 					Path path = (Path) value;
 					if (!isValidPath(path)) {
-						renderer.setForeground(data.isSelected() ? Tables.FG_ERROR_SELECTED
-								: Tables.FG_ERROR_UNSELECTED);
+						renderer.setForeground(getErrorForegroundColor(data.isSelected()));
 					}
 				}
 				return renderer;
@@ -242,7 +239,6 @@ public class PathManager {
 		});
 
 		JScrollPane scrollPane = new JScrollPane(pathTable);
-		scrollPane.getViewport().setBackground(pathTable.getBackground());
 
 		ListSelectionModel selModel = pathTable.getSelectionModel();
 		selModel.addListSelectionListener(e -> {
@@ -294,32 +290,31 @@ public class PathManager {
 	}
 
 	private void add() {
-		if (fileChooser == null) {
-			fileChooser = new GhidraFileChooser(panel);
-			fileChooser.setMultiSelectionEnabled(allowMultiFileSelection);
-			fileChooser.setFileSelectionMode(fileChooserMode);
-			fileChooser.setTitle(title);
-			fileChooser.setApproveButtonToolTipText(title);
-			if (filter != null) {
-				fileChooser.addFileFilter(new GhidraFileFilter() {
-					@Override
-					public String getDescription() {
-						return filter.getDescription();
-					}
 
-					@Override
-					public boolean accept(File f, GhidraFileChooserModel l_model) {
-						return filter.accept(f, l_model);
-					}
-				});
-			}
-			String dir = Preferences.getProperty(preferenceForLastSelectedDir);
-			if (dir != null) {
-				fileChooser.setCurrentDirectory(new File(dir));
-			}
+		GhidraFileChooser fileChooser = new GhidraFileChooser(panel);
+		fileChooser.setMultiSelectionEnabled(allowMultiFileSelection);
+		fileChooser.setFileSelectionMode(fileChooserMode);
+		fileChooser.setTitle(title);
+		fileChooser.setApproveButtonToolTipText(title);
+		if (filter != null) {
+			fileChooser.addFileFilter(new GhidraFileFilter() {
+				@Override
+				public String getDescription() {
+					return filter.getDescription();
+				}
+
+				@Override
+				public boolean accept(File f, GhidraFileChooserModel l_model) {
+					return filter.accept(f, l_model);
+				}
+			});
 		}
-		else {
-			fileChooser.rescanCurrentDirectory();
+		String dirPath = Preferences.getProperty(preferenceForLastSelectedDir);
+		if (dirPath != null) {
+			File dir = new File(dirPath);
+			if (dir.isDirectory()) {
+				fileChooser.setCurrentDirectory(dir);
+			}
 		}
 
 		List<File> files = fileChooser.getSelectedFiles();
@@ -339,6 +334,8 @@ public class PathManager {
 				Preferences.setProperty(preferenceForLastSelectedDir, path);
 			}
 		}
+
+		fileChooser.dispose();
 	}
 
 	private void up() {
@@ -389,7 +386,7 @@ public class PathManager {
 	}
 
 	/**
-	 * Restore paths from user Preferences using the specified keys.  
+	 * Restore paths from user Preferences using the specified keys.
 	 * If preferences have never been saved, the specified {@code defaultEnablePaths}
 	 * will be used.  Note: the encoded path list must have been stored
 	 * using the same keys using the {@link #savePathsToPreferences(String, String, Path[])}
@@ -408,7 +405,7 @@ public class PathManager {
 	}
 
 	/**
-	 * Restore paths from user Preferences using the specified keys.  
+	 * Restore paths from user Preferences using the specified keys.
 	 * If preferences have never been saved, the specified {@code defaultEnablePaths}
 	 * will be returned.  Note: the encoded path list must have been stored
 	 * using the same keys using the {@link #savePathsToPreferences(String, String, Path[])}
@@ -475,7 +472,7 @@ public class PathManager {
 
 	/**
 	 * Save the specified paths to the user Preferences using the specified keys.
-	 * Note: The encoded path Preferences are intended to be decoded by the 
+	 * Note: The encoded path Preferences are intended to be decoded by the
 	 * {@link #restoreFromPreferences(String, Path[], String)} and
 	 * {@link #getPathsFromPreferences(String, Path[], String)} methods.
 	 * @param enablePathKey preference key for storing enabled paths

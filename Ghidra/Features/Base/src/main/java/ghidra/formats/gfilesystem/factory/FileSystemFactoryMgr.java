@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,7 +15,6 @@
  */
 package ghidra.formats.gfilesystem.factory;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -34,13 +33,11 @@ import ghidra.util.task.TaskMonitor;
  * <p>
  * Auto-discovers all {@link GFileSystem} instances in the classpath that have a
  * {@link FileSystemInfo} annotation.
- * <p>
  */
 public class FileSystemFactoryMgr {
 
 	/**
-	 * <p>
-	 * @return The single global {@link FileSystemFactoryMgr} instance.
+	 * {@return The single global {@link FileSystemFactoryMgr} instance.}
 	 */
 	public static FileSystemFactoryMgr getInstance() {
 		return Singleton.instance;
@@ -136,7 +133,6 @@ public class FileSystemFactoryMgr {
 	/**
 	 * Creates a new {@link GFileSystem} instance when the filesystem type is already
 	 * known, consuming the specified ByteProvider.
-	 * <p>
 	 *
 	 * @param fsType filesystem type string, ie. "file", "zip".
 	 * @param byteProvider {@link ByteProvider}, will be owned by the new file system
@@ -193,7 +189,7 @@ public class FileSystemFactoryMgr {
 
 	/**
 	 * Returns true if the specified file contains a supported {@link GFileSystem}.
-	 * <p>
+	 * 
 	 * @param byteProvider 
 	 * @param fsService reference to the {@link FileSystemService} instance.
 	 * @param monitor {@link TaskMonitor} to use for canceling and updating progress.
@@ -212,18 +208,13 @@ public class FileSystemFactoryMgr {
 		byte[] startBytes = byteProvider.readBytes(0, pboByteCount);
 		for (FileSystemInfoRec fsir : sortedFactories) {
 			try {
-				if (fsir.getFactory() instanceof GFileSystemProbeBytesOnly) {
-					GFileSystemProbeBytesOnly factoryProbe =
-						(GFileSystemProbeBytesOnly) fsir.getFactory();
-					if (factoryProbe.getBytesRequired() <= startBytes.length) {
-						if (factoryProbe.probeStartBytes(containerFSRL, startBytes)) {
-							return true;
-						}
+				if (fsir.getFactory() instanceof GFileSystemProbeBytesOnly factoryProbe) {
+					if (factoryProbe.getBytesRequired() <= startBytes.length &&
+						factoryProbe.probeStartBytes(containerFSRL, startBytes)) {
+						return true;
 					}
 				}
-				if (fsir.getFactory() instanceof GFileSystemProbeByteProvider) {
-					GFileSystemProbeByteProvider factoryProbe =
-						(GFileSystemProbeByteProvider) fsir.getFactory();
+				if (fsir.getFactory() instanceof GFileSystemProbeByteProvider factoryProbe) {
 					if (factoryProbe.probe(byteProvider, fsService, monitor)) {
 						return true;
 					}
@@ -240,7 +231,6 @@ public class FileSystemFactoryMgr {
 	/**
 	 * Probes the specified file for a supported {@link GFileSystem} implementation, and
 	 * if found, creates a new filesystem instance.
-	 * <p>
 	 *
 	 * @param byteProvider container {@link ByteProvider}, will be owned by the new filesystem
 	 * @param fsService reference to the {@link FileSystemService} instance.
@@ -264,7 +254,7 @@ public class FileSystemFactoryMgr {
 	 * Probes the specified file for a supported {@link GFileSystem} implementation, and
 	 * if found, creates a new filesystem instance.  The ByteProvider is owned by the new
 	 * file system.
-	 * <p>
+	 * 
 	 * @param byteProvider container {@link ByteProvider}, will be owned by the new filesystem
 	 * @param fsService reference to the {@link FileSystemService} instance.
 	 * @param conflictResolver {@link FileSystemProbeConflictResolver conflict resolver} to

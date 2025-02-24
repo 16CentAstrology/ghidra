@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,20 +21,18 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 
 import db.DBHandle;
-import ghidra.dbg.target.TargetModule;
-import ghidra.dbg.target.TargetSection;
+import ghidra.framework.data.OpenMode;
 import ghidra.program.model.address.*;
 import ghidra.program.model.lang.Language;
 import ghidra.trace.database.DBTrace;
 import ghidra.trace.database.space.AbstractDBTraceSpaceBasedManager;
 import ghidra.trace.database.space.DBTraceDelegatingManager;
 import ghidra.trace.model.Lifespan;
-import ghidra.trace.model.Trace.TraceModuleChangeType;
 import ghidra.trace.model.modules.*;
 import ghidra.trace.model.thread.TraceThread;
 import ghidra.trace.util.TraceChangeRecord;
+import ghidra.trace.util.TraceEvents;
 import ghidra.util.LockHold;
-import ghidra.util.database.DBOpenMode;
 import ghidra.util.exception.DuplicateNameException;
 import ghidra.util.exception.VersionException;
 import ghidra.util.task.TaskMonitor;
@@ -43,7 +41,7 @@ public class DBTraceModuleManager extends AbstractDBTraceSpaceBasedManager<DBTra
 		implements TraceModuleManager, DBTraceDelegatingManager<DBTraceModuleSpace> {
 	public static final String NAME = "Module";
 
-	public DBTraceModuleManager(DBHandle dbh, DBOpenMode openMode, ReadWriteLock lock,
+	public DBTraceModuleManager(DBHandle dbh, OpenMode openMode, ReadWriteLock lock,
 			TaskMonitor monitor, Language baseLanguage, DBTrace trace)
 			throws VersionException, IOException {
 		super(NAME, dbh, openMode, lock, monitor, baseLanguage, trace, null);
@@ -70,8 +68,8 @@ public class DBTraceModuleManager extends AbstractDBTraceSpaceBasedManager<DBTra
 			if (!pc.getLifespan().intersects(moduleLifespan)) {
 				continue;
 			}
-			throw new DuplicateNameException("Module with path '" +
-				modulePath + "' already exists within an overlapping snap");
+			throw new DuplicateNameException(
+				"Module with path '" + modulePath + "' already exists within an overlapping snap");
 		}
 	}
 
@@ -132,8 +130,7 @@ public class DBTraceModuleManager extends AbstractDBTraceSpaceBasedManager<DBTra
 					.getObjectByPath(snap, modulePath, TraceObjectModule.class);
 		}
 		try (LockHold hold = LockHold.lock(lock.readLock())) {
-			return doGetModulesByPath(modulePath)
-					.stream()
+			return doGetModulesByPath(modulePath).stream()
 					.filter(m -> m.getLifespan().contains(snap))
 					.findAny()
 					.orElse(null);
@@ -160,11 +157,11 @@ public class DBTraceModuleManager extends AbstractDBTraceSpaceBasedManager<DBTra
 	public Collection<? extends TraceModule> getModulesAt(long snap, Address address) {
 		if (trace.getObjectManager().hasSchema()) {
 			return trace.getObjectManager()
-					.getObjectsContaining(snap, address, TargetModule.RANGE_ATTRIBUTE_NAME,
+					.getObjectsContaining(snap, address, TraceObjectModule.KEY_RANGE,
 						TraceObjectModule.class);
 		}
-		return delegateRead(address.getAddressSpace(),
-			m -> m.getModulesAt(snap, address), Set.of());
+		return delegateRead(address.getAddressSpace(), m -> m.getModulesAt(snap, address),
+			Set.of());
 	}
 
 	@Override
@@ -172,11 +169,11 @@ public class DBTraceModuleManager extends AbstractDBTraceSpaceBasedManager<DBTra
 			AddressRange range) {
 		if (trace.getObjectManager().hasSchema()) {
 			return trace.getObjectManager()
-					.getObjectsIntersecting(lifespan, range, TargetModule.RANGE_ATTRIBUTE_NAME,
+					.getObjectsIntersecting(lifespan, range, TraceObjectModule.KEY_RANGE,
 						TraceObjectModule.class);
 		}
-		return delegateRead(range.getAddressSpace(),
-			m -> m.getModulesIntersecting(lifespan, range), Set.of());
+		return delegateRead(range.getAddressSpace(), m -> m.getModulesIntersecting(lifespan, range),
+			Set.of());
 	}
 
 	@Override
@@ -188,11 +185,11 @@ public class DBTraceModuleManager extends AbstractDBTraceSpaceBasedManager<DBTra
 	public Collection<? extends TraceSection> getSectionsAt(long snap, Address address) {
 		if (trace.getObjectManager().hasSchema()) {
 			return trace.getObjectManager()
-					.getObjectsContaining(snap, address, TargetSection.RANGE_ATTRIBUTE_NAME,
+					.getObjectsContaining(snap, address, TraceObjectSection.KEY_RANGE,
 						TraceObjectSection.class);
 		}
-		return delegateRead(address.getAddressSpace(),
-			m -> m.getSectionsAt(snap, address), Set.of());
+		return delegateRead(address.getAddressSpace(), m -> m.getSectionsAt(snap, address),
+			Set.of());
 	}
 
 	@Override
@@ -200,7 +197,7 @@ public class DBTraceModuleManager extends AbstractDBTraceSpaceBasedManager<DBTra
 			AddressRange range) {
 		if (trace.getObjectManager().hasSchema()) {
 			return trace.getObjectManager()
-					.getObjectsIntersecting(lifespan, range, TargetSection.RANGE_ATTRIBUTE_NAME,
+					.getObjectsIntersecting(lifespan, range, TraceObjectSection.KEY_RANGE,
 						TraceObjectSection.class);
 		}
 		return delegateRead(range.getAddressSpace(),
@@ -274,8 +271,7 @@ public class DBTraceModuleManager extends AbstractDBTraceSpaceBasedManager<DBTra
 					.getObjectByPath(snap, sectionPath, TraceObjectSection.class);
 		}
 		try (LockHold hold = LockHold.lock(lock.readLock())) {
-			return doGetSectionsByPath(sectionPath)
-					.stream()
+			return doGetSectionsByPath(sectionPath).stream()
 					.filter(s -> s.getModule().getLifespan().contains(snap))
 					.findAny()
 					.orElse(null);
@@ -298,6 +294,6 @@ public class DBTraceModuleManager extends AbstractDBTraceSpaceBasedManager<DBTra
 			}
 			module.space.moduleMapSpace.deleteData(module);
 		}
-		trace.setChanged(new TraceChangeRecord<>(TraceModuleChangeType.DELETED, null, module));
+		trace.setChanged(new TraceChangeRecord<>(TraceEvents.MODULE_DELETED, null, module));
 	}
 }

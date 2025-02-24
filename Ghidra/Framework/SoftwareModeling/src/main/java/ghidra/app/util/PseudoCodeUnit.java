@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -28,9 +28,6 @@ import ghidra.util.*;
 import ghidra.util.exception.NoValueException;
 import ghidra.util.map.TypeMismatchException;
 
-/**
- * 
- */
 abstract class PseudoCodeUnit implements CodeUnit {
 
 	protected Address address;
@@ -503,19 +500,6 @@ abstract class PseudoCodeUnit implements CodeUnit {
 		if (program == null)
 			return null;
 		return program.getListing().getCodeUnitBefore(address);
-	}
-
-	/**
-	 * Return true if the given CodeUnit follows directly after this code unit.
-	 * 
-	 * @throws ConcurrentModificationException
-	 *             if this object is no longer valid.
-	 */
-	@Override
-	public boolean isSuccessor(CodeUnit codeUnit) {
-		Address min = codeUnit.getMinAddress();
-
-		return this.getMaxAddress().isSuccessor(min);
 	}
 
 	@Override

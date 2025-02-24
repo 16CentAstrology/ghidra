@@ -17,8 +17,8 @@ package ghidra.program.database.function;
 
 import static org.junit.Assert.*;
 
+import java.util.Collection;
 import java.util.Iterator;
-import java.util.List;
 
 import org.junit.*;
 
@@ -34,7 +34,7 @@ import ghidra.program.model.listing.*;
 import ghidra.program.model.symbol.*;
 import ghidra.test.AbstractGhidraHeadedIntegrationTest;
 import ghidra.util.exception.InvalidInputException;
-import ghidra.util.task.TaskMonitorAdapter;
+import ghidra.util.task.TaskMonitor;
 
 public class FunctionManagerTest extends AbstractGhidraHeadedIntegrationTest {
 
@@ -55,7 +55,7 @@ public class FunctionManagerTest extends AbstractGhidraHeadedIntegrationTest {
 		transactionID = program.startTransaction("Test");
 		program.getMemory()
 				.createInitializedBlock("temp", addr(0), 10000, (byte) 0,
-					TaskMonitorAdapter.DUMMY_MONITOR, false);
+					TaskMonitor.DUMMY, false);
 	}
 
 	@After
@@ -454,24 +454,11 @@ public class FunctionManagerTest extends AbstractGhidraHeadedIntegrationTest {
 	}
 
 	@Test
-	public void testGetCallingConventions() throws Exception {
-		PrototypeModel[] protoModels = functionManager.getCallingConventions();
-		assertTrue(protoModels.length >= 1);
-	}
-
-	@Test
 	public void testGetCallingConventionNames() throws Exception {
-
-		List<String> names = functionManager.getCallingConventionNames();
+		Collection<String> names = functionManager.getCallingConventionNames();
 		assertTrue(names.size() >= 1);
-
 		for (String name : names) {
-			if (Function.UNKNOWN_CALLING_CONVENTION_STRING.equals(name)) {
-				assertNull(functionManager.getCallingConvention(name));
-			}
-			else {
-				assertNotNull(functionManager.getCallingConvention(name));
-			}
+			assertNotNull(functionManager.getCallingConvention(name));
 		}
 	}
 

@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -27,7 +27,7 @@ import javax.swing.*;
 
 import org.junit.*;
 
-import docking.ActionContext;
+import docking.DefaultActionContext;
 import docking.action.DockingActionIf;
 import docking.test.AbstractDockingTest;
 import docking.tool.ToolConstants;
@@ -35,7 +35,7 @@ import docking.widgets.OptionDialog;
 import docking.widgets.filechooser.GhidraFileChooser;
 import docking.widgets.table.GTable;
 import docking.widgets.tree.GTreeNode;
-import docking.wizard.WizardManager;
+import docking.wizard.WizardDialog;
 import ghidra.app.plugin.core.codebrowser.CodeBrowserPlugin;
 import ghidra.framework.GenericRunInfo;
 import ghidra.framework.ToolUtils;
@@ -154,7 +154,7 @@ public class ToolActionManagerTest extends AbstractGhidraHeadedIntegrationTest {
 		final ToolButton cbButton = findToolButton(frontEndTool.getToolFrame(), "Untitled", false);
 		runSwing(() -> cbButton.doClick());
 
-		// the button click triggers an animation, and then launches the tool, so we must wait 
+		// the button click triggers an animation, and then launches the tool, so we must wait
 		// for the window to appear
 		Window window = waitForWindow("Untitled(2)");
 		assertNotNull(window);
@@ -175,8 +175,8 @@ public class ToolActionManagerTest extends AbstractGhidraHeadedIntegrationTest {
 		int count = tc.getToolCount();
 
 		String toolNamePrefix = "TestCodeBrowser";
-		final File cbFile = ResourceManager.getResourceFile(
-			"defaultTools/" + toolNamePrefix + ToolUtils.TOOL_EXTENSION);
+		final File cbFile = ResourceManager
+				.getResourceFile("defaultTools/" + toolNamePrefix + ToolUtils.TOOL_EXTENSION);
 		assertNotNull(cbFile);
 
 		DockingActionIf importAction = getAction("Import Tool");
@@ -218,7 +218,7 @@ public class ToolActionManagerTest extends AbstractGhidraHeadedIntegrationTest {
 		Project project = frontEndTool.getProject();
 		DataTree tree = findComponent(frontEndTool.getToolFrame(), DataTree.class);
 
-// TODO: move to method		
+// TODO: move to method
 		DomainFolder rootFolder = project.getProjectData().getRootFolder();
 		Program p = buildProgram("notepad");
 		rootFolder.createFile("notepad", p, TaskMonitor.DUMMY);
@@ -334,7 +334,7 @@ public class ToolActionManagerTest extends AbstractGhidraHeadedIntegrationTest {
 
 		// close the VT tool
 		// we first have to close the wizard...
-		final WizardManager wizard = waitForDialogComponent(WizardManager.class);
+		WizardDialog wizard = waitForDialogComponent(WizardDialog.class);
 		runSwing(() -> wizard.close());
 
 		// ...then the tool
@@ -344,7 +344,7 @@ public class ToolActionManagerTest extends AbstractGhidraHeadedIntegrationTest {
 		//
 		// edit the association
 		//
-		// find the 'Program' entry		
+		// find the 'Program' entry
 		rowCount = associationTable.getRowCount();
 		programRow = -1;
 		for (int i = 0; i < rowCount; i++) {
@@ -413,7 +413,7 @@ public class ToolActionManagerTest extends AbstractGhidraHeadedIntegrationTest {
 			assertTrue(!cb.isSelected());
 		}
 
-		final JButton selectAllButton = (JButton) getInstanceField("selectAllButton", d);
+		JButton selectAllButton = findButtonByText(d, "Select All");
 		runSwing(() -> selectAllButton.doClick());
 
 		pressButtonByText(d, "OK");
@@ -433,8 +433,8 @@ public class ToolActionManagerTest extends AbstractGhidraHeadedIntegrationTest {
 		}
 		newList.removeAll(origList);
 		runSwing(() -> {
-			for (int i = 0; i < newList.size(); i++) {
-				tc.remove(newList.get(i));
+			for (String element : newList) {
+				tc.remove(element);
 			}
 		});
 		assertEquals(origList.size(), tc.getToolCount());
@@ -713,7 +713,7 @@ public class ToolActionManagerTest extends AbstractGhidraHeadedIntegrationTest {
 	private void performToolButtonAction(final DockingActionIf action, String name, boolean doWait,
 			boolean runningTool) throws Exception {
 		final ToolButton tb = findToolButton(frontEndTool.getToolFrame(), name, runningTool);
-		Runnable r = () -> action.actionPerformed(new ActionContext(null, tb, tb));
+		Runnable r = () -> action.actionPerformed(new DefaultActionContext(null, tb, tb));
 		if (doWait) {
 			runSwing(r);
 		}
@@ -748,7 +748,7 @@ public class ToolActionManagerTest extends AbstractGhidraHeadedIntegrationTest {
 
 		runSwing(() -> {
 			JMenuItem item = new JMenuItem(name);
-			action.actionPerformed(new ActionContext(null, null, item));
+			action.actionPerformed(new DefaultActionContext(null, null, item));
 		}, doWait);
 
 		waitForSwing();

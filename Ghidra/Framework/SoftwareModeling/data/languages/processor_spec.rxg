@@ -115,6 +115,11 @@
                   </attribute>
                 </optional>
                 <optional>
+                  <attribute name="volatile">
+                    <ref name="boolean_type"/>
+                  </attribute>
+                </optional>
+                <optional>
                   <attribute name="vector_lane_sizes"/>
                 </optional>
               </element>
@@ -129,6 +134,14 @@
                 <attribute name="name"/>
                 <attribute name="address"/>
                 <optional>
+                  <attribute name="volatile">
+                    <ref name="boolean_type"/>
+                  </attribute>
+                </optional>
+                <optional>
+                  <attribute name="size"/>
+                </optional>
+                <optional>
                   <attribute name="entry">
                     <ref name="boolean_type"/>
                   </attribute>
@@ -137,6 +150,9 @@
                   <attribute name="type">
                     <ref name="symbol_type"/>
                   </attribute>
+                </optional>
+                <optional>
+                  <attribute name="description"/>
                 </optional>
               </element>
 

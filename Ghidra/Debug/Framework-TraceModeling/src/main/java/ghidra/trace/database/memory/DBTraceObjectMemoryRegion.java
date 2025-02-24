@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,8 +17,6 @@ package ghidra.trace.database.memory;
 
 import java.util.*;
 
-import ghidra.dbg.target.TargetMemoryRegion;
-import ghidra.dbg.target.TargetObject;
 import ghidra.program.model.address.*;
 import ghidra.trace.database.DBTrace;
 import ghidra.trace.database.DBTraceUtils;
@@ -26,50 +24,83 @@ import ghidra.trace.database.target.DBTraceObject;
 import ghidra.trace.database.target.DBTraceObjectInterface;
 import ghidra.trace.model.Lifespan;
 import ghidra.trace.model.Trace;
-import ghidra.trace.model.Trace.TraceMemoryRegionChangeType;
 import ghidra.trace.model.memory.*;
 import ghidra.trace.model.target.TraceObject;
 import ghidra.trace.model.target.TraceObjectValue;
-import ghidra.trace.model.target.annot.TraceObjectInterfaceUtils;
-import ghidra.trace.util.TraceChangeRecord;
-import ghidra.trace.util.TraceChangeType;
+import ghidra.trace.model.target.iface.TraceObjectInterface;
+import ghidra.trace.model.target.info.TraceObjectInterfaceUtils;
+import ghidra.trace.model.target.schema.TraceObjectSchema;
+import ghidra.trace.util.*;
 import ghidra.util.LockHold;
 import ghidra.util.exception.DuplicateNameException;
 
 public class DBTraceObjectMemoryRegion implements TraceObjectMemoryRegion, DBTraceObjectInterface {
 
+	protected record Keys(Set<String> all, String range, String display,
+			Set<String> flags) {
+		static Keys fromSchema(TraceObjectSchema schema) {
+			String keyRange = schema.checkAliasedAttribute(TraceObjectMemoryRegion.KEY_RANGE);
+			String keyDisplay = schema.checkAliasedAttribute(TraceObjectInterface.KEY_DISPLAY);
+			String keyReadable =
+				schema.checkAliasedAttribute(TraceObjectMemoryRegion.KEY_READABLE);
+			String keyWritable =
+				schema.checkAliasedAttribute(TraceObjectMemoryRegion.KEY_WRITABLE);
+			String keyExecutable =
+				schema.checkAliasedAttribute(TraceObjectMemoryRegion.KEY_EXECUTABLE);
+			return new Keys(Set.of(keyRange, keyDisplay, keyReadable, keyWritable, keyExecutable),
+				keyRange, keyDisplay, Set.of(keyReadable, keyWritable, keyExecutable));
+		}
+
+		public boolean isRange(String key) {
+			return range.equals(key);
+		}
+
+		public boolean isDisplay(String key) {
+			return display.equals(key);
+		}
+
+		public boolean isFlag(String key) {
+			return flags.contains(key);
+		}
+	}
+
 	protected class RegionChangeTranslator extends Translator<TraceMemoryRegion> {
+		private static final Map<TraceObjectSchema, Keys> KEYS_BY_SCHEMA =
+			new WeakHashMap<>();
+
+		private final Keys keys;
+
 		protected RegionChangeTranslator(DBTraceObject object, TraceMemoryRegion iface) {
-			super(TargetMemoryRegion.RANGE_ATTRIBUTE_NAME, object, iface);
+			super(TraceObjectMemoryRegion.KEY_RANGE, object, iface);
+			TraceObjectSchema schema = object.getSchema();
+			synchronized (KEYS_BY_SCHEMA) {
+				keys = KEYS_BY_SCHEMA.computeIfAbsent(schema, Keys::fromSchema);
+			}
 		}
 
 		@Override
-		protected TraceChangeType<TraceMemoryRegion, Void> getAddedType() {
-			return TraceMemoryRegionChangeType.ADDED;
+		protected TraceEvent<TraceMemoryRegion, Void> getAddedType() {
+			return TraceEvents.REGION_ADDED;
 		}
 
 		@Override
-		protected TraceChangeType<TraceMemoryRegion, Lifespan> getLifespanChangedType() {
-			return TraceMemoryRegionChangeType.LIFESPAN_CHANGED;
+		protected TraceEvent<TraceMemoryRegion, Lifespan> getLifespanChangedType() {
+			return TraceEvents.REGION_LIFESPAN_CHANGED;
 		}
 
 		@Override
-		protected TraceChangeType<TraceMemoryRegion, Void> getChangedType() {
-			return TraceMemoryRegionChangeType.CHANGED;
+		protected TraceEvent<TraceMemoryRegion, Void> getChangedType() {
+			return TraceEvents.REGION_CHANGED;
 		}
 
 		@Override
 		protected boolean appliesToKey(String key) {
-			return TargetMemoryRegion.RANGE_ATTRIBUTE_NAME.equals(key) ||
-				TargetObject.DISPLAY_ATTRIBUTE_NAME.equals(key) ||
-				TargetMemoryRegion.READABLE_ATTRIBUTE_NAME.equals(key) ||
-				TargetMemoryRegion.WRITABLE_ATTRIBUTE_NAME.equals(key) ||
-				TargetMemoryRegion.EXECUTABLE_ATTRIBUTE_NAME.equals(key);
+			return keys.all.contains(key);
 		}
 
 		@Override
-		protected TraceChangeType<TraceMemoryRegion, Void> getDeletedType() {
-			return TraceMemoryRegionChangeType.DELETED;
+		protected TraceEvent<TraceMemoryRegion, Void> getDeletedType() {
+			return TraceEvents.REGION_DELETED;
 		}
 
 		@Override
@@ -119,7 +150,7 @@ public class DBTraceObjectMemoryRegion implements TraceObjectMemoryRegion, DBTra
 
 	@Override
 	public void setName(Lifespan lifespan, String name) {
-		object.setValue(lifespan, TargetObject.DISPLAY_ATTRIBUTE_NAME, name);
+		object.setValue(lifespan, TraceObjectInterface.KEY_DISPLAY, name);
 	}
 
 	@Override
@@ -132,7 +163,7 @@ public class DBTraceObjectMemoryRegion implements TraceObjectMemoryRegion, DBTra
 	@Override
 	public String getName() {
 		TraceObjectValue value =
-			object.getValue(getCreationSnap(), TargetObject.DISPLAY_ATTRIBUTE_NAME);
+			object.getValue(getCreationSnap(), TraceObjectInterface.KEY_DISPLAY);
 		return value == null ? "" : (String) value.getValue();
 	}
 
@@ -183,7 +214,7 @@ public class DBTraceObjectMemoryRegion implements TraceObjectMemoryRegion, DBTra
 	@Override
 	public void setRange(Lifespan lifespan, AddressRange newRange) {
 		try (LockHold hold = object.getTrace().lockWrite()) {
-			object.setValue(lifespan, TargetMemoryRegion.RANGE_ATTRIBUTE_NAME, newRange);
+			object.setValue(lifespan, TraceObjectMemoryRegion.KEY_RANGE, newRange);
 			this.range = newRange;
 		}
 	}
@@ -196,13 +227,21 @@ public class DBTraceObjectMemoryRegion implements TraceObjectMemoryRegion, DBTra
 	}
 
 	@Override
+	public AddressRange getRange(long snap) {
+		try (LockHold hold = object.getTrace().lockRead()) {
+			// TODO: Caching without regard to snap seems bad
+			return range = TraceObjectInterfaceUtils.getValue(object, snap,
+				TraceObjectMemoryRegion.KEY_RANGE, AddressRange.class, range);
+		}
+	}
+
+	@Override
 	public AddressRange getRange() {
 		try (LockHold hold = object.getTrace().lockRead()) {
 			if (object.getLife().isEmpty()) {
 				return range;
 			}
-			return range = TraceObjectInterfaceUtils.getValue(object, getCreationSnap(),
-				TargetMemoryRegion.RANGE_ATTRIBUTE_NAME, AddressRange.class, range);
+			return getRange(getCreationSnap());
 		}
 	}
 
@@ -211,6 +250,12 @@ public class DBTraceObjectMemoryRegion implements TraceObjectMemoryRegion, DBTra
 		try (LockHold hold = object.getTrace().lockWrite()) {
 			setRange(DBTraceUtils.toRange(min, getMaxAddress()));
 		}
+	}
+
+	@Override
+	public Address getMinAddress(long snap) {
+		AddressRange range = getRange(snap);
+		return range == null ? null : range.getMinAddress();
 	}
 
 	@Override
@@ -224,6 +269,12 @@ public class DBTraceObjectMemoryRegion implements TraceObjectMemoryRegion, DBTra
 		try (LockHold hold = object.getTrace().lockWrite()) {
 			setRange(DBTraceUtils.toRange(getMinAddress(), max));
 		}
+	}
+
+	@Override
+	public Address getMaxAddress(long snap) {
+		AddressRange range = getRange(snap);
+		return range == null ? null : range.getMaxAddress();
 	}
 
 	@Override
@@ -245,26 +296,20 @@ public class DBTraceObjectMemoryRegion implements TraceObjectMemoryRegion, DBTra
 	}
 
 	protected static String keyForFlag(TraceMemoryFlag flag) {
-		switch (flag) {
-			case READ:
-				return TargetMemoryRegion.READABLE_ATTRIBUTE_NAME;
-			case WRITE:
-				return TargetMemoryRegion.WRITABLE_ATTRIBUTE_NAME;
-			case EXECUTE:
-				return TargetMemoryRegion.EXECUTABLE_ATTRIBUTE_NAME;
-			case VOLATILE:
-				return KEY_VOLATILE;
-			default:
-				throw new AssertionError();
-		}
+		return switch (flag) {
+			case READ -> TraceObjectMemoryRegion.KEY_READABLE;
+			case WRITE -> TraceObjectMemoryRegion.KEY_WRITABLE;
+			case EXECUTE -> TraceObjectMemoryRegion.KEY_EXECUTABLE;
+			case VOLATILE -> KEY_VOLATILE;
+			default -> throw new AssertionError();
+		};
 	}
 
 	@Override
 	public void setFlags(Lifespan lifespan, Collection<TraceMemoryFlag> flags) {
 		try (LockHold hold = object.getTrace().lockWrite()) {
 			for (TraceMemoryFlag flag : TraceMemoryFlag.values()) {
-				Boolean val = flags.contains(flag) ? true : null;
-				object.setValue(lifespan, keyForFlag(flag), val);
+				object.setValue(lifespan, keyForFlag(flag), flags.contains(flag));
 			}
 		}
 	}
@@ -282,7 +327,7 @@ public class DBTraceObjectMemoryRegion implements TraceObjectMemoryRegion, DBTra
 	public void clearFlags(Lifespan lifespan, Collection<TraceMemoryFlag> flags) {
 		try (LockHold hold = object.getTrace().lockWrite()) {
 			for (TraceMemoryFlag flag : flags) {
-				object.setValue(lifespan, keyForFlag(flag), null);
+				object.setValue(lifespan, keyForFlag(flag), false);
 			}
 		}
 	}
@@ -312,7 +357,8 @@ public class DBTraceObjectMemoryRegion implements TraceObjectMemoryRegion, DBTra
 	public Set<TraceMemoryFlag> getFlags(long snap) {
 		EnumSet<TraceMemoryFlag> result = EnumSet.noneOf(TraceMemoryFlag.class);
 		for (TraceMemoryFlag flag : TraceMemoryFlag.values()) {
-			if (object.getValue(snap, keyForFlag(flag)) != null) {
+			TraceObjectValue value = object.getValue(snap, keyForFlag(flag));
+			if (value != null && value.getValue() == Boolean.TRUE) {
 				result.add(flag);
 			}
 		}
@@ -331,6 +377,11 @@ public class DBTraceObjectMemoryRegion implements TraceObjectMemoryRegion, DBTra
 		try (LockHold hold = object.getTrace().lockWrite()) {
 			object.removeTree(computeSpan());
 		}
+	}
+
+	@Override
+	public boolean isValid(long snap) {
+		return object.getCanonicalParent(snap) != null;
 	}
 
 	@Override
@@ -354,19 +405,15 @@ public class DBTraceObjectMemoryRegion implements TraceObjectMemoryRegion, DBTra
 	protected void updateViewsValueChanged(Lifespan lifespan, String key, Object oldValue,
 			Object newValue) {
 		DBTrace trace = object.getTrace();
-		switch (key) {
-			case TargetMemoryRegion.RANGE_ATTRIBUTE_NAME:
-				// NB. old/newValue are null here. The CREATED event just has the new entry.
-				trace.updateViewsRefreshBlocks();
-				return;
-			case TargetObject.DISPLAY_ATTRIBUTE_NAME:
-				trace.updateViewsChangeRegionBlockName(this);
-				return;
-			case TargetMemoryRegion.READABLE_ATTRIBUTE_NAME:
-			case TargetMemoryRegion.WRITABLE_ATTRIBUTE_NAME:
-			case TargetMemoryRegion.EXECUTABLE_ATTRIBUTE_NAME:
-				trace.updateViewsChangeRegionBlockFlags(this, lifespan);
-				return;
+		if (translator.keys.isRange(key)) {
+			// NB. old/newValue are null here. The CREATED event just has the new entry.
+			trace.updateViewsRefreshBlocks();
+		}
+		else if (translator.keys.isDisplay(key)) {
+			trace.updateViewsChangeRegionBlockName(this);
+		}
+		else if (translator.keys.isFlag(key)) {
+			trace.updateViewsChangeRegionBlockFlags(this, lifespan);
 		}
 	}
 

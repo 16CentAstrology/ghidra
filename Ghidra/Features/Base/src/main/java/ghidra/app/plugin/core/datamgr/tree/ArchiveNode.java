@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,17 +21,25 @@ import javax.swing.Icon;
 
 import docking.widgets.tree.GTree;
 import docking.widgets.tree.GTreeNode;
+import generic.theme.GColor;
+import generic.theme.GThemeDefaults.Colors.Messages;
 import ghidra.app.plugin.core.datamgr.archive.Archive;
 import ghidra.program.model.data.*;
+import ghidra.program.model.data.StandAloneDataTypeManager.ArchiveWarning;
+import ghidra.program.model.data.StandAloneDataTypeManager.ArchiveWarningLevel;
+import ghidra.util.HTMLUtilities;
 import ghidra.util.task.SwingUpdateManager;
 
 public class ArchiveNode extends CategoryNode {
+
+	protected static final String DEFAULT_DATA_ORG_DESCRIPTION =
+		"[Using Default Data Organization]";
 
 	protected Archive archive;
 	protected ArchiveNodeCategoryChangeListener listener;
 	private DataTypeManager dataTypeManager; // may be null
 
-	public ArchiveNode(Archive archive, ArrayPointerFilterState filterState) {
+	public ArchiveNode(Archive archive, DtFilterState filterState) {
 		this(archive, archive.getDataTypeManager() == null ? null
 				: archive.getDataTypeManager().getRootCategory(),
 			filterState);
@@ -40,9 +48,49 @@ public class ArchiveNode extends CategoryNode {
 	}
 
 	protected ArchiveNode(Archive archive, Category rootCategory,
-			ArrayPointerFilterState filterState) {
+			DtFilterState filterState) {
 		super(rootCategory, filterState);
 		this.archive = archive;
+	}
+
+	protected String buildTooltip(String path) {
+		DataTypeManager dtm = archive.getDataTypeManager();
+		if (dtm == null) {
+			return null;
+		}
+		StringBuilder buf = new StringBuilder(HTMLUtilities.HTML);
+		buf.append(HTMLUtilities.escapeHTML(path));
+		buf.append(HTMLUtilities.BR);
+		String programArchSummary = dtm.getProgramArchitectureSummary();
+		if (programArchSummary != null) {
+			buf.append(HTMLUtilities.HTML_SPACE);
+			buf.append(HTMLUtilities.HTML_SPACE);
+			buf.append(HTMLUtilities.escapeHTML(programArchSummary));
+		}
+		else {
+			buf.append(DEFAULT_DATA_ORG_DESCRIPTION);
+		}
+		addArchiveWarnings(dtm, buf);
+		return buf.toString();
+	}
+
+	private void addArchiveWarnings(DataTypeManager dtm, StringBuilder buf) {
+		if (dtm instanceof StandAloneDataTypeManager archiveDtm) {
+			ArchiveWarning warning = archiveDtm.getWarning();
+			if (warning != ArchiveWarning.NONE) {
+				GColor c = Messages.NORMAL;
+				ArchiveWarningLevel level = warning.level();
+				if (level == ArchiveWarningLevel.ERROR) {
+					c = Messages.ERROR;
+				}
+				else if (level == ArchiveWarningLevel.WARN) {
+					c = Messages.WARNING;
+				}
+				String msg = archiveDtm.getWarningMessage(false);
+				buf.append(HTMLUtilities.BR);
+				buf.append("<font color=\"" + c + "\">** " + msg + " **</font>");
+			}
+		}
 	}
 
 	protected void archiveStateChanged() {
@@ -172,11 +220,11 @@ public class ArchiveNode extends CategoryNode {
 		return -1; // All ArchiveNodes are before any other types of nodes
 	}
 
-	@Override
 	/**
 	 * The hashcode must not be based on the name since it can change based upon the underlying
 	 * archive. This must be consistent with the equals method implementation.
 	 */
+	@Override
 	public int hashCode() {
 		return getArchive().hashCode();
 	}
@@ -422,6 +470,22 @@ public class ArchiveNode extends CategoryNode {
 
 		@Override
 		public void sourceArchiveChanged(DataTypeManager manager, SourceArchive sourceArchive) {
+			nodeChangedUpdater.update();
+		}
+
+		@Override
+		public void programArchitectureChanged(DataTypeManager manager) {
+			// need to force all cached datatype tooltips to be cleared 
+			// due to change in data organization
+			unloadChildren();
+			nodeChangedUpdater.update();
+		}
+
+		@Override
+		public void restored(DataTypeManager manager) {
+			// need to force all cached datatype tooltips to be cleared 
+			// due to potential changes (e.g., undo/redo)
+			unloadChildren();
 			nodeChangedUpdater.update();
 		}
 	}

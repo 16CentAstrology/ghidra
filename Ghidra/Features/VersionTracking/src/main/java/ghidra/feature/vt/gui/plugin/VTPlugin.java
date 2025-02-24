@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,15 +16,15 @@
 package ghidra.feature.vt.gui.plugin;
 
 import java.net.URL;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
 import javax.swing.Icon;
 import javax.swing.JFrame;
 
 import docking.action.DockingActionIf;
 import docking.tool.ToolConstants;
-import docking.wizard.WizardManager;
+import docking.wizard.WizardDialog;
 import generic.theme.GIcon;
 import ghidra.GhidraOptions;
 import ghidra.app.plugin.core.codebrowser.CodeBrowserPlugin;
@@ -37,11 +37,12 @@ import ghidra.feature.vt.gui.provider.functionassociation.VTFunctionAssociationP
 import ghidra.feature.vt.gui.provider.impliedmatches.*;
 import ghidra.feature.vt.gui.provider.markuptable.VTMarkupItemsTableProvider;
 import ghidra.feature.vt.gui.provider.matchtable.VTMatchTableProvider;
-import ghidra.feature.vt.gui.wizard.VTNewSessionWizardManager;
+import ghidra.feature.vt.gui.wizard.session.VTNewSessionWizardModel;
 import ghidra.framework.model.*;
 import ghidra.framework.options.Options;
 import ghidra.framework.options.SaveState;
 import ghidra.framework.plugintool.*;
+import ghidra.framework.plugintool.util.PluginException;
 import ghidra.framework.plugintool.util.PluginStatus;
 import ghidra.framework.preferences.Preferences;
 import ghidra.program.model.address.AddressSetView;
@@ -83,7 +84,6 @@ public class VTPlugin extends Plugin {
 	public static final Icon UNFILTERED_ICON = new GIcon("icon.version.tracking.unfiltered");
 	public static final Icon FILTERED_ICON = new GIcon("icon.version.tracking.filtered");
 	public static final Icon REPLACED_ICON = new GIcon("icon.version.tracking.replaced");
-	public static final Icon UNIGNORED_ICON = new GIcon("icon.version.tracking.unignored");
 
 	private VTController controller;
 
@@ -120,6 +120,7 @@ public class VTPlugin extends Plugin {
 		new ImpliedMatchAssociationHook(controller);
 
 		initializeOptions();
+
 	}
 
 	private DockingActionIf getToolAction(String actionName) {
@@ -134,7 +135,7 @@ public class VTPlugin extends Plugin {
 
 	private void initializeOptions() {
 		Options options = tool.getOptions(GhidraOptions.CATEGORY_BROWSER_DISPLAY);
-		options.registerOptionsEditor(new ListingDisplayOptionsEditor(options));
+		options.registerOptionsEditor(() -> new ListingDisplayOptionsEditor(options));
 		options.setOptionsHelpLocation(new HelpLocation(CodeBrowserPlugin.class.getSimpleName(),
 			GhidraOptions.CATEGORY_BROWSER_DISPLAY));
 
@@ -142,7 +143,35 @@ public class VTPlugin extends Plugin {
 
 	@Override
 	protected void init() {
+		addCustomPlugins();
+
 		maybeShowHelp();
+	}
+
+	private void addCustomPlugins() {
+
+		List<String> names =
+			new ArrayList<>(List.of("ghidra.features.codecompare.plugin.FunctionComparisonPlugin"));
+		List<Plugin> plugins = tool.getManagedPlugins();
+		Set<String> existingNames =
+			plugins.stream().map(c -> c.getName()).collect(Collectors.toSet());
+
+		// Note: we check to see if the plugins we want to add have already been added to the tool.
+		// We should not need to do this, but once the tool has been saved with the plugins added,
+		// they will get added again the next time the tool is loaded.  Adding this check here seems
+		// easier than modifying the default to file to load the plugins, since the amount of xml
+		// required for that is non-trivial.
+		try {
+			for (String className : names) {
+				if (!existingNames.contains(className)) {
+					tool.addPlugin(className);
+				}
+			}
+
+		}
+		catch (PluginException e) {
+			Msg.error(this, "Unable to load plugin", e);
+		}
 	}
 
 	private void maybeShowHelp() {
@@ -217,10 +246,10 @@ public class VTPlugin extends Plugin {
 		for (DomainFile domainFile : data) {
 			if (domainFile != null &&
 				VTSession.class.isAssignableFrom(domainFile.getDomainObjectClass())) {
-				openVersionTrackingSession(domainFile);
-				return true;
+				return controller.openVersionTrackingSession(domainFile);
 			}
 		}
+
 		DomainFile programFile1 = null;
 		DomainFile programFile2 = null;
 		for (DomainFile domainFile : data) {
@@ -239,19 +268,14 @@ public class VTPlugin extends Plugin {
 			if (!controller.closeVersionTrackingSession()) {
 				return false; // user cancelled  during save dialog
 			}
-			VTNewSessionWizardManager vtWizardManager =
-				new VTNewSessionWizardManager(controller, programFile1, programFile2);
-			WizardManager wizardManager =
-				new WizardManager("Version Tracking Wizard", true, vtWizardManager);
-			wizardManager.showWizard(tool.getToolFrame());
+			VTNewSessionWizardModel model =
+				new VTNewSessionWizardModel(controller, programFile1, programFile2);
+			WizardDialog wizardDialog = new WizardDialog(model);
+			wizardDialog.show(tool.getToolFrame());
 			return true;
 		}
 
 		return false;
-	}
-
-	private void openVersionTrackingSession(DomainFile domainFile) {
-		controller.openVersionTrackingSession(domainFile);
 	}
 
 	@Override
@@ -275,20 +299,18 @@ public class VTPlugin extends Plugin {
 	@Override
 	public void readDataState(SaveState saveState) {
 		String pathname = saveState.getString("PATHNAME", null);
-		String location = saveState.getString("PROJECT_LOCATION", null);
-		String projectName = saveState.getString("PROJECT_NAME", null);
-		if (location == null || projectName == null) {
+		if (pathname == null) {
 			return;
 		}
-		ProjectLocator url = new ProjectLocator(location, projectName);
-
-		ProjectData projectData = tool.getProject().getProjectData(url);
-		if (projectData == null) {
-			Msg.showError(this, tool.getToolFrame(), "File Not Found", "Could not find " + url);
+		Project project = tool.getProject();
+		if (project == null) {
 			return;
 		}
-
+		ProjectData projectData = project.getProjectData();
 		DomainFile domainFile = projectData.getFile(pathname);
+		if (domainFile == null) {
+			return;
+		}
 		controller.openVersionTrackingSession(domainFile);
 	}
 
@@ -299,21 +321,7 @@ public class VTPlugin extends Plugin {
 			return;
 		}
 		DomainFile domainFile = session.getDomainFile();
-
-		String projectLocation = null;
-		String projectName = null;
-		String path = null;
-		ProjectLocator url = domainFile.getProjectLocator();
-		if (url != null) {
-			projectLocation = url.getLocation();
-			projectName = url.getName();
-			path = domainFile.getPathname();
-		}
-
-		saveState.putString("PROJECT_LOCATION", projectLocation);
-		saveState.putString("PROJECT_NAME", projectName);
-		saveState.putString("PATHNAME", path);
-
+		saveState.putString("PATHNAME", domainFile.getPathname());
 	}
 
 	@Override

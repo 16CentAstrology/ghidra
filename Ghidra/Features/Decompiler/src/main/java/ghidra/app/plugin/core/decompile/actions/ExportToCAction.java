@@ -28,6 +28,7 @@ import ghidra.app.decompiler.component.DecompilerPanel;
 import ghidra.app.plugin.core.decompile.DecompilerActionContext;
 import ghidra.app.util.HelpTopics;
 import ghidra.framework.preferences.Preferences;
+import ghidra.program.model.symbol.IllegalCharCppTransformer;
 import ghidra.util.HelpLocation;
 import ghidra.util.Msg;
 import ghidra.util.filechooser.ExtensionFileFilter;
@@ -66,6 +67,7 @@ public class ExportToCAction extends AbstractDecompilerAction {
 			fileChooser.setSelectedFile(lastUsedFile);
 		}
 		File file = fileChooser.getSelectedFile();
+		fileChooser.dispose();
 		if (file == null) {
 			return null;
 		}
@@ -110,8 +112,9 @@ public class ExportToCAction extends AbstractDecompilerAction {
 		try {
 			PrintWriter writer = new PrintWriter(new FileOutputStream(file));
 			ClangTokenGroup grp = context.getCCodeModel();
-			PrettyPrinter printer = new PrettyPrinter(context.getFunction(), grp);
-			DecompiledFunction decompFunc = printer.print(true);
+			PrettyPrinter printer =
+				new PrettyPrinter(context.getFunction(), grp, new IllegalCharCppTransformer());
+			DecompiledFunction decompFunc = printer.print();
 			writer.write(decompFunc.getC());
 			writer.close();
 			context.setStatusMessage(

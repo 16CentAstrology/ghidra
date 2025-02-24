@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -30,6 +30,7 @@ import docking.action.MenuData;
 import docking.widgets.OptionDialog;
 import docking.widgets.combobox.GhidraComboBox;
 import docking.widgets.label.GLabel;
+import docking.widgets.list.GComboBoxCellRenderer;
 import docking.widgets.tree.GTreeNode;
 import ghidra.app.plugin.core.datamgr.DataTypeManagerPlugin;
 import ghidra.app.plugin.core.datamgr.DataTypesActionContext;
@@ -65,19 +66,19 @@ public class AssociateDataTypeAction extends DockingAction {
 			return false;
 		}
 
-		return hasOnlyDtNodes(((DataTypesActionContext) context).getSelectedNodes());
+		return hasAnyDtNodes(((DataTypesActionContext) context).getSelectedNodes());
 	}
 
-	private boolean hasOnlyDtNodes(List<GTreeNode> nodes) {
+	private boolean hasAnyDtNodes(List<GTreeNode> nodes) {
 		if (nodes.isEmpty()) {
 			return false;
 		}
 		for (GTreeNode node : nodes) {
-			if (!(node instanceof DataTypeNode)) {
-				return false;
+			if (node instanceof DataTypeNode) {
+				return true;
 			}
 		}
-		return true;
+		return false;
 	}
 
 	private boolean isAlreadyAssociated(DataTypesActionContext dtContext) {
@@ -128,9 +129,12 @@ public class AssociateDataTypeAction extends DockingAction {
 	@Override
 	public void actionPerformed(ActionContext context) {
 
-		List<GTreeNode> nodes = ((DataTypesActionContext) context).getSelectedNodes();
+		List<GTreeNode> allNodes = ((DataTypesActionContext) context).getSelectedNodes();
+		List<GTreeNode> dtNodes = allNodes.stream()
+				.filter(n -> n instanceof DataTypeNode)
+				.collect(Collectors.toList());
 
-		Archive dtArchive = getSingleDTArchive(nodes);
+		Archive dtArchive = getSingleDTArchive(dtNodes);
 		if (dtArchive == null) {
 			Msg.showInfo(this, getProviderComponent(), "Multiple Data Type Archives",
 				"The currently selected nodes are from multiple archives.\n" +
@@ -168,7 +172,7 @@ public class AssociateDataTypeAction extends DockingAction {
 		Category destinationCategory = dialog.getCategory();
 
 		DataTypeTreeCopyMoveTask task =
-			new DataTypeTreeCopyMoveTask(destinationArchive, destinationCategory, nodes,
+			new DataTypeTreeCopyMoveTask(destinationArchive, destinationCategory, dtNodes,
 				ActionType.COPY, plugin.getProvider().getGTree(), plugin.getConflictHandler());
 		task.setPromptToAssociateTypes(false); // do not prompt the user; they have already decided
 		TaskLauncher.launch(task);
@@ -203,15 +207,15 @@ public class AssociateDataTypeAction extends DockingAction {
 
 		private JComponent buildWorkPanel() {
 
-			archivesBox.setRenderer(new DefaultListCellRenderer() {
+			archivesBox.setRenderer(new GComboBoxCellRenderer<>() {
 
 				@Override
-				public Component getListCellRendererComponent(JList<?> list, Object value,
-						int index, boolean isSelected, boolean cellHasFocus) {
+				public Component getListCellRendererComponent(JList<? extends Archive> list,
+						Archive value, int index, boolean isSelected, boolean cellHasFocus) {
 
 					JLabel renderer = (JLabel) super.getListCellRendererComponent(list, value,
 						index, isSelected, cellHasFocus);
-					Archive a = (Archive) value;
+					Archive a = value;
 					renderer.setText(a.getName());
 					return renderer;
 				}
@@ -282,7 +286,8 @@ public class AssociateDataTypeAction extends DockingAction {
 			}
 
 			boolean noErrors = false;
-			int tx = dtm.startTransaction("Create Category");
+			String path = archive.getName() + categoryPath;
+			int tx = dtm.startTransaction("Create " + path);
 			try {
 				category = dtm.createCategory(categoryPath);
 				noErrors = true;

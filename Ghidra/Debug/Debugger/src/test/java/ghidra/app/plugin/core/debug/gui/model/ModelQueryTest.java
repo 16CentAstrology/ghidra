@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,22 +15,21 @@
  */
 package ghidra.app.plugin.core.debug.gui.model;
 
-import static ghidra.app.plugin.core.debug.gui.model.DebuggerModelProviderTest.CTX;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static ghidra.app.plugin.core.debug.gui.model.DebuggerModelProviderTest.*;
+import static org.junit.Assert.*;
 
 import org.junit.Test;
 
-import ghidra.app.plugin.core.debug.gui.AbstractGhidraHeadedDebuggerGUITest;
-import ghidra.dbg.target.schema.TargetObjectSchema.SchemaName;
+import db.Transaction;
+import ghidra.app.plugin.core.debug.gui.AbstractGhidraHeadedDebuggerTest;
 import ghidra.trace.database.target.DBTraceObjectManager;
 import ghidra.trace.model.Lifespan;
 import ghidra.trace.model.target.TraceObject.ConflictResolution;
-import ghidra.trace.model.target.TraceObjectKeyPath;
+import ghidra.trace.model.target.path.KeyPath;
+import ghidra.trace.model.target.schema.TraceObjectSchema.SchemaName;
 import ghidra.trace.model.target.TraceObjectValue;
-import ghidra.util.database.UndoableTransaction;
 
-public class ModelQueryTest extends AbstractGhidraHeadedDebuggerGUITest {
+public class ModelQueryTest extends AbstractGhidraHeadedDebuggerTest {
 	@Test
 	public void testIncludes() throws Throwable {
 		createTrace();
@@ -38,14 +37,14 @@ public class ModelQueryTest extends AbstractGhidraHeadedDebuggerGUITest {
 		ModelQuery rootQuery = ModelQuery.parse("");
 		ModelQuery threadQuery = ModelQuery.parse("Processes[].Threads[]");
 
-		try (UndoableTransaction tid = tb.startTransaction()) {
+		try (Transaction tx = tb.startTransaction()) {
 			DBTraceObjectManager objects = tb.trace.getObjectManager();
 
 			TraceObjectValue rootVal =
 				objects.createRootObject(CTX.getSchema(new SchemaName("Session")));
 
 			TraceObjectValue thread0Val =
-				objects.createObject(TraceObjectKeyPath.parse("Processes[0].Threads[0]"))
+				objects.createObject(KeyPath.parse("Processes[0].Threads[0]"))
 						.insert(Lifespan.nowOn(0), ConflictResolution.DENY)
 						.getLastEntry();
 
@@ -65,14 +64,14 @@ public class ModelQueryTest extends AbstractGhidraHeadedDebuggerGUITest {
 		ModelQuery rootQuery = ModelQuery.parse("");
 		ModelQuery threadQuery = ModelQuery.parse("Processes[].Threads[]");
 
-		try (UndoableTransaction tid = tb.startTransaction()) {
+		try (Transaction tx = tb.startTransaction()) {
 			DBTraceObjectManager objects = tb.trace.getObjectManager();
 
 			TraceObjectValue rootVal =
 				objects.createRootObject(CTX.getSchema(new SchemaName("Session")));
 
 			TraceObjectValue thread0Val =
-				objects.createObject(TraceObjectKeyPath.parse("Processes[0].Threads[0]"))
+				objects.createObject(KeyPath.parse("Processes[0].Threads[0]"))
 						.insert(Lifespan.nowOn(0), ConflictResolution.DENY)
 						.getLastEntry();
 

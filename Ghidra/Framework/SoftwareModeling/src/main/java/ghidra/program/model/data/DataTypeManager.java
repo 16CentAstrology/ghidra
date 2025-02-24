@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,10 +17,18 @@ package ghidra.program.model.data;
 
 import java.util.*;
 
+import db.Transaction;
+import ghidra.program.database.SpecExtension;
+import ghidra.program.database.map.AddressMap;
+import ghidra.program.model.lang.*;
+import ghidra.program.model.listing.Function;
+import ghidra.program.model.listing.Program;
 import ghidra.util.InvalidNameException;
 import ghidra.util.UniversalID;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
+import utility.function.ExceptionalCallback;
+import utility.function.ExceptionalSupplier;
 
 /**
  * Interface for Managing data types.
@@ -59,6 +67,21 @@ public interface DataTypeManager {
 	public UniversalID getUniversalID();
 
 	/**
+	 * Get the optional program architecture details associated with this archive
+	 * @return program architecture details or null if none
+	 */
+	public ProgramArchitecture getProgramArchitecture();
+
+	/**
+	 * Get the program architecture information which has been associated with this 
+	 * datatype manager.  If {@link #getProgramArchitecture()} returns null this method
+	 * may still return information if the program architecture was set on an archive but unable
+	 * to properly instantiate.
+	 * @return program architecture summary if it has been set
+	 */
+	public String getProgramArchitectureSummary();
+
+	/**
 	 * Returns true if the given category path exists in this datatype manager
 	 * @param path the path
 	 * @return true if the given category path exists in this datatype manager
@@ -67,7 +90,9 @@ public interface DataTypeManager {
 
 	/**
 	 * Returns a unique name not currently used by any other dataType or category
-	 * with the same baseName
+	 * with the same baseName.  This does not produce a conflict name and is intended 
+	 * to be used when generating an artifical datatype name only (e.g., {@code temp_1},
+	 * {@code temp_2}; for {@code baseName="temp"}.
 	 *
 	 * @param path the path of the name
 	 * @param baseName the base name to be made unique
@@ -138,17 +163,27 @@ public interface DataTypeManager {
 	public Iterator<Composite> getAllComposites();
 
 	/**
+	 * Returns an iterator over all function definition data types in this manager
+	 * @return the iterator
+	 */
+	public Iterator<FunctionDefinition> getAllFunctionDefinitions();
+
+	/**
 	 * Begin searching at the root category for all data types with the
 	 * given name. Places all the data types in this data type manager
-	 * with the given name into the list.
-	 * @param name name of the data type
+	 * with the given name into the list.  Presence of {@code .conflict}
+	 * extension will be ignored for both specified name and returned
+	 * results.
+	 * @param name name of the data type (wildcards are not supported and will be treated
+	 * as explicit search characters)
 	 * @param list list that will be populated with matching DataType objects
 	 */
 	public void findDataTypes(String name, List<DataType> list);
 
 	/**
 	 * Begin searching at the root category for all data types with names
-	 * that match the given name that may contain wildcards.
+	 * that match the given name that may contain wildcards using familiar globbing 
+	 * characters '*' and '?'.
 	 * @param name name to match; may contain wildcards
 	 * @param list list that will be populated with matching DataType objects
 	 * @param caseSensitive true if the match is case sensitive
@@ -318,6 +353,26 @@ public interface DataTypeManager {
 	public void setName(String name) throws InvalidNameException;
 
 	/**
+	 * Returns true if this DataTypeManager can be modified.
+	 * @return true if this DataTypeMangaer can be modified.
+	 */
+	public boolean isUpdatable();
+
+	/**
+	 * Open new transaction.  This should generally be done with a try-with-resources block:
+	 * <pre>
+	 * try (Transaction tx = dtm.openTransaction(description)) {
+	 * 	// ... Do something
+	 * }
+	 * </pre>
+	 * 
+	 * @param description a short description of the changes to be made.
+	 * @return transaction object
+	 * @throws IllegalStateException if this {@link DataTypeManager} has already been closed.
+	 */
+	public Transaction openTransaction(String description) throws IllegalStateException;
+
+	/**
 	 * Starts a transaction for making changes in this data type manager.
 	 * @param description a short description of the changes to be made.
 	 * @return the transaction ID
@@ -325,17 +380,75 @@ public interface DataTypeManager {
 	public int startTransaction(String description);
 
 	/**
-	 * Returns true if this DataTypeManager can be modified.
-	 * @return true if this DataTypeMangaer can be modified.
-	 */
-	public boolean isUpdatable();
-
-	/**
 	 * Ends the current transaction
 	 * @param transactionID id of the transaction to end
 	 * @param commit true if changes are committed, false if changes in transaction are revoked
 	 */
 	public void endTransaction(int transactionID, boolean commit);
+
+	/**
+	 * Performs the given callback inside of a transaction.  Use this method in place of the more
+	 * verbose try/catch/finally semantics.
+	 * <pre>
+	 * program.withTransaction("My Description", () -> {
+	 * 	// ... Do something
+	 * });
+	 * </pre>
+	 * 
+	 * <p>
+	 * Note: the transaction created by this method will always be committed when the call is 
+	 * finished.  If you need the ability to abort transactions, then you need to use the other 
+	 * methods on this interface.
+	 * 
+	 * @param description brief description of transaction
+	 * @param callback the callback that will be called inside of a transaction
+	 * @throws E any exception that may be thrown in the given callback
+	 */
+	public default <E extends Exception> void withTransaction(String description,
+			ExceptionalCallback<E> callback) throws E {
+		int id = startTransaction(description);
+		try {
+			callback.call();
+		}
+		finally {
+			endTransaction(id, true);
+		}
+	}
+
+	/**
+	 * Calls the given supplier inside of a transaction.  Use this method in place of the more
+	 * verbose try/catch/finally semantics.
+	 * <pre>
+	 * program.withTransaction("My Description", () -> {
+	 * 	// ... Do something
+	 * 	return result;
+	 * });
+	 * </pre>
+	 * <p>
+	 * If you do not need to supply a result, then use 
+	 * {@link #withTransaction(String, ExceptionalCallback)} instead.
+	 * 
+	 * @param <E> the exception that may be thrown from this method 
+	 * @param <T> the type of result returned by the supplier
+	 * @param description brief description of transaction
+	 * @param supplier the supplier that will be called inside of a transaction
+	 * @return the result returned by the supplier
+	 * @throws E any exception that may be thrown in the given callback
+	 */
+	public default <E extends Exception, T> T withTransaction(String description,
+			ExceptionalSupplier<T, E> supplier) throws E {
+		T t = null;
+		boolean success = false;
+		int id = startTransaction(description);
+		try {
+			t = supplier.get();
+			success = true;
+		}
+		finally {
+			endTransaction(id, success);
+		}
+		return t;
+	}
 
 	/**
 	 * Force all pending notification events to be flushed
@@ -468,7 +581,9 @@ public interface DataTypeManager {
 	public SourceArchive getLocalSourceArchive();
 
 	/**
-	 * Change the given data type so that its source archive is the given archive
+	 * Change the given data type and its dependencies so thier source archive is set to
+	 * given archive.  Only those data types not already associated with a source archive
+	 * will be changed.
 	 *
 	 * @param datatype the type
 	 * @param archive the archive
@@ -506,6 +621,13 @@ public interface DataTypeManager {
 	 * @return data organization (will never be null)
 	 */
 	public DataOrganization getDataOrganization();
+
+	/**
+	 * Returns the associated AddressMap used by this datatype manager.
+	 * @return the AddressMap used by this datatype manager or null if 
+	 * one has not be established.
+	 */
+	public AddressMap getAddressMap();
 
 	/**
 	 * Returns a list of source archives not including the builtin or the program's archive.
@@ -553,4 +675,49 @@ public interface DataTypeManager {
 	 * @return true if BuiltIn Settings are permitted
 	 */
 	public boolean allowsDefaultComponentSettings();
+
+	/**
+	 * Get the ordered list of known calling convention names.  The reserved names 
+	 * "unknown" and "default" are not included.  The returned collection will include all names 
+	 * ever used or resolved by associated {@link Function} and {@link FunctionDefinition} objects, 
+	 * even if not currently defined by the associated {@link CompilerSpec} or {@link Program} 
+	 * {@link SpecExtension}.  To get only those calling conventions formally defined, the method 
+	 * {@link CompilerSpec#getCallingConventions()} should be used.
+	 *
+	 * @return all known calling convention names.
+	 */
+	public Collection<String> getKnownCallingConventionNames();
+
+	/**
+	 * Get the ordered list of defined calling convention names.  The reserved names 
+	 * "unknown" and "default" are not included.  The returned collection may not include all names 
+	 * referenced by various functions and function-definitions.  This set is generally limited to 
+	 * those defined by the associated compiler specification.  If this instance does not have an 
+	 * assigned architecture the {@link GenericCallingConvention} names will be returned.
+	 * <p>
+	 * For a set of all known names (including those that are not defined by compiler spec)
+	 * see {@link #getKnownCallingConventionNames()}.
+	 *
+	 * @return the set of defined calling convention names.
+	 */
+	public Collection<String> getDefinedCallingConventionNames();
+
+	/**
+	 * Get the default calling convention's prototype model in this datatype manager if known.
+	 *
+	 * @return the default calling convention prototype model or null.
+	 */
+	public PrototypeModel getDefaultCallingConvention();
+
+	/**
+	 * Get the prototype model of the calling convention with the specified name from the 
+	 * associated compiler specification.  If an architecture has not been established this method 
+	 * will return null.  If {@link Function#DEFAULT_CALLING_CONVENTION_STRING}
+	 * is specified {@link #getDefaultCallingConvention()} will be returned.
+	 * 
+	 * @param name the calling convention name
+	 * @return the named function calling convention prototype model or null.
+	 */
+	public PrototypeModel getCallingConvention(String name);
+
 }

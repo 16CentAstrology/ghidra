@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,11 +15,9 @@
  */
 package ghidra.trace.database.listing;
 
-import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.concurrent.locks.Lock;
-
-import com.google.common.collect.Collections2;
 
 import generic.NestedIterator;
 import ghidra.program.model.address.*;
@@ -27,7 +25,6 @@ import ghidra.trace.database.DBTraceUtils;
 import ghidra.trace.database.space.DBTraceDelegatingManager;
 import ghidra.trace.model.*;
 import ghidra.trace.model.listing.TraceBaseCodeUnitsView;
-import ghidra.trace.model.thread.TraceThread;
 import ghidra.util.LockHold;
 
 /**
@@ -40,7 +37,6 @@ import ghidra.util.LockHold;
 public abstract class AbstractBaseDBTraceCodeUnitsMemoryView<T extends DBTraceCodeUnitAdapter, M extends AbstractBaseDBTraceCodeUnitsView<T>>
 		implements DBTraceDelegatingManager<M> {
 	protected final DBTraceCodeManager manager;
-	protected final Collection<M> activeSpacesView;
 
 	/**
 	 * Construct a composite view
@@ -49,8 +45,6 @@ public abstract class AbstractBaseDBTraceCodeUnitsMemoryView<T extends DBTraceCo
 	 */
 	public AbstractBaseDBTraceCodeUnitsMemoryView(DBTraceCodeManager manager) {
 		this.manager = manager;
-		this.activeSpacesView =
-			Collections2.transform(manager.getActiveMemorySpaces(), this::getView);
 	}
 
 	public AddressSpace getSpace() {
@@ -59,23 +53,10 @@ public abstract class AbstractBaseDBTraceCodeUnitsMemoryView<T extends DBTraceCo
 
 	/**
 	 * @see TraceBaseCodeUnitsView#getTrace()
+	 * @return the trace
 	 */
 	public Trace getTrace() {
 		return manager.getTrace();
-	}
-
-	/**
-	 * @see TraceBaseCodeUnitsView#getThread()
-	 */
-	public TraceThread getThread() {
-		return null;
-	}
-
-	/**
-	 * @see TraceBaseCodeUnitsView#getFrameLevel()
-	 */
-	public int getFrameLevel() {
-		return 0;
 	}
 
 	/**
@@ -140,7 +121,7 @@ public abstract class AbstractBaseDBTraceCodeUnitsMemoryView<T extends DBTraceCo
 	 * @param snap the snap the client requested
 	 * @param range the range of iteration
 	 * @param forward true to iterate forward (min to max), false for backward (max to min)
-	 * @return the iterator
+	 * @return an iterable of units
 	 */
 	public Iterable<? extends T> emptyOrFullIterableUndefined(long snap, AddressRange range,
 			boolean forward) {
@@ -149,6 +130,8 @@ public abstract class AbstractBaseDBTraceCodeUnitsMemoryView<T extends DBTraceCo
 
 	/**
 	 * @see #emptyOrFullIterableUndefined(long, AddressRange, boolean)
+	 * @param tasr the range of space and time to cover
+	 * @return the iterable
 	 */
 	public Iterable<? extends T> emptyOrFullIterableUndefined(TraceAddressSnapRange tasr) {
 		return Collections.emptyList();
@@ -239,17 +222,21 @@ public abstract class AbstractBaseDBTraceCodeUnitsMemoryView<T extends DBTraceCo
 
 	/**
 	 * @see TraceBaseCodeUnitsView#size()
+	 * @return the number of defined units
 	 */
 	public int size() {
 		int sum = 0;
-		for (M m : activeSpacesView) {
-			sum += m.size();
+		for (DBTraceCodeSpace space : manager.getActiveMemorySpaces()) {
+			sum += getView(space).size();
 		}
 		return sum;
 	}
 
 	/**
 	 * @see TraceBaseCodeUnitsView#getBefore(long, Address)
+	 * @param snap the snap
+	 * @param address the address
+	 * @return the unit or null
 	 */
 	public T getBefore(long snap, Address address) {
 		Address prev = prevAddress(address);
@@ -261,11 +248,17 @@ public abstract class AbstractBaseDBTraceCodeUnitsMemoryView<T extends DBTraceCo
 
 	/**
 	 * @see TraceBaseCodeUnitsView#getFloor(long, Address)
+	 * @param snap the snap
+	 * @param address the address
+	 * @return the unit or null
 	 */
 	public T getFloor(long snap, Address address) {
 		try (LockHold hold = LockHold.lock(readLock())) {
-			for (AddressRange range : DBTraceUtils.getAddressSet(
-				manager.getBaseLanguage().getAddressFactory(), address, false)) {
+			Iterator<AddressRange> it = DBTraceUtils
+					.getAddressSet(manager.getTrace().getBaseAddressFactory(), address, false)
+					.iterator(false);
+			while (it.hasNext()) {
+				AddressRange range = it.next();
 				M m = getForSpace(range.getAddressSpace(), false);
 				T candidate = m == null ? nullOrUndefined(snap, range.getMaxAddress())
 						: m.getFloor(snap, range.getMaxAddress());
@@ -279,6 +272,9 @@ public abstract class AbstractBaseDBTraceCodeUnitsMemoryView<T extends DBTraceCo
 
 	/**
 	 * @see TraceBaseCodeUnitsView#getContaining(long, Address)
+	 * @param snap the snap
+	 * @param address the address
+	 * @return the unit or null
 	 */
 	public T getContaining(long snap, Address address) {
 		try (LockHold hold = LockHold.lock(readLock())) {
@@ -292,6 +288,9 @@ public abstract class AbstractBaseDBTraceCodeUnitsMemoryView<T extends DBTraceCo
 
 	/**
 	 * @see TraceBaseCodeUnitsView#getAt(long, Address)
+	 * @param snap the snap
+	 * @param address the address
+	 * @return the unit or null
 	 */
 	public T getAt(long snap, Address address) {
 		try (LockHold hold = LockHold.lock(readLock())) {
@@ -305,11 +304,14 @@ public abstract class AbstractBaseDBTraceCodeUnitsMemoryView<T extends DBTraceCo
 
 	/**
 	 * @see TraceBaseCodeUnitsView#getCeiling(long, Address)
+	 * @param snap the snap
+	 * @param address the address
+	 * @return the unit or null
 	 */
 	public T getCeiling(long snap, Address address) {
 		try (LockHold hold = LockHold.lock(readLock())) {
 			for (AddressRange range : DBTraceUtils.getAddressSet(
-				manager.getBaseLanguage().getAddressFactory(), address, true)) {
+				manager.getTrace().getBaseAddressFactory(), address, true)) {
 				M m = getForSpace(range.getAddressSpace(), false);
 				T candidate = m == null ? nullOrUndefined(snap, range.getMinAddress())
 						: m.getCeiling(snap, range.getMinAddress());
@@ -323,6 +325,9 @@ public abstract class AbstractBaseDBTraceCodeUnitsMemoryView<T extends DBTraceCo
 
 	/**
 	 * @see TraceBaseCodeUnitsView#getAfter(long, Address)
+	 * @param snap the snap
+	 * @param address the address
+	 * @return the unit or null
 	 */
 	public T getAfter(long snap, Address address) {
 		Address next = nextAddress(address);
@@ -334,17 +339,26 @@ public abstract class AbstractBaseDBTraceCodeUnitsMemoryView<T extends DBTraceCo
 
 	/**
 	 * @see TraceBaseCodeUnitsView#get(long, Address, Address, boolean)
+	 * @param snap the snap
+	 * @param min the min address
+	 * @param max the max address
+	 * @param forward true to iterate forward
+	 * @return an iterable of units
 	 */
 	public Iterable<? extends T> get(long snap, Address min, Address max, boolean forward) {
 		if (min.hasSameAddressSpace(max)) {
 			return get(snap, new AddressRangeImpl(min, max), forward);
 		}
-		return get(snap, manager.getBaseLanguage().getAddressFactory().getAddressSet(min, max),
+		return get(snap, manager.getTrace().getBaseAddressFactory().getAddressSet(min, max),
 			forward);
 	}
 
 	/**
 	 * @see TraceBaseCodeUnitsView#get(long, AddressSetView, boolean)
+	 * @param snap the snap
+	 * @param set the address set
+	 * @param forward true to iterate forward
+	 * @return an iterable of units
 	 */
 	public Iterable<? extends T> get(long snap, AddressSetView set, boolean forward) {
 		return () -> NestedIterator.start(set.iterator(forward),
@@ -353,6 +367,10 @@ public abstract class AbstractBaseDBTraceCodeUnitsMemoryView<T extends DBTraceCo
 
 	/**
 	 * @see TraceBaseCodeUnitsView#get(long, AddressRange, boolean)
+	 * @param snap the snap
+	 * @param range the address range
+	 * @param forward true to iterate forward
+	 * @return an iterable of units
 	 */
 	public Iterable<? extends T> get(long snap, AddressRange range, boolean forward) {
 		M m = getForSpace(range.getAddressSpace(), false);
@@ -364,21 +382,30 @@ public abstract class AbstractBaseDBTraceCodeUnitsMemoryView<T extends DBTraceCo
 
 	/**
 	 * @see TraceBaseCodeUnitsView#get(long, Address, boolean)
+	 * @param snap the snap
+	 * @param start the start address
+	 * @param forward true to iterate forward
+	 * @return an iterable of units
 	 */
 	public Iterable<? extends T> get(long snap, Address start, boolean forward) {
-		AddressFactory factory = manager.getBaseLanguage().getAddressFactory();
+		AddressFactory factory = manager.getTrace().getBaseAddressFactory();
 		return get(snap, DBTraceUtils.getAddressSet(factory, start, forward), forward);
 	}
 
 	/**
 	 * @see TraceBaseCodeUnitsView#get(long, boolean)
+	 * @param snap the snap
+	 * @param forward true to iterate forward
+	 * @return an iterable of units
 	 */
 	public Iterable<? extends T> get(long snap, boolean forward) {
-		return get(snap, manager.getBaseLanguage().getAddressFactory().getAddressSet(), forward);
+		return get(snap, manager.getTrace().getBaseAddressFactory().getAddressSet(), forward);
 	}
 
 	/**
 	 * @see TraceBaseCodeUnitsView#getIntersecting(TraceAddressSnapRange)
+	 * @param tasr the range in space and time to cover
+	 * @return an iterable of units
 	 */
 	public Iterable<? extends T> getIntersecting(TraceAddressSnapRange tasr) {
 		M m = getForSpace(tasr.getX1().getAddressSpace(), false);
@@ -390,6 +417,9 @@ public abstract class AbstractBaseDBTraceCodeUnitsMemoryView<T extends DBTraceCo
 
 	/**
 	 * @see TraceBaseCodeUnitsView#getAddressSetView(long, AddressRange)
+	 * @param snap the snap
+	 * @param within the range to consider
+	 * @return the address set
 	 */
 	public AddressSetView getAddressSetView(long snap, AddressRange within) {
 		M m = getForSpace(within.getAddressSpace(), false);
@@ -401,10 +431,12 @@ public abstract class AbstractBaseDBTraceCodeUnitsMemoryView<T extends DBTraceCo
 
 	/**
 	 * @see TraceBaseCodeUnitsView#getAddressSetView(long)
+	 * @param snap the snap
+	 * @return the address set
 	 */
 	public AddressSetView getAddressSetView(long snap) {
 		AddressSet result = new AddressSet();
-		for (AddressRange range : manager.getBaseLanguage().getAddressFactory().getAddressSet()) {
+		for (AddressRange range : manager.getTrace().getBaseAddressFactory().getAddressSet()) {
 			M m = getForSpace(range.getAddressSpace(), false);
 			if (m == null) {
 				result.add(emptyOrFullAddressSetUndefined(range));
@@ -418,6 +450,9 @@ public abstract class AbstractBaseDBTraceCodeUnitsMemoryView<T extends DBTraceCo
 
 	/**
 	 * @see TraceBaseCodeUnitsView#containsAddress(long, Address)
+	 * @param snap the snap
+	 * @param address the address
+	 * @return true if contained
 	 */
 	public boolean containsAddress(long snap, Address address) {
 		return delegateRead(address.getAddressSpace(), m -> m.containsAddress(snap, address),
@@ -426,6 +461,9 @@ public abstract class AbstractBaseDBTraceCodeUnitsMemoryView<T extends DBTraceCo
 
 	/**
 	 * @see TraceBaseCodeUnitsView#coversRange(Lifespan, AddressRange)
+	 * @param span the span
+	 * @param range the range
+	 * @return true if covered
 	 */
 	public boolean coversRange(Lifespan span, AddressRange range) {
 		return delegateRead(range.getAddressSpace(), m -> m.coversRange(span, range),
@@ -434,6 +472,8 @@ public abstract class AbstractBaseDBTraceCodeUnitsMemoryView<T extends DBTraceCo
 
 	/**
 	 * @see TraceBaseCodeUnitsView#coversRange(TraceAddressSnapRange)
+	 * @param range the range in space and time
+	 * @return true if covered
 	 */
 	public boolean coversRange(TraceAddressSnapRange range) {
 		return delegateRead(range.getRange().getAddressSpace(), m -> m.coversRange(range),
@@ -442,6 +482,9 @@ public abstract class AbstractBaseDBTraceCodeUnitsMemoryView<T extends DBTraceCo
 
 	/**
 	 * @see TraceBaseCodeUnitsView#intersectsRange(Lifespan, AddressRange)
+	 * @param span the span
+	 * @param range the range
+	 * @return true if intersected
 	 */
 	public boolean intersectsRange(Lifespan span, AddressRange range) {
 		return delegateRead(range.getAddressSpace(), m -> m.intersectsRange(span, range),
@@ -450,6 +493,8 @@ public abstract class AbstractBaseDBTraceCodeUnitsMemoryView<T extends DBTraceCo
 
 	/**
 	 * @see TraceBaseCodeUnitsView#intersectsRange(TraceAddressSnapRange)
+	 * @param range the range in space and time
+	 * @return true if intersected
 	 */
 	public boolean intersectsRange(TraceAddressSnapRange range) {
 		return delegateRead(range.getRange().getAddressSpace(), m -> m.intersectsRange(range),

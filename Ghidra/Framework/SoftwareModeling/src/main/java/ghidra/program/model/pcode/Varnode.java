@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -38,6 +38,15 @@ import ghidra.util.exception.InvalidInputException;
 public class Varnode {
 	private static final long masks[] = { 0L, 0xffL, 0xffffL, 0xffffffL, 0xffffffffL, 0xffffffffffL,
 		0xffffffffffffL, 0xffffffffffffffL, 0xffffffffffffffffL };
+
+	/**
+	 * Set of Varnode pieces referred to by a single Varnode in join space
+	 * as returned by Varnode.decodePieces
+	 */
+	public static class Join {
+		public Varnode[] pieces;		// The list of individual Varnodes being joined
+		public int logicalSize;			// The size (in bytes) of the logical whole.	
+	}
 
 	private Address address;
 	private int size;
@@ -166,6 +175,29 @@ public class Varnode {
 		return rangeIntersects(varnode.offset, endOtherOffset);
 	}
 
+	/**
+	 * Is this contiguous (as the most significant piece) with the given Varnode
+	 * @param lo is the other Varnode to compare with
+	 * @param bigEndian is true for big endian significance ordering
+	 * @return true if the two byte ranges are contiguous and in order
+	 */
+	public boolean isContiguous(Varnode lo, boolean bigEndian) {
+		AddressSpace spc = address.getAddressSpace();
+		if (spc != lo.address.getAddressSpace())
+			return false;
+		if (bigEndian) {
+			long nextoff = spc.truncateOffset(offset + size);
+			if (nextoff == lo.offset)
+				return true;
+		}
+		else {
+			long nextoff = spc.truncateOffset(lo.offset + lo.size);
+			if (nextoff == offset)
+				return true;
+		}
+		return false;
+	}
+
 	private boolean rangeIntersects(long otherOffset, long otherEndOffset) {
 		long endOffset = offset;
 		if (size > 0) {
@@ -292,15 +324,14 @@ public class Varnode {
 	 * @return the lone descendant PcodeOp
 	 */
 	public PcodeOp getLoneDescend() {
-		Iterator<PcodeOp> iter = getDescendants();
-		if (!iter.hasNext()) {
-			return null;		// If there are no descendants return null
-		}
-		PcodeOp op = iter.next();
-		if (iter.hasNext()) {
-			return null;		// If there is more than one descendant return null
-		}
-		return op;
+		return null;
+	}
+
+	/**
+	 * @return false if the Varnode has a PcodeOp reading it that is part of function data-flow
+	 */
+	public boolean hasNoDescend() {
+		return true;
 	}
 
 	/**
@@ -393,10 +424,12 @@ public class Varnode {
 		if ((spc != null) && (spc.getType() == AddressSpace.TYPE_VARIABLE)) {	// Check for a composite Address
 			decoder.rewindAttributes();
 			try {
-				Varnode[] pieces = decodePieces(decoder);
-				VariableStorage storage = factory.getJoinStorage(pieces);
+				Join join = decodePieces(decoder);
+				VariableStorage storage = factory.getJoinStorage(join.pieces);
 				// Update "join" address to the one just registered with the pieces
 				addr = factory.getJoinAddress(storage);
+				// Update size to be the size of the pieces 
+				sz = join.logicalSize;
 			}
 			catch (InvalidInputException e) {
 				throw new DecoderException("Invalid varnode pieces: " + e.getMessage());
@@ -495,27 +528,43 @@ public class Varnode {
 	 * space, a contiguous sequence of bytes, at a specific Address, represent a logical value
 	 * that may physically be split across multiple registers or other storage locations.
 	 * @param decoder is the stream decoder
-	 * @return an array of decoded Varnodes
+	 * @return an array of decoded Varnodes and the logical size
 	 * @throws DecoderException for any errors in the encoding
 	 */
-	public static Varnode[] decodePieces(Decoder decoder) throws DecoderException {
+	public static Join decodePieces(Decoder decoder) throws DecoderException {
 		ArrayList<Varnode> list = new ArrayList<>();
+		int sizeAccum = 0;
+		int logicalSize = 0;
 		for (;;) {
 			int attribId = decoder.getNextAttributeId();
 			if (attribId == 0) {
 				break;
 			}
-			else if (attribId >= ATTRIB_PIECE1.id() && attribId <= ATTRIB_PIECE9.id()) {
-				int index = attribId - ATTRIB_PIECE1.id();
+			else if (attribId == ATTRIB_LOGICALSIZE.id()) {
+				logicalSize = (int) decoder.readUnsignedInteger();
+			}
+			else if (attribId == ATTRIB_UNKNOWN.id()) {
+				attribId = decoder.getIndexedAttributeId(ATTRIB_PIECE);
+			}
+
+			if (attribId >= ATTRIB_PIECE.id()) {
+				int index = attribId - ATTRIB_PIECE.id();
+				if (index > AddressXML.MAX_PIECES) {
+					continue;
+				}
 				if (index != list.size()) {
 					throw new DecoderException("\"piece\" attributes must be in order");
 				}
-				list.add(decodePiece(decoder.readString(), decoder.getAddressFactory()));
+				Varnode vn = decodePiece(decoder.readString(), decoder.getAddressFactory());
+				list.add(vn);
+				sizeAccum += vn.getSize();
 			}
 		}
-		Varnode[] pieces = new Varnode[list.size()];
-		list.toArray(pieces);
-		return pieces;
+		Join join = new Join();
+		join.pieces = new Varnode[list.size()];
+		join.logicalSize = (logicalSize != 0) ? logicalSize : sizeAccum;
+		list.toArray(join.pieces);
+		return join;
 	}
 
 	/**

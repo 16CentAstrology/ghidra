@@ -19,12 +19,16 @@ import static ghidra.program.model.pcode.AttributeId.*;
 import static ghidra.program.model.pcode.ElementId.*;
 
 import java.io.*;
+import java.util.concurrent.TimeUnit;
 
 import ghidra.program.model.address.Address;
 import ghidra.program.model.lang.InjectPayload;
+import ghidra.program.model.lang.UnknownInstructionException;
 import ghidra.program.model.listing.Program;
+import ghidra.program.model.mem.MemoryAccessException;
 import ghidra.program.model.pcode.*;
 import ghidra.util.Msg;
+import ghidra.util.exception.NotFoundException;
 import ghidra.util.timer.GTimer;
 import ghidra.util.timer.GTimerMonitor;
 
@@ -43,6 +47,8 @@ import ghidra.util.timer.GTimerMonitor;
  */
 
 public class DecompileProcess {
+	
+	private static boolean errorDisplayed = false; // launch failure previously displayed
 
 	//	public static DecompileProcess decompProcess = null;
 	private final static byte[] command_start = { 0, 0, 1, 2 };
@@ -74,7 +80,7 @@ public class DecompileProcess {
 	private int maxResultSizeMBYtes = 50; // maximum result size in MBytes to allow from decompiler
 
 	private PackedDecode paramDecoder;			// Decoder to use for queries from the decompiler
-	private PackedEncode resultEncoder;			// Encoder to use for query responses
+	private PatchPackedEncode resultEncoder;	// Encoder to use for query responses
 	private StringIngest stringDecoder;		// Ingest of exception and status messages
 
 	public enum DisposeState {
@@ -99,6 +105,14 @@ public class DecompileProcess {
 			}
 		};
 		stringDecoder = new StringIngest();
+	}
+	
+	private static synchronized boolean getAndSetErrorDisplayed() {
+		boolean b = errorDisplayed;
+		if (!b) {
+			errorDisplayed = true;
+		}
+		return b;
 	}
 
 	public void dispose() {
@@ -130,19 +144,52 @@ public class DecompileProcess {
 		if (exepath == null || exepath.length == 0 || exepath[0] == null) {
 			throw new IOException("Could not find decompiler executable");
 		}
+		IOException exc = null;
+		statusGood = false;
+		
 		try {
 			nativeProcess = runtime.exec(exepath);
-
+			
+			// Give process time to load and report possible error
+			try {
+				nativeProcess.waitFor(200, TimeUnit.MILLISECONDS);
+			}
+			catch (InterruptedException e) {
+				// Restore interrupted thread state since we are continuing with setup.
+				// It does not appear that the decompiler interface is affected by an
+				// interrupted thread so why stop here.
+				Thread.currentThread().interrupt();
+			}
+			
 			nativeIn = nativeProcess.getInputStream();
 			nativeOut = nativeProcess.getOutputStream();
-			statusGood = true;
+			
+			statusGood = nativeProcess.isAlive();
+			if (!statusGood) {
+				if (!getAndSetErrorDisplayed()) {
+					String err = new String(nativeProcess.getErrorStream().readAllBytes());
+					String errorDetail = "Decompiler executable may not be compatible with your system and may need to be rebuilt.\n" +
+							"(see InstallationGuide.html, 'Building Native Components').\n\n" +
+							err;		
+					Msg.showError(this, null, "Failed to launch Decompiler process", errorDetail);
+				}
+			}
 		}
 		catch (IOException e) {
-			disposestate = DisposeState.DISPOSED_ON_STARTUP_FAILURE;
-			statusGood = false;
-			Msg.showError(this, null, "Problem launching decompiler",
-				"Please report this stack trace to the Ghidra Team", e);
-			throw e;
+			exc = e; // permission error, etc.
+		}
+		finally {
+			if (!statusGood) {
+				disposestate = DisposeState.DISPOSED_ON_STARTUP_FAILURE;
+				if (nativeProcess != null) {
+					nativeProcess.destroy();          			
+					nativeProcess = null;
+				}
+				if (exc == null) {
+					exc = new IOException("Decompiler process failed to launch (see log for details)");
+				}
+				throw exc;
+			}
 		}
 	}
 
@@ -199,7 +246,7 @@ public class DecompileProcess {
 	private int readToBuffer(ByteIngest buf) throws IOException {
 		int cur;
 		for (;;) {
-			buf.ingestStream(nativeIn);
+			buf.ingestStreamToNextTerminator(nativeIn);
 			do {
 				cur = nativeIn.read();
 			}
@@ -236,7 +283,7 @@ public class DecompileProcess {
 		write(string_end);
 	}
 
-	private void writeString(Encoder byteResult) throws IOException {
+	private void writeString(CachedEncoder byteResult) throws IOException {
 		if (nativeOut == null) {
 			return;
 		}
@@ -374,6 +421,9 @@ public class DecompileProcess {
 					currentResponse = null;		// Reset current buffer as a native message may follow
 					break;
 				case 16:			// Beginning of any native message from the decompiler
+					if (currentResponse != null) {	// Beginning of native message before end of main response
+						currentResponse.clear();	// Don't try to parse main response
+					}
 					currentResponse = stringDecoder;
 					currentResponse.open(1 << 20, programSource);
 					break;
@@ -420,7 +470,7 @@ public class DecompileProcess {
 		// Decompiler process may callback during the registerProgram operation
 		// so provide query/reponse decoding/encoding
 		paramDecoder = new PackedDecode(program.getAddressFactory());
-		resultEncoder = new PackedEncode();
+		resultEncoder = new PatchPackedEncode();
 
 		StringIngest response = new StringIngest();	// Don't use stringDecoder
 
@@ -599,8 +649,8 @@ public class DecompileProcess {
 	 * @throws IOException for problems with the pipe to the decompiler process
 	 * @throws DecompileException for problems executing the command
 	 */
-	public synchronized void sendCommand1Param(String command, Encoder param1, ByteIngest response)
-			throws IOException, DecompileException {
+	public synchronized void sendCommand1Param(String command, CachedEncoder param1,
+			ByteIngest response) throws IOException, DecompileException {
 		if (!statusGood) {
 			throw new IOException(command + " called on bad process");
 		}
@@ -705,7 +755,8 @@ public class DecompileProcess {
 		write(query_response_end);
 	}
 
-	private void getPcodeInject(int type) throws IOException, DecoderException {
+	private void getPcodeInject(int type) throws IOException, DecoderException,
+			UnknownInstructionException, MemoryAccessException, NotFoundException {
 		resultEncoder.clear();
 		String name = paramDecoder.readString(ATTRIB_NAME);
 		callback.getPcodeInject(name, paramDecoder, type, resultEncoder);

@@ -19,18 +19,20 @@ import java.io.IOException;
 import java.util.*;
 
 import db.*;
+import ghidra.framework.data.OpenMode;
 import ghidra.framework.options.Options;
 import ghidra.program.database.ManagerDB;
 import ghidra.program.database.ProgramDB;
 import ghidra.program.database.map.AddressMap;
 import ghidra.program.database.mem.AddressSourceInfo;
-import ghidra.program.database.mem.FileBytes;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressSetView;
 import ghidra.program.model.listing.Program;
-import ghidra.program.model.mem.MemoryBlockSourceInfo;
+import ghidra.program.model.mem.Memory;
 import ghidra.program.model.reloc.Relocation;
+import ghidra.program.model.reloc.Relocation.Status;
 import ghidra.program.model.reloc.RelocationTable;
+import ghidra.program.util.ProgramEvent;
 import ghidra.util.Lock;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.exception.VersionException;
@@ -59,14 +61,14 @@ public class RelocationManager implements RelocationTable, ManagerDB {
 	 * @throws VersionException
 	 * @throws IOException
 	 */
-	public RelocationManager(DBHandle handle, AddressMap addrMap, int openMode, Lock lock,
+	public RelocationManager(DBHandle handle, AddressMap addrMap, OpenMode openMode, Lock lock,
 			TaskMonitor monitor) throws VersionException, IOException {
 		this.addrMap = addrMap;
 		this.lock = lock;
 		initializeAdapters(handle, openMode, monitor);
 	}
 
-	private void initializeAdapters(DBHandle handle, int openMode, TaskMonitor monitor)
+	private void initializeAdapters(DBHandle handle, OpenMode openMode, TaskMonitor monitor)
 			throws VersionException, IOException {
 		adapter = RelocationDBAdapter.getAdapter(handle, openMode, addrMap, monitor);
 	}
@@ -82,41 +84,104 @@ public class RelocationManager implements RelocationTable, ManagerDB {
 	}
 
 	@Override
-	public void programReady(int openMode, int currentRevision, TaskMonitor monitor)
+	public void programReady(OpenMode openMode, int currentRevision, TaskMonitor monitor)
 			throws IOException, CancelledException {
-		// Nothing to do
+
+		if (openMode == OpenMode.UPGRADE &&
+			currentRevision < ProgramDB.RELOCATION_STATUS_ADDED_VERSION) {
+			RelocationDBAdapter.preV6DataMigrationUpgrade(adapter, program, monitor);
+		}
 	}
 
-	private byte[] getOriginalBytes(Address addr, byte[] bytes) throws IOException {
-		if (bytes != null) {
-			return bytes;
-		}
-		int byteCount = program.getDefaultPointerSize() > 4 ? 8 : 4;
+	/**
+	 * Get default byte length when unknown
+	 * @param program program containing relocation
+	 * @return default byte length
+	 */
+	static int getDefaultOriginalByteLength(Program program) {
+		return program.getDefaultPointerSize() > 4 ? 8 : 4;
+	}
+
+	/**
+	 * Get the specified number of original file bytes for the specified address.  Any offsets
+	 * not backed by file bytes will have a 0-byte value.
+	 * @param memory program memory
+	 * @param addr memory address
+	 * @param byteCount number of original file bytes to read
+	 * @return byte array of length byteCount
+	 * @throws IOException if an IO error occurs
+	 */
+	static byte[] getOriginalBytes(Memory memory, Address addr, int byteCount) throws IOException {
 		byte[] originalBytes = new byte[byteCount];
-		AddressSourceInfo addressSourceInfo = program.getMemory().getAddressSourceInfo(addr);
-		if (addressSourceInfo == null) {
-			return null;
-		}
-		MemoryBlockSourceInfo memoryBlockSourceInfo = addressSourceInfo.getMemoryBlockSourceInfo();
-		Optional<FileBytes> optional = memoryBlockSourceInfo.getFileBytes();
-		if (!optional.isEmpty()) {
-			FileBytes fileBytes = optional.get();
-			long fileBytesOffset = addressSourceInfo.getFileOffset();
-			long offsetIntoSourceRange =
-				fileBytesOffset - memoryBlockSourceInfo.getFileBytesOffset();
-			long available = memoryBlockSourceInfo.getLength() - offsetIntoSourceRange;
-			int readSize = (int) Math.min(available, byteCount);
-			fileBytes.getOriginalBytes(fileBytesOffset, originalBytes, 0, readSize);
+		// must get one byte at a time due to the possibility of byte-mapped memory use
+		for (int i = 0; i < byteCount; i++) {
+			if (i != 0) {
+				addr = addr.next();
+			}
+			if (addr == null) {
+				break;
+			}
+			AddressSourceInfo addressSourceInfo = memory.getAddressSourceInfo(addr);
+			if (addressSourceInfo == null) {
+				return originalBytes;
+			}
+			originalBytes[i] = addressSourceInfo.getOriginalValue();
 		}
 		return originalBytes;
 	}
 
+	private byte[] getOriginalBytes(Address addr, Status status, byte[] bytes, int defaultLength)
+			throws IOException {
+		if (bytes != null || !status.hasBytes()) {
+			return bytes;
+		}
+		int byteCount = defaultLength;
+		if (defaultLength <= 0) {
+			byteCount = getDefaultOriginalByteLength(program);
+		}
+		return getOriginalBytes(program.getMemory(), addr, byteCount);
+	}
+
 	@Override
-	public Relocation add(Address addr, int type, long[] values, byte[] bytes, String symbolName) {
+	public Relocation add(Address addr, Status status, int type, long[] values, byte[] bytes,
+			String symbolName) {
 		lock.acquire();
 		try {
-			adapter.add(addr, type, values, bytes, symbolName);
-			return new Relocation(addr, type, values, getOriginalBytes(addr, bytes), symbolName);
+			byte flags = RelocationDBAdapter.getFlags(status, 0);
+			adapter.add(addr, flags, type, values, bytes, symbolName);
+			Relocation reloc = new Relocation(addr, status, type, values,
+				getOriginalBytes(addr, status, bytes, 0), symbolName);
+
+			// fire event
+			// TODO: full change support is missing
+			program.setChanged(ProgramEvent.RELOCATION_ADDED, null, reloc);
+
+			return reloc;
+		}
+		catch (IOException e) {
+			program.dbError(e);
+		}
+		finally {
+			lock.release();
+		}
+		return null;
+	}
+
+	@Override
+	public Relocation add(Address addr, Status status, int type, long[] values, int byteLength,
+			String symbolName) {
+		lock.acquire();
+		try {
+			byte flags = RelocationDBAdapter.getFlags(status, byteLength);
+			adapter.add(addr, flags, type, values, null, symbolName);
+			Relocation reloc = new Relocation(addr, status, type, values,
+				getOriginalBytes(addr, status, null, byteLength), symbolName);
+
+			// fire event
+			// TODO: full change support is missing
+			program.setChanged(ProgramEvent.RELOCATION_ADDED, null, reloc);
+
+			return reloc;
 		}
 		catch (IOException e) {
 			program.dbError(e);
@@ -178,13 +243,16 @@ public class RelocationManager implements RelocationTable, ManagerDB {
 
 	private Relocation getRelocation(DBRecord rec) throws IOException {
 		Address addr = addrMap.decodeAddress(rec.getLongValue(RelocationDBAdapter.ADDR_COL));
+		byte flags = rec.getByteValue(RelocationDBAdapter.FLAGS_COL);
+		Status status = RelocationDBAdapter.getStatus(flags);
+		int length = RelocationDBAdapter.getByteLength(flags);
 		BinaryCodedField valuesField =
 			new BinaryCodedField((BinaryField) rec.getFieldValue(RelocationDBAdapter.VALUE_COL));
-		byte[] originalBytes =
-			getOriginalBytes(addr, rec.getBinaryData(RelocationDBAdapter.BYTES_COL));
-		return new Relocation(addr, rec.getIntValue(RelocationDBAdapter.TYPE_COL),
-			valuesField.getLongArray(),
-			originalBytes, rec.getString(RelocationDBAdapter.SYMBOL_NAME_COL));
+		byte[] originalBytes = getOriginalBytes(addr, status,
+			rec.getBinaryData(RelocationDBAdapter.BYTES_COL), length);
+		return new Relocation(addr, status, rec.getIntValue(RelocationDBAdapter.TYPE_COL),
+			valuesField.getLongArray(), originalBytes,
+			rec.getString(RelocationDBAdapter.SYMBOL_NAME_COL));
 	}
 
 	@Override
@@ -315,7 +383,8 @@ public class RelocationManager implements RelocationTable, ManagerDB {
 	}
 
 	@Override
-	public void moveAddressRange(Address fromAddr, Address toAddr, long length, TaskMonitor monitor) {
+	public void moveAddressRange(Address fromAddr, Address toAddr, long length,
+			TaskMonitor monitor) {
 		// do nothing here
 	}
 

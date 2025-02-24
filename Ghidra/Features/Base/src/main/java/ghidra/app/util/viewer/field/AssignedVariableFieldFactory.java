@@ -15,14 +15,13 @@
  */
 package ghidra.app.util.viewer.field;
 
-import java.awt.Color;
 import java.math.BigInteger;
 import java.util.ArrayList;
 
 import docking.widgets.fieldpanel.field.*;
 import docking.widgets.fieldpanel.support.FieldLocation;
-import generic.theme.GThemeDefaults.Colors.Palette;
-import ghidra.app.util.HighlightProvider;
+import ghidra.app.util.ListingHighlightProvider;
+import ghidra.app.util.viewer.field.ListingColors.FunctionColors;
 import ghidra.app.util.viewer.format.FieldFormatModel;
 import ghidra.app.util.viewer.proxy.ProxyObj;
 import ghidra.framework.options.Options;
@@ -36,7 +35,6 @@ import ghidra.program.util.ProgramLocation;
   */
 public class AssignedVariableFieldFactory extends FieldFactory {
 	public static final String FIELD_NAME = "Var Assign";
-	public static final Color DEFAULT_COLOR = Palette.PURPLE;
 
 	/**
 	 * Default constructor.
@@ -52,15 +50,10 @@ public class AssignedVariableFieldFactory extends FieldFactory {
 	 * @param displayOptions the Options for display properties.
 	 * @param fieldOptions the Options for field specific properties.
 	 */
-	private AssignedVariableFieldFactory(FieldFormatModel model, HighlightProvider hsProvider,
+	private AssignedVariableFieldFactory(FieldFormatModel model,
+			ListingHighlightProvider hsProvider,
 			Options displayOptions, Options fieldOptions) {
 		super(FIELD_NAME, model, hsProvider, displayOptions, fieldOptions);
-	}
-
-	@Override
-	public void fieldOptionsChanged(Options options, String optionName, Object oldValue,
-			Object newValue) {
-		// stub
 	}
 
 	/**
@@ -78,7 +71,7 @@ public class AssignedVariableFieldFactory extends FieldFactory {
 		}
 		CodeUnit cu = (CodeUnit) obj;
 
-		ArrayList<FieldElement> elemenetList = new ArrayList<>();
+		ArrayList<FieldElement> elements = new ArrayList<>();
 
 		Function f = cu.getProgram().getFunctionManager().getFunctionContaining(cu.getMinAddress());
 		if (f != null) {
@@ -95,20 +88,18 @@ public class AssignedVariableFieldFactory extends FieldFactory {
 					buf.append(var.getVariableStorage().toString());
 					buf.append(" = ");
 					buf.append(var.getName());
-					AttributedString as = new AttributedString(buf.toString(), color, getMetrics());
-					elemenetList.add(new TextFieldElement(as, 0, 0));
+					AttributedString as = new AttributedString(buf.toString(),
+						FunctionColors.VARIABLE_ASSIGNED, getMetrics());
+					elements.add(new TextFieldElement(as, 0, 0));
 				}
 			}
 		}
-		if (elemenetList.size() == 0) {
+		if (elements.isEmpty()) {
 			return null;
 		}
 
-		FieldElement[] elements = new FieldElement[elemenetList.size()];
-		elemenetList.toArray(elements);
-
 		return ListingTextField.createMultilineTextField(this, proxy, elements, startX + varWidth,
-			width, elements.length + 1, hlProvider);
+			width, hlProvider);
 	}
 
 	@Override
@@ -141,14 +132,10 @@ public class AssignedVariableFieldFactory extends FieldFactory {
 	}
 
 	@Override
-	public FieldFactory newInstance(FieldFormatModel formatModel, HighlightProvider hsProvider,
+	public FieldFactory newInstance(FieldFormatModel formatModel,
+			ListingHighlightProvider hsProvider,
 			ToolOptions displayOptions, ToolOptions fieldOptions) {
 		return new AssignedVariableFieldFactory(formatModel, hsProvider, displayOptions,
 			fieldOptions);
-	}
-
-	@Override
-	public Color getDefaultColor() {
-		return DEFAULT_COLOR;
 	}
 }

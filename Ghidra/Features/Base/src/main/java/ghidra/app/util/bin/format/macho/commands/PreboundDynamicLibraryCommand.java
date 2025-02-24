@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -33,13 +33,13 @@ import ghidra.util.task.TaskMonitor;
  */
 public class PreboundDynamicLibraryCommand extends LoadCommand {
 	private LoadCommandString name;
-	private int nmodules;
+	private long nmodules;
 	private LoadCommandString linkedModules;
 
 	PreboundDynamicLibraryCommand(BinaryReader reader) throws IOException {
 		super(reader);
 		name = new LoadCommandString(reader, this);
-		nmodules = reader.readNextInt();
+		nmodules = checkCount(reader.readNextUnsignedInt());
 		linkedModules = new LoadCommandString(reader, this);
 	}
 
@@ -67,7 +67,7 @@ public class PreboundDynamicLibraryCommand extends LoadCommand {
 	 * Returns number of modules in library.
 	 * @return number of modules in library
 	 */
-	public int getNumberOfModules() {
+	public long getNumberOfModules() {
 		return nmodules;
 	}
 
@@ -85,19 +85,15 @@ public class PreboundDynamicLibraryCommand extends LoadCommand {
 	}
 
 	@Override
-	public void markup(MachHeader header, FlatProgramAPI api, Address baseAddress, boolean isBinary,
+	public void markupRawBinary(MachHeader header, FlatProgramAPI api, Address baseAddress,
 			ProgramModule parentModule, TaskMonitor monitor, MessageLog log) {
-		updateMonitor(monitor);
 		try {
-			if (isBinary) {
-				createFragment(api, baseAddress, parentModule);
-				Address addr = baseAddress.getNewAddress(getStartIndex());
-				api.createData(addr, toDataType());
+			super.markupRawBinary(header, api, baseAddress, parentModule, monitor, log);
 
-				int nameLen = getCommandSize() - name.getOffset();
-				Address nameAddr = addr.add(name.getOffset());
-				api.createAsciiString(nameAddr, nameLen);
-			}
+			Address addr = baseAddress.getNewAddress(getStartIndex());
+			int nameLen = getCommandSize() - name.getOffset();
+			Address nameAddr = addr.add(name.getOffset());
+			api.createAsciiString(nameAddr, nameLen);
 		}
 		catch (Exception e) {
 			log.appendMsg("Unable to create " + getCommandName() + " - " + e.getMessage());

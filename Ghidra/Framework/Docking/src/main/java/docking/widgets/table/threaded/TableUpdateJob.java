@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -36,7 +36,7 @@ import ghidra.util.task.TaskMonitor;
  * </ol>
  * <p>
  * Not all the update functions are performed on a run of a TableUpdateJob.  If the reloadData flag is
- * not set, the the data is just copied from the model's current list, instead of calling the model's
+ * not set, then the data is just copied from the model's current list, instead of calling the model's
  * loadData() method. If the sortComparator is null,
  * then the data is not sorted (for example, when only filtering needs to be done).  If there
  * are no add/removes in the list, then that step does nothing.
@@ -68,8 +68,8 @@ public class TableUpdateJob<T> {
 
 	private TableData<T> sourceData;
 	private TableData<T> updatedData;
-	private boolean disableSubFiltering = SystemUtilities.getBooleanProperty(
-		RowObjectFilterModel.SUB_FILTERING_DISABLED_PROPERTY, false);
+	private boolean disableSubFiltering = SystemUtilities
+			.getBooleanProperty(RowObjectFilterModel.SUB_FILTERING_DISABLED_PROPERTY, false);
 
 	private volatile boolean reloadData;
 	private volatile boolean doForceSort;
@@ -100,7 +100,7 @@ public class TableUpdateJob<T> {
 	/**
 	 * Meant to be called by subclasses, not clients.  This method will trigger this job not to
 	 * load data, but rather to use the given data.
-	 * 
+	 *
 	 * @param data The data to process.
 	 */
 	protected void setData(TableData<T> data) {
@@ -111,7 +111,7 @@ public class TableUpdateJob<T> {
 	 * Allows the precise disabling of the filter operation.  For example, when the user sorts, no
 	 * filtering is needed.  If the filter has changed, then a filter will take place, regardless
 	 * of the state of this variable.
-	 * 
+	 *
 	 * @param force false to reuse the current filter, if possible.
 	 */
 	protected void setForceFilter(boolean force) {
@@ -163,7 +163,7 @@ public class TableUpdateJob<T> {
 	/**
 	 * Adds the Add/Remove item to the list of items to be processed in the add/remove phase. This
 	 * call is not allowed on running jobs, only pending jobs.
-	 * 
+	 *
 	 * @param item the add/remove item to add to the list of items to be processed in the
 	 *        add/remove phase of this job.
 	 * @param maxAddRemoveCount the maximum number of add/remove jobs to queue before performing a
@@ -191,18 +191,18 @@ public class TableUpdateJob<T> {
 	 * effect depends on the running job's state:
 	 * <ul>
 	 *     <li>If the sort state hasn't happened yet, all it does is set the comparator for when
-	 *      the sort occurs.
+	 *      the sort occurs.</li>
 	 *     <li>If the sort state has already been started or completed, then this method attempts
 	 *      to stop the current process phase and cause the state machine to return to the sort
-	 *      phase.
+	 *      phase.</li>
 	 *     <li>If the current job has already entered the DONE state, then the sort cannot take
 	 *      effect in this job and a false value is returned to indicate the
-	 * sort was not handled by this job.
+	 * sort was not handled by this job.</li>
 	 * </ul>
 	 * @param newSortingContext the TableColumnComparator to use to sort the data.
 	 * @param forceSort True signals to re-sort, even if this is already sorted
 	 * @return true if the sort can be processed by this job, false if this job is essentially
-	 *         already completed and therefor cannot perform the sort job.
+	 *         already completed and therefore cannot perform the sort job.
 	 */
 	public synchronized boolean requestSort(TableSortingContext<T> newSortingContext,
 			boolean forceSort) {
@@ -225,16 +225,16 @@ public class TableUpdateJob<T> {
 	 * depends on the running job's state:
 	 * <ul>
 	 * 	  <li>If the filter state hasn't happened yet, then nothing needs to be done as this job
-	 * 			will filter later anyway.
+	 * 			will filter later anyway.</li>
 	 *    <li>If the filter state has already been started or completed, then this method
 	 *    		attempts to stop the current process phase and cause the state machine to return to
-	 *          the filter phase.
+	 *          the filter phase.</li>
 	 *    <li>If the current job has already entered the DONE state, then the filter cannot take
 	 *     		effect in this job and a false value is returned to indicate the filter was not
-	 *          handled by this job.
+	 *          handled by this job.</li>
 	 * </ul>
 	 * @return true if the filter can be processed by this job, false if this job is essentially
-	 * already completed and therefor cannot perform the filter job.
+	 * already completed and therefore cannot perform the filter job.
 	 */
 	public synchronized boolean requestFilter() {
 		if (currentState == DONE) {
@@ -277,7 +277,7 @@ public class TableUpdateJob<T> {
 			if (pendingRequestedState != null) {
 				setState(pendingRequestedState);
 				pendingRequestedState = null;
-				monitor.clearCanceled();
+				monitor.clearCancelled();
 			}
 			else if (currentState != CANCELLED) {
 				setState(CANCELLED);
@@ -388,7 +388,7 @@ public class TableUpdateJob<T> {
 	 * Since much memory could be consumed, we provide an option in the tool to disable this reuse
 	 * of filtered data.  When not in use, each filter change will perform a full refilter.  This
 	 * is not an issue for tables with moderate to small-sized datasets.
-	 * 
+	 *
 	 * @return the initial data to use for future filter and sort operations.
 	 */
 	private TableData<T> pickExistingTableData() {
@@ -522,11 +522,26 @@ public class TableUpdateJob<T> {
 
 		Comparator<T> comparator = newSortContext.getComparator();
 		Comparator<T> monitoredComparator = new MonitoredComparator<>(comparator, monitor, size);
+
+		// copy the data. If the sort is cancelled, the data could be corrupted
+		List<T> copy = new ArrayList<>(data);
 		try {
 			Collections.sort(data, monitoredComparator);
 		}
 		catch (SortCancelledException e) {
-			// do nothing, the old data will remain
+			// restore copy as data could be corrupted
+			data.clear();
+			data.addAll(copy);
+		}
+		catch (Exception e) {
+			// We added this to catch an issue if the sort comparators violate the contract of
+			// Comparator.  TimSort will throw an exception in this case.  We have decided to not
+			// throw the exception.  This will allow the currently loaded data to be used, albeit
+			// unsorted.
+			Msg.error(this, "Unable to finish table sorting", e);
+			// restore copy as data could be corrupted
+			data.clear();
+			data.addAll(copy);
 		}
 
 		monitor.setMessage("Done sorting");
@@ -703,7 +718,7 @@ public class TableUpdateJob<T> {
 	}
 
 	/**
-	 * Wraps a comparator<T> to add progress monitoring and cancel checking
+	 * Wraps a {@link Comparator} to add progress monitoring and cancel checking
 	 *
 	 * @param <T> The type of data being sorted
 	 */
@@ -716,7 +731,7 @@ public class TableUpdateJob<T> {
 		MonitoredComparator(Comparator<T> delegate, TaskMonitor monitor, int size) {
 			this.delegate = delegate;
 			this.monitor = monitor;
-			// After testing the number of comparisons needed to sort random data for the 
+			// After testing the number of comparisons needed to sort random data for the
 			// sort used by Collections, the max seems to be less then  O(N (log(n)-1).
 			// This seems to be a reasonable approximation for random data. For sorted data
 			// the number drops to exactly N-1 comparisons, but that just means the progress

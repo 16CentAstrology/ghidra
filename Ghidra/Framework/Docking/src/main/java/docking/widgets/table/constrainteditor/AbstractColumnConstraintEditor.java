@@ -46,7 +46,7 @@ public abstract class AbstractColumnConstraintEditor<T> implements ColumnConstra
 	/** Color indicating a valid value is defined by the editor widget(s) */
 	protected static final Color VALID_INPUT_COLOR = Colors.BACKGROUND;
 	/** Color indicating a invalid value is defined by the editor widget(s) */
-	protected static final Color INVALID_INPUT_COLOR = new GColor("docking.palette.mistyrose");
+	protected static final Color INVALID_INPUT_COLOR = new GColor("color.palette.mistyrose");
 
 	/**
 	 * Constructor.
@@ -207,7 +207,7 @@ public abstract class AbstractColumnConstraintEditor<T> implements ColumnConstra
 	 * @return an HTML string suitable for a JLabel.
 	 */
 	protected final static String formatStatus(String message, boolean error) {
-		Color color = error ? Colors.ERROR : Colors.FOREGROUND;
+		Color color = error ? Colors.Messages.ERROR : Colors.FOREGROUND;
 		String messageWithFont = HTMLUtilities.setFont(message, color, 12);
 		String html = HTMLUtilities.wrapAsHTML(messageWithFont);
 		return html;

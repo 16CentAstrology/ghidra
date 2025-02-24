@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -139,7 +139,7 @@ public class TableData<ROW_OBJECT> implements Iterable<ROW_OBJECT> {
 	 * @return the index
 	 */
 	public int indexOf(ROW_OBJECT t) {
-		if (!sortContext.isUnsorted()) {
+		if (isSorted()) {
 			Comparator<ROW_OBJECT> comparator = sortContext.getComparator();
 			return Collections.binarySearch(data, t, comparator);
 		}
@@ -159,7 +159,7 @@ public class TableData<ROW_OBJECT> implements Iterable<ROW_OBJECT> {
 			source.remove(t);
 		}
 
-		if (sortContext.isUnsorted()) {
+		if (!isSorted()) {
 			return data.remove(t); // no sort; cannot binary search
 		}
 
@@ -197,7 +197,7 @@ public class TableData<ROW_OBJECT> implements Iterable<ROW_OBJECT> {
 	}
 
 	/**
-	 * Adds the new <tt>value</tt> to the data at the appropriate location based on the sort
+	 * Adds the new {@code value} to the data at the appropriate location based on the sort
 	 * 
 	 * @param value the row Object to insert
 	 */

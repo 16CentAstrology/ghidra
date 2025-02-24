@@ -6,7 +6,7 @@
     "HTML Tidy for Java (vers. 2009-12-01), see jtidy.sourceforge.net">
 
     <TITLE>Exporting Files</TITLE>
-    <LINK rel="stylesheet" type="text/css" href="../../shared/Frontpage.css">
+    <LINK rel="stylesheet" type="text/css" href="help/shared/DefaultStyle.css">
   </HEAD>
 
   <BODY lang="EN-US">
@@ -24,7 +24,9 @@
 
       <LI><A href="#c_cpp">C/C++</A></LI>
       
-      <LI><A href="#gzf">Ghidra Zip File (.gzf)</A></LI>
+      <LI><A href="#gzf">Ghidra Zip File (GZF)</A></LI>
+      
+      <LI><A href="#gdt">Ghidra Data Type Archive File (GDT)</a></LI>
 
       <LI><A href="#html">HTML</A></LI>
 
@@ -35,6 +37,8 @@
       <LI><A href="#binary">Raw Bytes</A></LI>
 
       <LI><A href="#xml">XML Export Format</A></LI>
+
+      <LI><A href="#sarif">SARIF Export Format</A></LI>
     </UL>
 
     <H2>Export Action</H2>
@@ -58,6 +62,16 @@
 
           <LI>Press the <B>OK</B> button to perform the export.</LI>
         </UL>
+        
+        <P><I><IMG src="help/shared/note.png"> In preparation for a file export, a selected project
+        file may be opened in an attempt to support export formats that require an open
+        file.  If the selected file requires an upgrade a warning dialog
+        will be displayed and the affected export formats will not be available until an upgrade 
+        is perfored, however a direct packed format of the project file may still be chosen
+        without performing the upgrade first (e.g., <A href="#gzf">Ghidra Zip File (GZF)</A>,
+        <A href="#gzf">Ghidra Zip File (GZF)</A>).
+	  	</P>
+	  
       </BLOCKQUOTE>
 
       <H3>To export from the CodeBrowser tool:</H3>
@@ -69,7 +83,7 @@
           <LI>Make sure the program to export is the currently open program in the CodeBrowser
           tool.</LI>
 
-          <LI>Invoke the action from the <B>File<IMG src="../../shared/arrow.gif" alt="">Export
+          <LI>Invoke the action from the <B>File<IMG src="help/shared/arrow.gif" alt="">Export
           File...</B> menu item.</LI>
 
           <LI>Use the <A href="#Exporter_Dialog">Exporter Dialog</A> that appears to configure the
@@ -234,7 +248,7 @@
               <P>The text-fields in this panel specify the width, in number of characters, to use
               when displaying program elements in the output file.</P>
 
-              <P><IMG alt="" border="0" src="../../shared/note.png"> <I>Setting a width to zero (0)
+              <P><IMG alt="" border="0" src="help/shared/note.png"> <I>Setting a width to zero (0)
               effectively excludes it from the output file.</I></P>
             </BLOCKQUOTE>
           </BLOCKQUOTE>
@@ -276,12 +290,28 @@
           </UL>
         </BLOCKQUOTE>
 
-        <H3><A name="gzf"/>Ghidra Zip File (.gzf)</H3>
+        <H3><A name="gzf"/>Ghidra Zip File (GZF)</H3>
 
         <BLOCKQUOTE>
-          <P>Creates a zip file from a program in your project. You may want to create a zip file
+          <P>Creates a GZF file from a Program in your project. You may want to create a GZF file
           so that you can give it to another user who can then <A href=
-          "help/topics/ImporterPlugin/importer.htm">import</A> into their project.</P>
+          "help/topics/ImporterPlugin/importer.htm">import</A> into their project.  A program
+          export of this format from the Project Window will be based on the current saved file
+          content and bypass any potential upgrade that may be required by other formats.
+          </P>
+        </BLOCKQUOTE>
+        
+        <H3><A name="gdt"/>Ghidra Data Type Archive File (GDT)</H3>
+
+        <BLOCKQUOTE>
+          <P>Creates a GDT file from a Data Type Archive in your project. You may want to create a GDT file
+          so that you can give it to another user who can then <A href=
+          "help/topics/ImporterPlugin/importer.htm">import</A> into their project or open directly
+          via the Data Type Manager as a 
+          <A href="help/topics/DataTypeManagerPlugin/data_type_manager_description.htm#Open_File_Data_Type_Archive">File Data Type Archive</A>.
+          A project Data Type Archive export of this format from the Project Window will be based on 
+          the current saved file content and bypass any potential upgrade that may be required by other formats.
+          </P>
         </BLOCKQUOTE>
 
         <H3><A name="html"/><A name="Options_HTML"/>HTML</H3>
@@ -294,7 +324,7 @@
           fields to be color-matched to those in the Code Browser. The hyper-linking allows
           navigation similar to that supported in the Code Browser.</P>
 
-          <P><I><IMG alt="" border="0" src="../../shared/note.png"> The HTML Options are identical
+          <P><I><IMG alt="" border="0" src="help/shared/note.png"> The HTML Options are identical
           the <A href="#ascii_options">ASCII Options</A>.</I></P>
         </BLOCKQUOTE>
 
@@ -346,18 +376,18 @@
             the primary (first) file source will saved to the specified destination file.</LI>
           </UL>
           
-          <P><IMG alt="" border="0" src="../../shared/note.png"> <I>This exporter is only
+          <P><IMG alt="" border="0" src="help/shared/note.png"> <I>This exporter is only
           operational when the program has at least one file-backed byte source.  This will be 
           reflected in the <A href="help/topics/MemoryMapPlugin/Memory_Map.htm">Memory Map's</A> 
           Byte Source column, which entries that begin with <B>File:</B></I></P>
 
-          <P><IMG alt="" border="0" src="../../shared/note.png"> <I>Writing back a modified Memory 
+          <P><IMG alt="" border="0" src="help/shared/note.png"> <I>Writing back a modified Memory 
           Map is not supported. </I></P>
           
-          <P><IMG alt="" border="0" src="../../shared/note.png"> <I>Relocation bytes are always
+          <P><IMG alt="" border="0" src="help/shared/note.png"> <I>Relocation bytes are always
           restored to their original values, even if the user modifies them.</I></P>
           
-          <P><IMG alt="" border="0" src="../../shared/warning.png"> <I>Programs written to disk with
+          <P><IMG alt="" border="0" src="help/shared/warning.png"> <I>Programs written to disk with
           this exporter may be runnable on your native platform.  Use caution when exporting 
           potentially malicious programs.</I></P>
         </BLOCKQUOTE>
@@ -371,7 +401,7 @@
           Importer</B> and there is only one memory block, then this exporter allows recreation of 
           the original file.</P>
 
-          <P><IMG alt="" border="0" src="../../shared/note.png"> <I>Only initialized memory blocks
+          <P><IMG alt="" border="0" src="help/shared/note.png"> <I>Only initialized memory blocks
           are included in the output file.</I></P>
         </BLOCKQUOTE>
 
@@ -382,9 +412,21 @@
           re-import files in this format using the <A href=
           "help/topics/ImporterPlugin/importer.htm">XML Importer</A>.</P>
 
-          <P><A name="xml_options"></A> <I><IMG alt="" border="0" src="../../shared/note.png">The
+          <P><A name="xml_options"></A> <I><IMG alt="" border="0" src="help/shared/note.png">The
           XML Options are identical the <A href=
           "help/topics/ImporterPlugin/importer.htm#xml_options">XML Importer Options</A>.</I></P>
+        </BLOCKQUOTE>
+
+        <H3><A name="sarif"/><A name="Options_SARIF"/>SARIF</H3>
+
+        <BLOCKQUOTE>
+          <P>The SARIF Exporter creates SARIF files that conform to Ghidra's Program DTD. You can
+          re-import files in this format using the <A href=
+          "help/topics/ImporterPlugin/importer.htm">SARIF Importer</A>.</P>
+
+          <P><A name="sarif_options"></A> <I><IMG alt="" border="0" src="help/shared/note.png">The
+          SARIF Options are identical the <A href=
+          "help/topics/ImporterPlugin/importer.htm#sarif_options">SARIF Importer Options</A>.</I></P>
         </BLOCKQUOTE>
       </BLOCKQUOTE>
 

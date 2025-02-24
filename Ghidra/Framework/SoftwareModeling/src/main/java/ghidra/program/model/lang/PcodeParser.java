@@ -36,10 +36,10 @@ import ghidra.pcodeCPort.sleighbase.SleighBase;
 import ghidra.pcodeCPort.slgh_compile.*;
 import ghidra.pcodeCPort.slghsymbol.*;
 import ghidra.pcodeCPort.slghsymbol.EndSymbol;
+import ghidra.pcodeCPort.slghsymbol.Next2Symbol;
 import ghidra.pcodeCPort.slghsymbol.OperandSymbol;
 import ghidra.pcodeCPort.slghsymbol.StartSymbol;
 import ghidra.pcodeCPort.space.*;
-import ghidra.pcodeCPort.xml.DocumentStorage;
 import ghidra.program.model.address.*;
 import ghidra.sleigh.grammar.*;
 import ghidra.sleigh.grammar.SleighParser_SemanticParser.semantic_return;
@@ -155,7 +155,7 @@ public class PcodeParser extends PcodeCompile {
 		if (sym != null) {
 			return sym;
 		}
-		return PcodeParser.this.sleigh.findSymbol(nm);
+		return sleigh.findSymbol(nm);
 	}
 
 	public SleighBase getSleigh() {
@@ -320,11 +320,6 @@ public class PcodeParser extends PcodeCompile {
 				AddrSpace space = getSpace(i);
 				symtab.addSymbol(new SpaceSymbol(null, space));
 			}
-		}
-
-		@Override
-		public void initialize(DocumentStorage store) {
-			// Unused
 		}
 
 		@Override

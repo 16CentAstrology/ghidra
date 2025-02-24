@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -41,13 +41,13 @@ public class GTheme extends GThemeValueMap {
 	private final File file;
 
 	/**
-	 * Creates a new GTheme with the given name, the default {@link LookAndFeel} for the the 
+	 * Creates a new GTheme with the given name, the default {@link LookAndFeel} for the 
 	 * platform and not using dark defaults. This theme will be using all the standard defaults
 	 * from the theme.property files and the defaults from the default LookAndFeel.
 	 * @param name the name for this GTheme
 	 */
 	public GTheme(String name) {
-		this(name, LafType.getDefaultLookAndFeel(), false);
+		this(name, LafType.getDefaultLookAndFeel());
 
 	}
 
@@ -55,23 +55,22 @@ public class GTheme extends GThemeValueMap {
 	 * Creates a new empty GTheme with the given name, {@link LookAndFeel}, and whether or not to
 	 * use dark defaults.
 	 * @param name the name for the new GTheme
-	 * @param lookAndFeel the look and feel type used by this theme
-	 * @param useDarkDefaults determines whether or  
+	 * @param lafType the look and feel type used by this theme
 	 */
-	public GTheme(String name, LafType lookAndFeel, boolean useDarkDefaults) {
-		this(null, name, lookAndFeel, useDarkDefaults);
+	public GTheme(String name, LafType lafType) {
+		this(null, name, lafType, lafType.usesDarkDefaults());
 	}
 
 	/**
 	 * Constructor for creating a GTheme with an associated File. 
 	 * @param file the file that this theme will save to
 	 * @param name the name of the new theme
-	 * @param lookAndFeel the {@link LafType} for the new theme
+	 * @param lafType the {@link LafType} for the new theme
 	 * @param useDarkDefaults true if this new theme uses dark defaults
 	 */
-	public GTheme(File file, String name, LafType lookAndFeel, boolean useDarkDefaults) {
+	public GTheme(File file, String name, LafType lafType, boolean useDarkDefaults) {
 		this.name = name;
-		this.lookAndFeel = lookAndFeel;
+		this.lookAndFeel = lafType;
 		this.useDarkDefaults = useDarkDefaults;
 		this.file = file;
 	}
@@ -218,11 +217,19 @@ public class GTheme extends GThemeValueMap {
 	}
 
 	/**
+	 * Returns true if this theme can not be changed
+	 * @return true if this theme can not be changed
+	 */
+	public boolean isReadOnly() {
+		return false;
+	}
+
+	/**
 	 * Reads a theme from a file. The file can be either a theme file or a zip file containing
 	 * a theme file and optionally a set of icon files.
 	 * @param file the file to read.
 	 * @return the theme that was read from the file
-	 * @throws IOException if an error occcured trying to read a theme from the file.
+	 * @throws IOException if an error occurred trying to read a theme from the file.
 	 */
 	public static GTheme loadTheme(File file) throws IOException {
 		ThemeReader reader = new ThemeReader(file);

@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -49,7 +49,7 @@ public abstract class DecompilerReference {
 	/**
 	 * Scan this reference for any data type matches.
 	 * <p>
-	 * The <tt>fieldName</tt> is optional.  If not included, then only data type matches will
+	 * The {@code fieldName} is optional.  If not included, then only data type matches will
 	 * be sought.  If it is included, then a match is only included when it is a reference
 	 * to the given data type where that type is being accessed by the given field name.
 	 *
@@ -156,15 +156,17 @@ public abstract class DecompilerReference {
 	public static DataType getFieldDataType(ClangFieldToken field) {
 		DataType fieldDt = field.getDataType();
 		fieldDt = DecompilerReference.getBaseType(fieldDt);
-		if (fieldDt instanceof Structure) {
-			Structure parent = (Structure) fieldDt;
+		if (fieldDt instanceof Structure parent) {
 			int offset = field.getOffset();
 			int n = parent.getLength();
 			if (offset >= 0 && offset < n) {
 				DataTypeComponent dtc = parent.getComponentContaining(field.getOffset());
-				fieldDt = dtc.getDataType();
+				if (dtc != null) {
+					return dtc.getDataType();
+				}
 			}
 		}
+
 		return fieldDt;
 	}
 
